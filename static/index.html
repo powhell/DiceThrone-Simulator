@@ -798,10 +798,7 @@ function renderAbilities(abilities, currentEv) {
   document.getElementById('currentEv').textContent = currentEv.toFixed(2);
   const board = document.getElementById('abilityBoard');
   board.innerHTML = abilities.map(ab => {
-    const hasDreadfulGain = Math.abs(ab.value - ab.base_damage) >= 0.05;
-    const dmgCol = hasDreadfulGain
-      ? `<span class="ability-dmg"><span>${ab.base_damage.toFixed(1)}</span> dmg</span>`
-      : '';
+    const dmgCol = `<span class="ability-dmg"><span>${ab.base_damage.toFixed(1)}</span> dmg</span>`;
     return `
     <div class="ability ${ab.matched ? 'matched' : ''}">
       <span class="ability-name">${ab.name}</span>
