@@ -801,8 +801,10 @@ async function runEval(silent = false) {
 const ABILITY_GAINS = {
   'Dreadful Charge (CCCCC)':    { dreadful: 4 },
   'Horrify (CCCC)':             { dreadful: 3, note: 'ou GP · les 2 si Tête' },
-  'Spectral Assault (AAACC)':   {},
-  'Cleave 4A (AAAA)':           { dreadful: 1 },
+  'Spectral Assault (AAACC)':   { note: '+1.5 dmg/☠' },
+  'Cleave 5A (AAAAA)':          { dreadful: 1, note: 'si 4 identiques' },
+  'Cleave 4A (AAAA)':           { dreadful: 1, note: 'si 4 identiques' },
+  'Cleave 3A (AAA)':            {},
   'Ride Down (AAABB)':          { gp: 2 },
   'Reap (BBBC)':                { dreadful: 2, note: '+carte si Tête' },
   'Sow Despair L (5-straight)': { dreadful: 2 },
