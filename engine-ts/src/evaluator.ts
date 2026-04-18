@@ -121,6 +121,10 @@ function _abilityDist(
     return { [bestAbilityName(kept, dreadful, hasHead)]: 1.0 }
   }
 
+  // Ability already complete in kept subset — guaranteed regardless of free dice
+  const guaranteed = bestAbilityName(kept, dreadful, hasHead)
+  if (guaranteed !== 'Whiff') return { [guaranteed]: 1.0 }
+
   const key = cacheKey(kept, rollsRemaining, dreadful, hasHead)
   const cached = distMemo.get(key)
   if (cached !== undefined) return cached
