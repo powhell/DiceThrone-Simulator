@@ -4,30 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-**Run the app:**
+**Build the browser engine:**
 ```bash
-python app.py
-# Serves at http://localhost:5000
+cd engine-ts && npm run build
+# Outputs static/engine.js
 ```
 
-**Run tests:**
+**Open the UI:** Open `static/index.html` directly in a browser (no server required).
+
+**Run TS tests:**
+```bash
+cd engine-ts && npm test
+```
+
+**Run Python tests (engine intact):**
 ```bash
 python -m pytest tests/ -v
 ```
 
 ## Architecture
 
-This is a Flask-based dice strategy analyzer. A single POST endpoint (`/eval` in `app.py`) accepts a game state and returns optimal keep strategies via dynamic programming.
+Vanilla JS single-page app backed by a bundled TypeScript solver (`static/engine.js`). No server required.
 
 **Data flow:**
 ```
 Browser (static/index.html)
-  → POST /eval (app.py)
-    → engine/evaluator.py   # recursive DP solver with lru_cache memoization
-      → engine/abilities.py # matches dice to abilities, returns EV
-        → engine/dice.py    # classifies faces as A (1-3), B (4-5), C (6)
-        → engine/dreadful.py # marginal value of Dreadful token gain
-        → constants.py       # damage values for each ability
+  → callEngine() [inline adapter]
+    → calculateOptimalKeep() [static/engine.js, bundled from engine-ts/]
+      → evaluator.ts   # recursive DP solver with Map memoization
+        → abilities.ts # matches dice to abilities, returns EV
+          → dice.ts    # classifies faces as A (1-3), B (4-5), C (6)
+          → dreadful.ts # marginal value of Dreadful token gain
+          → constants.ts # damage values for each ability
 ```
 
 **Core algorithm** (`engine/evaluator.py`):

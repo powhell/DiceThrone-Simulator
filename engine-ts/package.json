@@ -1,0 +1,15 @@
+{
+  "name": "headless-horseman-engine",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "esbuild src/index.ts --bundle --format=iife --global-name=HHEngine --outfile=../static/engine.js && node inline.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}
