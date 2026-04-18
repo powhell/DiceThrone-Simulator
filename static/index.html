@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dice Throne — Headless Horseman</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --accent: #e94560;
+    --gold: #f5a623;
+    --text: #eaeaea;
+    --muted: #888;
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --border: #2a2a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding: 20px; }
+
+  h1 { text-align: center; color: var(--accent); font-size: 1.6rem; letter-spacing: 2px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 0.8rem; margin-bottom: 24px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; max-width: 900px; margin: 0 auto; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .panel h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
+
+  /* Turn indicator */
+  .turn-indicator {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .roll-pip {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; color: var(--muted);
+    transition: all 0.2s;
+  }
+  .roll-pip.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .roll-pip.current { border-color: var(--gold); color: var(--gold); animation: pulse 1.2s infinite; }
+  .roll-pip-label { font-size: 0.7rem; color: var(--muted); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(245,166,35,0.4); } 50% { box-shadow: 0 0 0 5px rgba(245,166,35,0); } }
+
+  /* Dice */
+  .dice-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+  .die {
+    width: 70px; height: 70px; border-radius: 12px;
+    background: #0f3460; border: 2px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; user-select: none; transition: all 0.15s; position: relative;
+  }
+  .die:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .die.kept { border-color: var(--green); background: #1a3a1a; }
+  .die.rolling { animation: shake 0.3s ease; }
+  .die .symbol { font-size: 1.8rem; line-height: 1; }
+  .die .face-num { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+  .die .face-arrows { font-size: 0.6rem; color: var(--muted); position: absolute; bottom: 3px; }
+  @keyframes shake { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+
+  .kept-label { font-size: 0.7rem; text-align: center; color: var(--green); margin-bottom: 10px; min-height: 16px; }
+
+  /* Roll action row */
+  .action-row { display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .roll-btn {
+    padding: 10px 24px; font-size: 1rem; font-weight: 700;
+    border: 2px solid; border-radius: 8px; cursor: pointer;
+    transition: all 0.15s; letter-spacing: 0.5px;
+  }
+  .roll-btn.idle {
+    background: rgba(76,175,80,0.15); border-color: var(--green); color: var(--green);
+  }
+  .roll-btn.idle:hover { background: rgba(76,175,80,0.3); }
+  .roll-btn.reroll {
+    background: rgba(66,165,245,0.15); border-color: var(--blue); color: var(--blue);
+  }
+  .roll-btn.reroll:hover { background: rgba(66,165,245,0.3); }
+  .roll-btn.done {
+    background: rgba(245,166,35,0.15); border-color: var(--gold); color: var(--gold);
+  }
+  .roll-btn.done:hover { background: rgba(245,166,35,0.3); }
+
+  .sep-v { width: 1px; height: 28px; background: var(--border); }
+
+  /* Controls */
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 4px; }
+  .ctrl-group label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .ctrl-group .btn-row { display: flex; gap: 4px; }
+
+  button {
+    background: var(--border); border: 1px solid #3a3a5a; color: var(--text);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s;
+  }
+  button:hover { background: #3a3a6a; }
+  button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #c73652; }
+  button.secondary { background: transparent; border-color: var(--muted); color: var(--muted); }
+  button.secondary:hover { border-color: var(--text); color: var(--text); background: transparent; }
+
+  .counter-display { font-size: 1.1rem; font-weight: 700; min-width: 28px; text-align: center; padding: 4px 8px; background: var(--bg); border-radius: 6px; }
+
+  /* Top options */
+  .option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  .option:hover { border-color: var(--gold); }
+  .option.best { border-color: var(--green); background: rgba(76,175,80,0.08); }
+  .option-rank { font-size: 0.7rem; color: var(--muted); width: 16px; }
+  .option-dice { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+  .mini-die { width: 24px; height: 24px; border-radius: 5px; background: #0f3460; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
+  .mini-die.a { border-color: #ff7043; }
+  .mini-die.b { border-color: #42a5f5; }
+  .mini-die.c { border-color: #ab47bc; }
+  .option-ev { font-weight: 700; color: var(--gold); font-size: 0.9rem; min-width: 48px; text-align: right; }
+  .option-label { font-size: 0.65rem; color: var(--muted); }
+
+  /* Probability bars */
+  .prob-bars { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .prob-row { display: flex; align-items: center; gap: 6px; }
+  .prob-label { font-size: 0.62rem; color: var(--muted); width: 100px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prob-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .prob-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .prob-pct { font-size: 0.62rem; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
+  .fork-badge { font-size: 0.58rem; background: rgba(245,166,35,0.2); border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+
+  /* Ability board */
+  .ability { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid var(--border); opacity: 0.45; transition: all 0.2s; }
+  .ability.matched { opacity: 1; border-color: var(--green); background: rgba(76,175,80,0.1); }
+  .ability-name { font-size: 0.75rem; flex: 1; }
+  .ability-nums { display: flex; align-items: center; gap: 8px; }
+  .ability-dmg { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+  .ability-dmg span { color: var(--text); font-weight: 600; }
+  .ability-val { font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 42px; text-align: right; }
+
+  .status { text-align: center; font-size: 0.8rem; color: var(--muted); padding: 6px; }
+  .ev-display { text-align: center; margin: 8px 0; }
+  .ev-display .ev-val { font-size: 2rem; font-weight: 700; color: var(--gold); }
+  .ev-display .ev-label { font-size: 0.7rem; color: var(--muted); display: block; }
+
+  .sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+  @media (max-width: 680px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>☠ HEADLESS HORSEMAN</h1>
+<p class="subtitle">Dice Throne · Strategy Simulator</p>
+
+<div class="layout">
+  <!-- Left column -->
+  <div>
+    <div class="panel" style="margin-bottom:12px">
+      <h2>Your Dice — click to cycle face · right-click to mark kept</h2>
+
+      <!-- Turn progress indicator -->
+      <div class="turn-indicator">
+        <div class="roll-pip" id="pip1">1</div>
+        <div class="roll-pip-label">Initial</div>
+        <span style="color:var(--border)">──</span>
+        <div class="roll-pip" id="pip2">2</div>
+        <div class="roll-pip-label">Reroll 1</div>
+        <span style="color:var(--border)">──</span>
+        <div class="roll-pip" id="pip3">3</div>
+        <div class="roll-pip-label">Reroll 2</div>
+      </div>
+
+      <div class="dice-row" id="diceRow"></div>
+      <div class="kept-label" id="keptLabel"></div>
+
+      <!-- Roll action row -->
+      <div class="action-row">
+        <button class="roll-btn idle" id="rollBtn" onclick="rollDice()">🎲 Roll — Start Turn</button>
+        <div class="sep-v"></div>
+        <button class="secondary" onclick="runEval()">▶ Evaluate</button>
+        <button class="secondary" onclick="resetTurn()">↺ Reset</button>
+      </div>
+
+      <!-- Settings controls -->
+      <div class="controls">
+        <div class="ctrl-group">
+          <label>Dreadful Tokens</label>
+          <div class="btn-row">
+            <button onclick="adjustDreadful(-1)">−</button>
+            <span class="counter-display" id="dreadfulDisplay">0</span>
+            <button onclick="adjustDreadful(1)">+</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <label>Haunted Head</label>
+          <div class="btn-row" id="headCtrl"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Best Keeping Strategies</h2>
+      <div id="optionsList"><p class="status">Press Roll to start your turn, or Evaluate for manual analysis.</p></div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="panel">
+    <h2>Ability Board</h2>
+    <div class="ev-display">
+      <span class="ev-label">Current dice value (no reroll)</span>
+      <span class="ev-val" id="currentEv">—</span>
+    </div>
+    <div class="sep"></div>
+    <div id="abilityBoard"></div>
+  </div>
+</div>
+
+<script>
+const ABILITY_COLOR = {
+  'Dreadful Charge': '#ab47bc',
+  'Horrify':         '#7b1fa2',
+  'Spectral Assault':'#5c6bc0',
+  'Cleave 5A':       '#ef5350',
+  'Cleave 4A':       '#ef5350',
+  'Cleave 3A':       '#ff7043',
+  'Ride Down':       '#ffa726',
+  'Reap':            '#26a69a',
+  'Sow Despair L':   '#d4e157',
+  'Sow Despair S':   '#aed581',
+  'Whiff':           '#555',
+};
+
+const SYMBOL   = {1:'⚔',2:'⚔',3:'⚔',4:'🧲',5:'🧲',6:'💀'};
+const SYMNAME  = {1:'A',2:'A',3:'A',4:'B',5:'B',6:'C'};
+const SYMCLASS = {1:'a',2:'a',3:'a',4:'b',5:'b',6:'c'};
+const FACE_LABEL = {1:'A',2:'A',3:'A',4:'B',5:'B',6:'C'};
+
+let dice          = [1, 1, 4, 4, 6];
+let kept          = [false, false, false, false, false];
+let rollsRemaining = 2;   // rerolls left after current dice state (0–2)
+let dreadful      = 0;
+let headLocation  = 'opponent';
+let turnPhase     = 0;    // 0=idle, 1=after roll1, 2=after roll2, 3=final
+
+// ─── Roll logic ─────────────────────────────────────────────────────────────
+
+function randomFace() { return Math.ceil(Math.random() * 6); }
+
+function rollDice() {
+  if (turnPhase === 0) {
+    // Initial roll: roll all 5 dice
+    dice = [randomFace(), randomFace(), randomFace(), randomFace(), randomFace()];
+    kept = [false, false, false, false, false];
+    rollsRemaining = 2;
+    turnPhase = 1;
+  } else if (turnPhase === 1) {
+    // 2nd roll: reroll non-kept dice
+    for (let i = 0; i < 5; i++) if (!kept[i]) dice[i] = randomFace();
+    rollsRemaining = 1;
+    turnPhase = 2;
+  } else if (turnPhase === 2) {
+    // 3rd roll (final): reroll non-kept dice
+    for (let i = 0; i < 5; i++) if (!kept[i]) dice[i] = randomFace();
+    rollsRemaining = 0;
+    kept = [false, false, false, false, false]; // nothing to keep anymore
+    turnPhase = 3;
+  } else {
+    // Turn ended — start a new one
+    resetTurn();
+    return;
+  }
+
+  animateDice();
+  buildDiceRow();
+  updateTurnIndicator();
+  updateRollButton();
+  runEval(false);
+}
+
+function resetTurn() {
+  turnPhase = 0;
+  rollsRemaining = 2;
+  kept = [false, false, false, false, false];
+  buildDiceRow();
+  updateTurnIndicator();
+  updateRollButton();
+  document.getElementById('optionsList').innerHTML =
+    '<p class="status">Press Roll to start your turn, or Evaluate for manual analysis.</p>';
+  liveBoardUpdate();
+}
+
+function animateDice() {
+  document.querySelectorAll('.die').forEach((el, i) => {
+    if (!kept[i]) {
+      el.classList.add('rolling');
+      setTimeout(() => el.classList.remove('rolling'), 300);
+    }
+  });
+}
+
+// ─── UI state ────────────────────────────────────────────────────────────────
+
+function updateRollButton() {
+  const btn = document.getElementById('rollBtn');
+  if (turnPhase === 0) {
+    btn.textContent = '🎲 Roll — Start Turn';
+    btn.className = 'roll-btn idle';
+  } else if (turnPhase === 1) {
+    btn.textContent = '🎲 Reroll (2 left)';
+    btn.className = 'roll-btn reroll';
+  } else if (turnPhase === 2) {
+    btn.textContent = '🎲 Reroll (1 left — final)';
+    btn.className = 'roll-btn reroll';
+  } else {
+    btn.textContent = '↺ New Turn';
+    btn.className = 'roll-btn done';
+  }
+}
+
+function updateTurnIndicator() {
+  const pips = [
+    document.getElementById('pip1'),
+    document.getElementById('pip2'),
+    document.getElementById('pip3'),
+  ];
+  pips.forEach((p, i) => {
+    p.className = 'roll-pip';
+    if (i < turnPhase) p.classList.add('done');
+    else if (i === turnPhase && turnPhase < 3) p.classList.add('current');
+  });
+}
+
+// ─── Dice UI ─────────────────────────────────────────────────────────────────
+
+function buildDiceRow() {
+  const row = document.getElementById('diceRow');
+  row.innerHTML = '';
+  dice.forEach((face, i) => {
+    const d = document.createElement('div');
+    d.className = 'die' + (kept[i] ? ' kept' : '');
+    d.innerHTML = `
+      <span class="symbol">${SYMBOL[face]}</span>
+      <span class="face-num">${FACE_LABEL[face]} (${face})</span>
+      <span class="face-arrows">◀▶</span>`;
+    d.addEventListener('click', () => { cycleDie(i, 1); });
+    d.addEventListener('contextmenu', e => { e.preventDefault(); toggleKept(i); });
+    row.appendChild(d);
+  });
+  updateKeptLabel();
+}
+
+function cycleDie(i, dir) {
+  dice[i] = ((dice[i] - 1 + dir + 6) % 6) + 1;
+  buildDiceRow();
+  liveBoardUpdate();
+}
+
+function toggleKept(i) {
+  if (turnPhase === 3) return; // can't keep in final state
+  kept[i] = !kept[i];
+  buildDiceRow();
+}
+
+function updateKeptLabel() {
+  const keptDice = dice.filter((_, i) => kept[i]);
+  const label = document.getElementById('keptLabel');
+  if (turnPhase === 3) {
+    label.textContent = 'Final result — start a new turn to roll again';
+    label.style.color = 'var(--gold)';
+  } else if (keptDice.length === 0) {
+    label.textContent = 'Right-click dice to mark as kept for next reroll';
+    label.style.color = 'var(--muted)';
+  } else {
+    label.textContent = `Kept: ${keptDice.map(f => FACE_LABEL[f]).join(' ')} — click Roll to reroll the rest`;
+    label.style.color = 'var(--green)';
+  }
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+
+function buildHeadCtrl() {
+  const c = document.getElementById('headCtrl');
+  c.innerHTML = '';
+  ['player','opponent'].forEach(loc => {
+    const b = document.createElement('button');
+    b.textContent = loc === 'player' ? 'Player' : 'Opponent';
+    b.className = headLocation === loc ? 'active' : '';
+    b.onclick = () => { headLocation = loc; buildHeadCtrl(); liveBoardUpdate(); };
+    c.appendChild(b);
+  });
+}
+
+function adjustDreadful(delta) {
+  dreadful = Math.max(0, Math.min(5, dreadful + delta));
+  document.getElementById('dreadfulDisplay').textContent = dreadful;
+  liveBoardUpdate();
+}
+
+// ─── Backend calls ───────────────────────────────────────────────────────────
+
+async function liveBoardUpdate() {
+  if (rollsRemaining === 0) {
+    await runEval(true);
+  } else {
+    try {
+      const res = await fetch('/eval', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({dice, rolls_remaining: 0, dreadful, head_location: headLocation})
+      });
+      const data = await res.json();
+      renderAbilities(data.abilities, data.current_ev);
+    } catch(e) {}
+  }
+}
+
+async function runEval(silent = false) {
+  const payload = { dice, rolls_remaining: rollsRemaining, dreadful, head_location: headLocation };
+  try {
+    const res = await fetch('/eval', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    renderAbilities(data.abilities, data.current_ev);
+    if (!silent || rollsRemaining === 0) renderOptions(data.top_options);
+  } catch(e) {
+    document.getElementById('optionsList').innerHTML =
+      `<p class="status" style="color:var(--accent)">Error: ${e.message}</p>`;
+  }
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────────
+
+function renderAbilities(abilities, currentEv) {
+  document.getElementById('currentEv').textContent = currentEv.toFixed(2);
+  const board = document.getElementById('abilityBoard');
+  board.innerHTML = abilities.map(ab => {
+    const hasDreadfulGain = Math.abs(ab.value - ab.base_damage) >= 0.05;
+    const dmgCol = hasDreadfulGain
+      ? `<span class="ability-dmg"><span>${ab.base_damage.toFixed(1)}</span> dmg</span>`
+      : '';
+    return `
+    <div class="ability ${ab.matched ? 'matched' : ''}">
+      <span class="ability-name">${ab.name}</span>
+      <div class="ability-nums">
+        ${dmgCol}
+        <span class="ability-val">${ab.value.toFixed(1)} EV</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderProbBars(probDist) {
+  if (!probDist) return '';
+  const entries = Object.entries(probDist).sort((a, b) => b[1] - a[1]);
+  const significant = entries.filter(([, p]) => p >= 1);
+  const bars = significant.map(([name, pct]) => {
+    const color = ABILITY_COLOR[name] || '#888';
+    return `<div class="prob-row">
+      <span class="prob-label">${name}</span>
+      <div class="prob-track"><div class="prob-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="prob-pct">${pct.toFixed(0)}%</span>
+    </div>`;
+  }).join('');
+  return `<div class="prob-bars">${bars}</div>`;
+}
+
+function isFork(probDist) {
+  if (!probDist) return false;
+  const significant = Object.values(probDist).filter(p => p >= 15);
+  return significant.length >= 2;
+}
+
+function renderOptions(options) {
+  const list = document.getElementById('optionsList');
+  if (!options || options.length === 0) {
+    list.innerHTML = '<p class="status">No options.</p>';
+    return;
+  }
+  list.innerHTML = options.map((opt, i) => {
+    const diceHtml = opt.kept.length === 0
+      ? '<span style="color:var(--muted);font-size:0.75rem">re-roll all</span>'
+      : opt.kept.map(f => `<div class="mini-die ${SYMCLASS[f]}">${SYMBOL[f]}</div>`).join('');
+    const label = i === 0 ? '★ Best' : `#${i+1}`;
+    const forkBadge = isFork(opt.prob_dist) ? '<span class="fork-badge">FORK</span>' : '';
+    const bars = renderProbBars(opt.prob_dist);
+    return `
+      <div class="option ${i===0?'best':''}" onclick="applyKeep(${JSON.stringify(opt.kept)})">
+        <span class="option-rank">${label}</span>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:${bars?'4px':'0'}">
+            <div class="option-dice">${diceHtml}</div>
+            ${forkBadge}
+            <div style="margin-left:auto">
+              <div class="option-ev">${opt.ev.toFixed(2)}</div>
+              <div class="option-label">EV</div>
+            </div>
+          </div>
+          ${bars}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function applyKeep(keptFaces) {
+  const remaining = [...keptFaces];
+  kept = dice.map(face => {
+    const idx = remaining.indexOf(face);
+    if (idx !== -1) { remaining.splice(idx, 1); return true; }
+    return false;
+  });
+  buildDiceRow();
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+buildDiceRow();
+buildHeadCtrl();
+updateTurnIndicator();
+updateRollButton();
+liveBoardUpdate();
+</script>
+
+</body>
+</html>
