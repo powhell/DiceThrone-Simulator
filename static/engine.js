@@ -248,8 +248,6 @@ var HHEngine = (() => {
       if (kept.length !== 5) throw new Error("Need 5 dice at rolls=0");
       return { [bestAbilityName(kept, dreadful, hasHead)]: 1 };
     }
-    const guaranteed = bestAbilityName(kept, dreadful, hasHead);
-    if (guaranteed !== "Whiff") return { [guaranteed]: 1 };
     const key = cacheKey(kept, rollsRemaining, dreadful, hasHead);
     const cached = distMemo.get(key);
     if (cached !== void 0) return cached;

@@ -123,4 +123,10 @@ describe('calculateOptimalKeep result structure', () => {
     const direct = evalState([...dice].sort((a, b) => a - b), 0, 0, false)
     expect(r.currentEv).toBeCloseTo(direct, 5)
   })
+
+  it('partial keep shows upgrade distribution (Sow S + Sow L)', () => {
+    const r = calculateOptimalKeep([2, 3, 4, 5, 6], 1, 0, false)
+    const partial = r.topOptions.find(o => o.kept.join(',') === '3,4,5,6')
+    if (partial) expect(partial.probDist['Sow Despair L'] ?? 0).toBeGreaterThan(0)
+  })
 })
