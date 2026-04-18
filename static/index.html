@@ -916,23 +916,23 @@ function renderStrategy(data) {
   const panel = document.getElementById('strategyContent');
   if (!data) { panel.innerHTML = ''; return; }
 
-  // Objectif du tour
-  let objectifText;
-  if (dreadful <= 2) {
-    objectifText = `Génère des Dreadful → priorité <strong>Reap</strong> (BBBC), +2 tokens garanti`;
-  } else if (dreadful === 3) {
-    objectifText = `⚡ À 1 token du <strong>Terrorize</strong> — maximise le gain Dreadful ce tour`;
-  } else if (dreadful === 4) {
-    objectifText = `🔥 Terrorize actif — vise <strong>Spectral Assault</strong> (+1.5/token) ou <strong>Ride Down</strong>`;
-  } else {
-    objectifText = `⚠ Évite de gagner un 5e token en attaquant (valeur 0.5 seulement)`;
-  }
+  const topOpt = data.top_options?.[0];
+  const opts   = data.top_options || [];
+  const board  = data.abilities  || [];
 
-  // Conseil du tour
-  const topOpt = data.top_options && data.top_options[0];
+  // Ability board sorted by EV desc (exclude Whiff)
+  const boardSorted = board.filter(a => a.name !== 'Whiff').sort((a, b) => b.value - a.value);
+  const dominant    = boardSorted[0];
+  const top3Names   = new Set(boardSorted.slice(0, 3).map(a => a.name));
 
+  const saAbility   = board.find(a => a.name === 'Spectral Assault');
+  const reapAbility = board.find(a => a.name === 'Reap');
+  const saEV        = saAbility?.value  ?? 0;
+  const reapEV      = reapAbility?.value ?? 0;
+
+  // ── Kept text ──────────────────────────────────────────────────────
   let keptText = 'Relance tout';
-  if (topOpt && topOpt.kept && topOpt.kept.length > 0) {
+  if (topOpt?.kept?.length > 0) {
     const counts = { A: 0, B: 0, C: 0 };
     topOpt.kept.forEach(f => {
       if (f <= 3) counts.A++;
@@ -943,24 +943,64 @@ function renderStrategy(data) {
     keptText = 'Garde ' + parts.join(' + ');
   }
 
+  // Target ability from top option's prob_dist
   let abilityText = '';
-  if (topOpt && topOpt.prob_dist) {
+  let topProbName = '';
+  if (topOpt?.prob_dist) {
     const top = Object.entries(topOpt.prob_dist)
       .filter(([, v]) => v > 5)
       .sort((a, b) => b[1] - a[1])[0];
-    if (top) abilityText = ` → vise <strong>${top[0]}</strong> (${top[1].toFixed(0)}%)`;
+    if (top) { topProbName = top[0]; abilityText = ` → vise <strong>${top[0]}</strong> (${top[1].toFixed(0)}%)`; }
   }
 
+  // ── Objectif dynamique depuis ability board ────────────────────────
+  let objectifText;
+  if (saEV > 0 && reapEV > 0 && saEV > reapEV) {
+    objectifText = `⚡ <strong>Spectral Assault</strong> (${saEV.toFixed(1)}) dépasse Reap (${reapEV.toFixed(1)}) — bascule sur SA`;
+  } else if (dominant) {
+    const ev = dominant.value.toFixed(1);
+    if (dominant.name === 'Reap') {
+      const extra = dreadful === 3 ? ' — à 1 token du Terrorize' : dreadful <= 2 ? ', +2 tokens garanti' : '';
+      objectifText = `Vise <strong>Reap</strong> (${ev} EV)${extra}`;
+    } else if (dominant.name === 'Ride Down') {
+      objectifText = `Vise <strong>Ride Down</strong> (${ev} EV) — maintiens AAABB, évite C`;
+    } else if (dominant.name.startsWith('Sow Despair')) {
+      objectifText = `Vise <strong>${dominant.name}</strong> (${ev} EV) — suite de dés`;
+    } else {
+      objectifText = `Vise <strong>${dominant.name}</strong> (${ev} EV)`;
+    }
+  } else {
+    objectifText = dreadful >= 5
+      ? `⚠ Évite de gagner un 5e token en attaquant (valeur 0.5 seulement)`
+      : `Génère des Dreadful → priorité <strong>Reap</strong> (BBBC), +2 tokens garanti`;
+  }
+
+  // ── EV delta always visible ────────────────────────────────────────
   let tightText = '';
-  const opts = data.top_options || [];
-  if (opts.length >= 2 && opts[0].ev - opts[1].ev < 0.5) {
-    const diff = (opts[0].ev - opts[1].ev).toFixed(2);
-    tightText = `⚠ Choix serré : option #2 à ${opts[1].ev.toFixed(2)} EV (écart ${diff})`;
+  if (opts.length >= 2) {
+    const diff  = (opts[0].ev - opts[1].ev).toFixed(2);
+    const label = parseFloat(diff) < 0.5 ? '⚠ Choix serré' : 'Option #2';
+    tightText   = `${label} : ${opts[1].ev.toFixed(2)} EV (écart ${diff})`;
   }
 
-  const conseilText = `${keptText}${abilityText}`;
+  // ── Ride Down callout — 1 C blocks it ─────────────────────────────
+  let rideDownCallout = '';
+  {
+    const dc = { a: 0, b: 0, c: 0 };
+    dice.forEach(f => { if (f <= 3) dc.a++; else if (f <= 5) dc.b++; else dc.c++; });
+    if (dc.a >= 2 && dc.b >= 2 && dc.c === 1) {
+      rideDownCallout = `1 C parasite bloque <strong>Ride Down</strong> — envisage de la relancer`;
+    }
+  }
 
-  // Tête Hantée
+  // ── Sow Despair in top 3 ───────────────────────────────────────────
+  let sowCallout = '';
+  const sowEntry = boardSorted.find(a => a.name.startsWith('Sow Despair') && top3Names.has(a.name));
+  if (sowEntry) {
+    sowCallout = `<strong>${sowEntry.name}</strong> dans le top 3 (${sowEntry.value.toFixed(1)} EV) — suite possible`;
+  }
+
+  // ── Tête Hantée ───────────────────────────────────────────────────
   let teteText;
   if (headLocation === 'player') {
     teteText = dreadful < 3
@@ -970,14 +1010,21 @@ function renderStrategy(data) {
     teteText = `Adversaire a la Tête — +1 Dreadful en upkeep garanti`;
   }
 
+  const extras = [rideDownCallout, sowCallout].filter(Boolean)
+    .map(t => `<div class="strat-section" style="margin-top:8px"><div class="strat-text">${t}</div></div>`)
+    .join('');
+
+  const conseilLabel = dominant ? `Conseil — ${topProbName || dominant.name}` : 'Conseil';
+
   panel.innerHTML = `
     <div class="strat-section strat-highlight">
-      <div class="strat-label">Conseil</div>
-      <div class="strat-text">${conseilText}</div>
+      <div class="strat-label">${conseilLabel}</div>
+      <div class="strat-text">${keptText}${abilityText}</div>
     </div>
-    ${tightText ? `<div class="strat-section" style="margin-top:10px">
+    ${tightText ? `<div class="strat-section" style="margin-top:8px">
       <div class="strat-text">${tightText}</div>
     </div>` : ''}
+    ${extras}
     <div class="strat-section" style="margin-top:10px">
       <div class="strat-label">Objectif du tour</div>
       <div class="strat-text">${objectifText}</div>
