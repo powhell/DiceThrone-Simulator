@@ -98,11 +98,12 @@ describe('non-terminal states (oracle)', () => {
 // ─── calculateOptimalKeep shape ──────────────────────────────────────────────
 
 describe('calculateOptimalKeep result structure', () => {
-  it('returns at most 5 options sorted by EV descending', () => {
+  it('returns at most 6 options; first 5 sorted by EV descending', () => {
     const r = calculateOptimalKeep([1, 2, 3, 4, 5], 2, 0, false)
-    expect(r.topOptions.length).toBeLessThanOrEqual(5)
-    for (let i = 1; i < r.topOptions.length; i++) {
-      expect(r.topOptions[i - 1].ev).toBeGreaterThanOrEqual(r.topOptions[i].ev)
+    expect(r.topOptions.length).toBeLessThanOrEqual(6)
+    const top5 = r.topOptions.slice(0, 5)
+    for (let i = 1; i < top5.length; i++) {
+      expect(top5[i - 1].ev).toBeGreaterThanOrEqual(top5[i].ev)
     }
   })
 
@@ -128,5 +129,15 @@ describe('calculateOptimalKeep result structure', () => {
     const r = calculateOptimalKeep([2, 3, 4, 5, 6], 1, 0, false)
     const partial = r.topOptions.find(o => o.kept.join(',') === '3,4,5,6')
     if (partial) expect(partial.probDist['Sow Despair L'] ?? 0).toBeGreaterThan(0)
+  })
+
+  it('Keep All forced in topOptions when ability already matched', () => {
+    const r = calculateOptimalKeep([1, 2, 3, 4, 5], 2, 0, false)
+    const keepAll = r.topOptions.find(o => o.kept.length === 5)
+    expect(keepAll).toBeDefined()
+    expect(keepAll!.isGuaranteed).toBe(true)
+    const vals = Object.values(keepAll!.probDist)
+    expect(vals.length).toBe(1)
+    expect(vals[0]).toBeCloseTo(100, 0)
   })
 })

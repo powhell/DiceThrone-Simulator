@@ -7,6 +7,7 @@ export interface KeepOption {
   kept: number[]
   ev: number
   probDist: Record<string, number>  // ability name → probability % (0-100)
+  isGuaranteed?: boolean
 }
 
 export interface SolverResult {
@@ -187,9 +188,24 @@ export function calculateOptimalKeep(
 
   options.sort((a, b) => b.ev - a.ev)
 
+  let topOptions = options.slice(0, 5)
+
+  const currentAbility = bestAbilityName(sorted, dreadful, hasHead)
+  if (currentAbility !== 'Whiff' && rollsRemaining > 0) {
+    const keepAllKey = sorted.join(',')
+    const existing = topOptions.find(o => o.kept.join(',') === keepAllKey)
+    if (existing) {
+      existing.isGuaranteed = true
+    } else {
+      const keepAllOpt = options.find(o => o.kept.join(',') === keepAllKey)!
+      keepAllOpt.isGuaranteed = true
+      topOptions = [...topOptions, keepAllOpt]
+    }
+  }
+
   return {
     currentEv,
-    topOptions: options.slice(0, 5),
+    topOptions,
     abilities: buildAbilityBoard(sorted, dreadful, hasHead),
   }
 }
