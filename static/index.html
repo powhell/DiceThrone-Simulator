@@ -133,6 +133,7 @@
   .prob-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
   .prob-pct { font-size: 0.62rem; color: var(--muted); width: 34px; text-align: right; flex-shrink: 0; }
   .fork-badge { font-size: 0.58rem; background: rgba(245,166,35,0.2); border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+  .guar-badge { font-size: 0.58rem; background: rgba(76,175,80,0.2); border: 1px solid var(--green); color: var(--green); border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
 
   /* Ability board */
   .ability { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid var(--border); opacity: 0.45; transition: all 0.2s; }
@@ -606,7 +607,7 @@ function callEngine(diceArr, rollsRem, dreadfulCount, headLoc) {
   const result = HHEngine.calculateOptimalKeep(diceArr, rollsRem, dreadfulCount, headLoc === 'player');
   return {
     current_ev: result.currentEv,
-    top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist })),
+    top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist, is_guaranteed: o.isGuaranteed ?? false })),
     abilities: result.abilities.map(a => ({ name: a.name, value: a.value, base_damage: a.baseDamage, matched: a.matched })),
   };
 }
@@ -915,6 +916,7 @@ function renderOptions(options) {
       : opt.kept.map(f => `<div class="mini-die ${SYMCLASS[f]}">${getDieSvg(SYMCLASS[f])}</div>`).join('');
     const label = i === 0 ? '★ Best' : `#${i+1}`;
     const forkBadge = isFork(opt.prob_dist) ? '<span class="fork-badge">FORK</span>' : '';
+    const guarBadge = opt.is_guaranteed ? '<span class="guar-badge">🔒 STOP</span>' : '';
     const bars = renderProbBars(opt.prob_dist);
     return `
       <div class="option ${i===0?'best':''}" onclick="applyKeep(${JSON.stringify(opt.kept)})">
@@ -923,6 +925,7 @@ function renderOptions(options) {
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:${bars?'4px':'0'}">
             <div class="option-dice">${diceHtml}</div>
             ${forkBadge}
+            ${guarBadge}
             <div style="margin-left:auto">
               <div class="option-ev">${opt.ev.toFixed(2)}</div>
               <div class="option-label">EV</div>
