@@ -161,6 +161,15 @@
   .hr-table td, .hr-table th { padding: 3px 6px; border: 1px solid var(--border); text-align: center; }
   .hr-current { background: rgba(245,166,35,0.15); color: var(--gold); font-weight: 700; }
 
+  /* HP inputs */
+  .hp-input {
+    width: 56px; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 4px 6px; font-size: 1.05rem; font-weight: 700; text-align: center;
+    -moz-appearance: textfield;
+  }
+  .hp-input::-webkit-outer-spin-button, .hp-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .hp-input:focus { outline: none; border-color: var(--accent); }
+
   /* Strategy panel */
   .strat-section { margin-bottom: 10px; }
   .strat-section:last-child { margin-bottom: 0; }
@@ -168,6 +177,8 @@
   .strat-text { font-size: 0.8rem; line-height: 1.45; color: var(--text); }
   .strat-text strong { color: var(--gold); }
   .strat-highlight { background: rgba(245,166,35,0.07); border-left: 2px solid var(--gold); padding: 6px 8px; border-radius: 0 4px 4px 0; }
+  .strat-lethal { background: rgba(233,69,96,0.12); border-left: 2px solid var(--accent); padding: 6px 8px; border-radius: 0 4px 4px 0; }
+  .strat-lethal strong { color: var(--accent); }
 
   @media (max-width: 680px) { .layout { grid-template-columns: 1fr; } }
   @media (max-width: 520px) {
@@ -221,6 +232,14 @@
         <div class="ctrl-group">
           <label>Haunted Head</label>
           <div class="btn-row" id="headCtrl"></div>
+        </div>
+        <div class="ctrl-group">
+          <label>HP (You / Ennemi)</label>
+          <div class="btn-row" style="gap:6px;align-items:center">
+            <input type="number" class="hp-input" id="hpPlayerInput" min="1" max="50" value="50" oninput="hpPlayer=Math.max(1,Math.min(50,+this.value||50))">
+            <span style="color:var(--muted);font-size:0.75rem">/</span>
+            <input type="number" class="hp-input" id="hpEnemyInput" min="1" max="50" value="50" oninput="hpEnemy=Math.max(1,Math.min(50,+this.value||50))">
+          </div>
         </div>
       </div>
     </div>
@@ -627,6 +646,8 @@ let kept           = [false, false, false, false, false];
 let rollsRemaining = 2;
 let dreadful       = 0;
 let headLocation   = 'opponent';
+let hpPlayer       = 50;
+let hpEnemy        = 50;
 let turnPhase      = 0;
 
 // ─── Roll logic ──────────────────────────────────────────────────────────────
@@ -1000,6 +1021,27 @@ function renderStrategy(data) {
     sowCallout = `<strong>${sowEntry.name}</strong> dans le top 3 (${sowEntry.value.toFixed(1)} EV) — suite possible`;
   }
 
+  // ── Lethal detection ──────────────────────────────────────────────
+  let lethalCallout = '';
+  let is2TurnKill   = false;
+  if (hpEnemy > 0 && board.length > 0) {
+    const abilityMap   = Object.fromEntries(board.map(a => [a.name, a]));
+    const probKeys     = topOpt?.prob_dist ? Object.keys(topOpt.prob_dist) : [];
+    const maxDmgThisTurn = probKeys.reduce((max, name) => {
+      const ab = abilityMap[name];
+      return ab && ab.base_damage > max ? ab.base_damage : max;
+    }, 0);
+    const est2TurnDmg  = dominant ? dominant.base_damage * 2 : 0;
+
+    if (maxDmgThisTurn >= hpEnemy) {
+      const lethalAb = board.find(a => a.base_damage >= hpEnemy && probKeys.includes(a.name));
+      lethalCallout  = `💀 <strong>LETHAL possible</strong> ce tour avec ${lethalAb?.name ?? 'une ability'} (${maxDmgThisTurn} dmg / ${hpEnemy} HP)`;
+    } else if (est2TurnDmg >= hpEnemy) {
+      is2TurnKill   = true;
+      lethalCallout = `⚡ Kill en <strong>2 tours</strong> possible — priorise dégâts directs (${dominant.base_damage}×2 = ${est2TurnDmg} dmg)`;
+    }
+  }
+
   // ── Tête Hantée ───────────────────────────────────────────────────
   let teteText;
   if (headLocation === 'player') {
@@ -1014,20 +1056,27 @@ function renderStrategy(data) {
     .map(t => `<div class="strat-section" style="margin-top:8px"><div class="strat-text">${t}</div></div>`)
     .join('');
 
-  const conseilLabel = dominant ? `Conseil — ${topProbName || dominant.name}` : 'Conseil';
+  const conseilLabel  = dominant ? `Conseil — ${topProbName || dominant.name}` : 'Conseil';
+  const lethalSection = lethalCallout
+    ? `<div class="strat-section strat-lethal" style="margin-top:8px"><div class="strat-text">${lethalCallout}</div></div>`
+    : '';
+  const objectifFinal = is2TurnKill
+    ? objectifText + ` <em style="color:var(--accent);font-size:0.75rem">(2-turn kill window)</em>`
+    : objectifText;
 
   panel.innerHTML = `
     <div class="strat-section strat-highlight">
       <div class="strat-label">${conseilLabel}</div>
       <div class="strat-text">${keptText}${abilityText}</div>
     </div>
+    ${lethalSection}
     ${tightText ? `<div class="strat-section" style="margin-top:8px">
       <div class="strat-text">${tightText}</div>
     </div>` : ''}
     ${extras}
     <div class="strat-section" style="margin-top:10px">
       <div class="strat-label">Objectif du tour</div>
-      <div class="strat-text">${objectifText}</div>
+      <div class="strat-text">${objectifFinal}</div>
     </div>
     <div class="strat-section" style="margin-top:10px">
       <div class="strat-label">Tête Hantée</div>
