@@ -142,6 +142,10 @@
   .ability-dmg { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
   .ability-dmg span { color: var(--text); font-weight: 600; }
   .ability-val { font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 42px; text-align: right; }
+  .gain-badge { font-size: 0.58rem; border-radius: 3px; padding: 1px 4px; margin-left: 3px; }
+  .gain-dread { background: rgba(171,71,188,0.25); color: #ce93d8; border: 1px solid #7b1fa2; }
+  .gain-gp    { background: rgba(245,166,35,0.2);  color: var(--gold); border: 1px solid #a0722a; }
+  .gain-note  { font-size: 0.58rem; color: var(--muted); margin-left: 4px; font-style: italic; }
 
   .status { text-align: center; font-size: 0.8rem; color: var(--muted); padding: 6px; }
   .ev-display { text-align: center; margin: 8px 0; }
@@ -794,14 +798,31 @@ async function runEval(silent = false) {
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
+const ABILITY_GAINS = {
+  'Dreadful Charge (CCCCC)':    { dreadful: 4 },
+  'Horrify (CCCC)':             { dreadful: 3, note: 'ou GP · les 2 si Tête' },
+  'Spectral Assault (AAACC)':   {},
+  'Cleave 4A (AAAA)':           { dreadful: 1 },
+  'Ride Down (AAABB)':          { gp: 2 },
+  'Reap (BBBC)':                { dreadful: 2, note: '+carte si Tête' },
+  'Sow Despair L (5-straight)': { dreadful: 2 },
+  'Sow Despair S (4-straight)': { dreadful: 1 },
+  'Whiff':                      { gp: 1 },
+};
+
 function renderAbilities(abilities, currentEv) {
   document.getElementById('currentEv').textContent = currentEv.toFixed(2);
   const board = document.getElementById('abilityBoard');
   board.innerHTML = abilities.map(ab => {
     const dmgCol = `<span class="ability-dmg"><span>${ab.base_damage.toFixed(1)}</span> dmg</span>`;
+    const g = ABILITY_GAINS[ab.name] || {};
+    let gainsHtml = '';
+    if (g.dreadful) gainsHtml += `<span class="gain-badge gain-dread">+${g.dreadful}☠</span>`;
+    if (g.gp)       gainsHtml += `<span class="gain-badge gain-gp">+${g.gp}GP</span>`;
+    if (g.note)     gainsHtml += `<span class="gain-note">${g.note}</span>`;
     return `
     <div class="ability ${ab.matched ? 'matched' : ''}">
-      <span class="ability-name">${ab.name}</span>
+      <span class="ability-name">${ab.name}${gainsHtml}</span>
       <div class="ability-nums">
         ${dmgCol}
         <span class="ability-val">${ab.value.toFixed(1)} EV</span>
