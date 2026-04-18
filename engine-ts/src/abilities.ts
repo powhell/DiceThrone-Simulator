@@ -48,7 +48,9 @@ export function getCandidates(
   }
   if (c >= 4) {
     const base = HORRIFY_BASE_UNDEFENDABLE
-    out.push(['Horrify', base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN), base])
+    let val = base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN)
+    if (hasHead) val += GRIM_PURSUIT_AVG_DMG
+    out.push(['Horrify', val, base])
   }
   if (a >= 3 && c >= 2) {
     const val = SPECTRAL_ASSAULT_BASE + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL
@@ -100,6 +102,8 @@ export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boo
 
   const dc = dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN)
   const horrifyGain = dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN)
+  let horrifyVal = HORRIFY_BASE_UNDEFENDABLE + horrifyGain
+  if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG
   let reapVal = REAP_UNDEFENDABLE + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN)
   if (hasHead) reapVal += CARD_DRAW_VALUE
   const sowLVal = SOW_LARGE_DMG + dreadfulValueOfGaining(dreadful, SOW_LARGE_DREADFUL)
@@ -110,7 +114,7 @@ export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boo
 
   return [
     { name: 'Dreadful Charge (CCCCC)', value: DREADFUL_CHARGE_VALUE + dc,         baseDamage: DREADFUL_CHARGE_VALUE,       matched: matchedSet.has('Dreadful Charge') },
-    { name: 'Horrify (CCCC)',          value: HORRIFY_BASE_UNDEFENDABLE + horrifyGain, baseDamage: HORRIFY_BASE_UNDEFENDABLE, matched: matchedSet.has('Horrify') },
+    { name: 'Horrify (CCCC)',          value: horrifyVal,                            baseDamage: HORRIFY_BASE_UNDEFENDABLE,    matched: matchedSet.has('Horrify') },
     { name: 'Spectral Assault (AAACC)',value: saVal,                               baseDamage: SPECTRAL_ASSAULT_BASE,       matched: matchedSet.has('Spectral Assault') },
     { name: 'Cleave 5A (AAAAA)',       value: CLEAVE_5A,                           baseDamage: CLEAVE_5A,                   matched: matchedSet.has('Cleave 5A') },
     { name: 'Cleave 4A (AAAA)',        value: CLEAVE_4A,                           baseDamage: CLEAVE_4A,                   matched: matchedSet.has('Cleave 4A') },

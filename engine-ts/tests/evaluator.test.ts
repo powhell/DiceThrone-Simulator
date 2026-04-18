@@ -42,6 +42,10 @@ describe('terminal states', () => {
     expect(evalState([1, 6, 6, 6, 6], 0, 0, false)).toBeCloseTo(15.0)
   })
 
+  it('Horrify at dreadful=0 with Head → 16.66', () => {
+    expect(evalState([1, 6, 6, 6, 6], 0, 0, true)).toBeCloseTo(16.66, 2)
+  })
+
   it('Ride Down at dreadful=0 (6+2×1.66=9.32)', () => {
     // [1,2,4,4,4] → a=2, b=3, c=0 → RideDown: 6 + 2*1.66 = 9.32
     expect(evalState([1, 2, 4, 4, 4], 0, 0, false)).toBeCloseTo(9.32, 2)
