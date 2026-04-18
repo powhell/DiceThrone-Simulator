@@ -154,6 +154,13 @@
 
   .sep { height: 1px; background: var(--border); margin: 12px 0; }
 
+  .hr-toggle { display: flex; gap: 4px; margin-bottom: 8px; }
+  .hr-toggle button { flex: 1; padding: 4px; cursor: pointer; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+  .hr-toggle button.active { background: var(--gold); color: #000; font-weight: 700; }
+  .hr-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .hr-table td, .hr-table th { padding: 3px 6px; border: 1px solid var(--border); text-align: center; }
+  .hr-current { background: rgba(245,166,35,0.15); color: var(--gold); font-weight: 700; }
+
   /* Strategy panel */
   .strat-section { margin-bottom: 10px; }
   .strat-section:last-child { margin-bottom: 0; }
@@ -238,6 +245,13 @@
     </div>
     <div class="sep"></div>
     <div id="abilityBoard"></div>
+    <div class="sep"></div>
+    <h2 style="margin-top:12px">Hallowed Reckoning</h2>
+    <div class="hr-toggle">
+      <button id="hrBase" class="active" onclick="setHR('base')">Base</button>
+      <button id="hrUpg" onclick="setHR('upgraded')">Upgraded</button>
+    </div>
+    <div id="hrTable"></div>
   </div>
 </div>
 
@@ -768,6 +782,7 @@ function adjustDreadful(delta) {
   dreadful = Math.max(0, Math.min(5, dreadful + delta));
   document.getElementById('dreadfulDisplay').textContent = dreadful;
   liveBoardUpdate();
+  renderHR();
 }
 
 // ─── Backend calls ───────────────────────────────────────────────────────────
@@ -914,34 +929,36 @@ function renderStrategy(data) {
   }
 
   // Conseil du tour
-  let conseilText = '';
   const topOpt = data.top_options && data.top_options[0];
-  const abilities = data.abilities || [];
-  const spectralMatched = abilities.some(a => a.name === 'Spectral Assault' && a.matched);
-  const reapMatched     = abilities.some(a => a.name === 'Reap' && a.matched);
 
-  if (spectralMatched) {
-    conseilText = `<strong>Spectral Assault disponible!</strong> EV maximisé — garde les haches et citrouilles`;
-  } else if (reapMatched && dreadful <= 3) {
-    conseilText = `<strong>Reap disponible</strong> — gain assuré de +2 Dreadful`;
-  } else if (topOpt && topOpt.prob_dist) {
-    const probs = topOpt.prob_dist;
-    const sp = probs['Spectral Assault'] || 0;
-    const rp = probs['Reap'] || 0;
-    const rd = probs['Ride Down'] || 0;
-    if (sp > 25) {
-      conseilText = `Spectral Assault en vue (${sp.toFixed(0)}%) — garde haches + citrouilles`;
-    } else if (rp > 20 && dreadful <= 3) {
-      conseilText = `Reap probable (${rp.toFixed(0)}%) — garde tes B et C`;
-    } else if (rd > 30 && dreadful >= 4) {
-      conseilText = `<strong>Ride Down</strong> optimal à ce compte — évite les citrouilles`;
-    } else {
-      const top = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
-      if (top && top[1] >= 10) {
-        conseilText = `Vise <strong>${top[0]}</strong> (${top[1].toFixed(0)}% de chance)`;
-      }
-    }
+  let keptText = 'Relance tout';
+  if (topOpt && topOpt.kept && topOpt.kept.length > 0) {
+    const counts = { A: 0, B: 0, C: 0 };
+    topOpt.kept.forEach(f => {
+      if (f <= 3) counts.A++;
+      else if (f <= 5) counts.B++;
+      else counts.C++;
+    });
+    const parts = ['A', 'B', 'C'].filter(k => counts[k] > 0).map(k => `${counts[k]}${k}`);
+    keptText = 'Garde ' + parts.join(' + ');
   }
+
+  let abilityText = '';
+  if (topOpt && topOpt.prob_dist) {
+    const top = Object.entries(topOpt.prob_dist)
+      .filter(([, v]) => v > 5)
+      .sort((a, b) => b[1] - a[1])[0];
+    if (top) abilityText = ` → vise <strong>${top[0]}</strong> (${top[1].toFixed(0)}%)`;
+  }
+
+  let tightText = '';
+  const opts = data.top_options || [];
+  if (opts.length >= 2 && opts[0].ev - opts[1].ev < 0.5) {
+    const diff = (opts[0].ev - opts[1].ev).toFixed(2);
+    tightText = `⚠ Choix serré : option #2 à ${opts[1].ev.toFixed(2)} EV (écart ${diff})`;
+  }
+
+  const conseilText = `${keptText}${abilityText}`;
 
   // Tête Hantée
   let teteText;
@@ -955,17 +972,45 @@ function renderStrategy(data) {
 
   panel.innerHTML = `
     <div class="strat-section strat-highlight">
+      <div class="strat-label">Conseil</div>
+      <div class="strat-text">${conseilText}</div>
+    </div>
+    ${tightText ? `<div class="strat-section" style="margin-top:10px">
+      <div class="strat-text">${tightText}</div>
+    </div>` : ''}
+    <div class="strat-section" style="margin-top:10px">
       <div class="strat-label">Objectif du tour</div>
       <div class="strat-text">${objectifText}</div>
     </div>
-    ${conseilText ? `<div class="strat-section" style="margin-top:10px">
-      <div class="strat-label">Conseil</div>
-      <div class="strat-text">${conseilText}</div>
-    </div>` : ''}
     <div class="strat-section" style="margin-top:10px">
       <div class="strat-label">Tête Hantée</div>
       <div class="strat-text">${teteText}</div>
     </div>`;
+}
+
+// ─── Hallowed Reckoning ──────────────────────────────────────────────────────
+
+const HR_VALUES = {
+  base:     [0.75, 1.61, 2.51, 3.41, 4.13, 3.08],
+  upgraded: [1.65, 2.63, 3.63, 4.61, 4.45, 3.40],
+};
+let hrMode = 'base';
+
+function setHR(mode) {
+  hrMode = mode;
+  document.getElementById('hrBase').classList.toggle('active', mode === 'base');
+  document.getElementById('hrUpg').classList.toggle('active', mode === 'upgraded');
+  renderHR();
+}
+
+function renderHR() {
+  const vals = HR_VALUES[hrMode];
+  const rows = vals.map((v, i) => {
+    const cls = i === dreadful ? ' class="hr-current"' : '';
+    return `<tr${cls}><td>${i}</td><td>${v.toFixed(2)}</td></tr>`;
+  }).join('');
+  document.getElementById('hrTable').innerHTML =
+    `<table class="hr-table"><thead><tr><th>Tokens</th><th>Def EV</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -975,6 +1020,7 @@ buildHeadCtrl();
 updateTurnIndicator();
 updateRollButton();
 liveBoardUpdate();
+renderHR();
 </script>
 
 </body>
