@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { evalState, calculateOptimalKeep, clearCache } from '../src/evaluator.js'
+import { evalState, calculateOptimalKeep, clearCache } from '../src/index.js'
 
 beforeEach(() => clearCache())
 

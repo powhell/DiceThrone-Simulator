@@ -10,14 +10,21 @@ import {
   HORRIFY_BASE_UNDEFENDABLE, HORRIFY_DREADFUL_GIVEN,
   WHIFF_PURSUIT_TOKENS,
 } from './constants.js'
-import { classifyDice } from './dice.js'
 import { dreadfulValueOfGaining } from './dreadful.js'
+import type { AbilityEntry } from '../../core/types.js'
 
-export interface AbilityEntry {
-  name: string
-  value: number
-  baseDamage: number
-  matched: boolean
+export type HHSymbol = 'A' | 'B' | 'C'
+
+export function hhFaceToSymbol(face: number): HHSymbol {
+  if (face <= 3) return 'A'
+  if (face <= 5) return 'B'
+  return 'C'
+}
+
+function classify(dice: number[]): { A: number; B: number; C: number } {
+  const counts = { A: 0, B: 0, C: 0 }
+  for (const face of dice) counts[hhFaceToSymbol(face)]++
+  return counts
 }
 
 function hasStraight(dice: number[], length: number): boolean {
@@ -32,14 +39,12 @@ function hasStraight(dice: number[], length: number): boolean {
   return false
 }
 
-// Returns [internalName, value, baseDamage] for all abilities whose dice
-// requirements are met by the given dice.
 export function getCandidates(
   dice: number[],
   dreadful: number,
   hasHead: boolean,
 ): Array<[string, number, number]> {
-  const { A: a, B: b, C: c } = classifyDice(dice)
+  const { A: a, B: b, C: c } = classify(dice)
   const out: Array<[string, number, number]> = []
 
   if (c >= 5) {
@@ -95,8 +100,6 @@ export function bestAbilityName(dice: number[], dreadful: number, hasHead: boole
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
-// Builds the full ability board (all 11 abilities) with hypothetical values
-// even for abilities whose dice requirement is not currently met.
 export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boolean): AbilityEntry[] {
   const matchedSet = new Set(getCandidates(dice, dreadful, hasHead).map(([name]) => name))
 

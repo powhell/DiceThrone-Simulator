@@ -21,12 +21,170 @@ var HHEngine = (() => {
   // src/index.ts
   var src_exports = {};
   __export(src_exports, {
-    calculateOptimalKeep: () => calculateOptimalKeep,
+    calculateOptimalKeep: () => calculateOptimalKeep2,
     clearCache: () => clearCache,
-    evalState: () => evalState
+    evalState: () => evalState2
   });
 
-  // src/constants.ts
+  // src/core/dice.ts
+  var OUTCOMES = [];
+  for (let n = 0; n <= 5; n++) {
+    if (n === 0) {
+      OUTCOMES[n] = [[]];
+      continue;
+    }
+    const cur = [];
+    for (const sub of OUTCOMES[n - 1]) {
+      for (let face = 1; face <= 6; face++) {
+        cur.push([face, ...sub]);
+      }
+    }
+    OUTCOMES[n] = cur;
+  }
+  function enumerateOutcomes(n) {
+    return OUTCOMES[n];
+  }
+
+  // src/core/evaluator.ts
+  var evMemo = /* @__PURE__ */ new Map();
+  var distMemo = /* @__PURE__ */ new Map();
+  function cacheKey(cfg, kept, rollsRemaining, state) {
+    return `${cfg.id}|${kept.join(",")}|${rollsRemaining}|${cfg.stateKey(state)}`;
+  }
+  function clearCache() {
+    evMemo.clear();
+    distMemo.clear();
+  }
+  function evalState(cfg, kept, rollsRemaining, state) {
+    if (rollsRemaining === 0) {
+      if (kept.length !== 5) throw new Error(`evalState: need 5 dice at rolls=0, got ${kept.length}`);
+      return cfg.bestAbilityValue(kept, state);
+    }
+    const key = cacheKey(cfg, kept, rollsRemaining, state);
+    const cached = evMemo.get(key);
+    if (cached !== void 0) return cached;
+    const nReroll = 5 - kept.length;
+    const prob = Math.pow(1 / 6, nReroll);
+    let totalEv = 0;
+    for (const outcome of enumerateOutcomes(nReroll)) {
+      const full = [...kept, ...outcome].sort((a, b) => a - b);
+      totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state);
+    }
+    evMemo.set(key, totalEv);
+    return totalEv;
+  }
+  function _bestKeepEv(cfg, full, rollsRemaining, state) {
+    if (rollsRemaining === 0) return evalState(cfg, full, 0, state);
+    let best = -Infinity;
+    for (let mask = 0; mask < 32; mask++) {
+      const kept = [];
+      for (let i = 0; i < 5; i++) {
+        if (mask & 1 << i) kept.push(full[i]);
+      }
+      kept.sort((a, b) => a - b);
+      const ev = evalState(cfg, kept, rollsRemaining, state);
+      if (ev > best) best = ev;
+    }
+    return best;
+  }
+  function _optimalKeep(cfg, full, rollsRemaining, state) {
+    if (rollsRemaining === 0) return full;
+    let bestEv = -Infinity;
+    let bestKept = full;
+    for (let mask = 0; mask < 32; mask++) {
+      const kept = [];
+      for (let i = 0; i < 5; i++) {
+        if (mask & 1 << i) kept.push(full[i]);
+      }
+      kept.sort((a, b) => a - b);
+      const ev = evalState(cfg, kept, rollsRemaining, state);
+      if (ev > bestEv) {
+        bestEv = ev;
+        bestKept = kept;
+      }
+    }
+    return bestKept;
+  }
+  function _abilityDist(cfg, kept, rollsRemaining, state) {
+    if (rollsRemaining === 0) {
+      if (kept.length !== 5) throw new Error("Need 5 dice at rolls=0");
+      return { [cfg.bestAbilityName(kept, state)]: 1 };
+    }
+    const key = cacheKey(cfg, kept, rollsRemaining, state);
+    const cached = distMemo.get(key);
+    if (cached !== void 0) return cached;
+    const nReroll = 5 - kept.length;
+    const prob = Math.pow(1 / 6, nReroll);
+    const dist = {};
+    for (const outcome of enumerateOutcomes(nReroll)) {
+      const full = [...kept, ...outcome].sort((a, b) => a - b);
+      const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state);
+      const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state);
+      for (const [name, p] of Object.entries(sub)) {
+        dist[name] = (dist[name] ?? 0) + prob * p;
+      }
+    }
+    distMemo.set(key, dist);
+    return dist;
+  }
+  function calculateOptimalKeep(cfg, dice, rollsRemaining, state) {
+    const sorted = [...dice].sort((a, b) => a - b);
+    const currentEv = cfg.bestAbilityValue(sorted, state);
+    if (rollsRemaining === 0) {
+      const dist = _abilityDist(cfg, sorted, 0, state);
+      return {
+        currentEv,
+        topOptions: [{
+          kept: sorted,
+          ev: currentEv,
+          probDist: _distToPercent(dist)
+        }],
+        abilities: cfg.buildAbilityBoard(sorted, state)
+      };
+    }
+    const seenKeys = /* @__PURE__ */ new Set();
+    const options = [];
+    for (let mask = 0; mask < 32; mask++) {
+      const kept = [];
+      for (let i = 0; i < 5; i++) {
+        if (mask & 1 << i) kept.push(sorted[i]);
+      }
+      kept.sort((a, b) => a - b);
+      const kKey = kept.join(",");
+      if (seenKeys.has(kKey)) continue;
+      seenKeys.add(kKey);
+      const ev = evalState(cfg, kept, rollsRemaining, state);
+      const dist = _abilityDist(cfg, kept, rollsRemaining, state);
+      options.push({ kept, ev, probDist: _distToPercent(dist) });
+    }
+    options.sort((a, b) => b.ev - a.ev);
+    let topOptions = options.slice(0, 5);
+    if (cfg.hasMatchedAbility(sorted, state) && rollsRemaining > 0) {
+      const keepAllKey = sorted.join(",");
+      const existing = topOptions.find((o) => o.kept.join(",") === keepAllKey);
+      if (existing) {
+        existing.isGuaranteed = true;
+      } else {
+        const keepAllOpt = options.find((o) => o.kept.join(",") === keepAllKey);
+        keepAllOpt.isGuaranteed = true;
+        topOptions = [...topOptions, keepAllOpt];
+      }
+    }
+    return {
+      currentEv,
+      topOptions,
+      abilities: cfg.buildAbilityBoard(sorted, state)
+    };
+  }
+  function _distToPercent(dist) {
+    const out = {};
+    for (const [name, p] of Object.entries(dist)) {
+      out[name] = Math.round(p * 1e4) / 100;
+    }
+    return out;
+  }
+
+  // src/characters/horseman/constants.ts
   var GRIM_PURSUIT_AVG_DMG = 1.66;
   var CARD_DRAW_VALUE = 2;
   var SPECTRAL_ASSAULT_BASE = 8;
@@ -47,36 +205,7 @@ var HHEngine = (() => {
   var HORRIFY_DREADFUL_GIVEN = 3;
   var WHIFF_PURSUIT_TOKENS = 1;
 
-  // src/dice.ts
-  function faceToSymbol(face) {
-    if (face <= 3) return "A";
-    if (face <= 5) return "B";
-    return "C";
-  }
-  function classifyDice(dice) {
-    const counts = { A: 0, B: 0, C: 0 };
-    for (const face of dice) counts[faceToSymbol(face)]++;
-    return counts;
-  }
-  var OUTCOMES = [];
-  for (let n = 0; n <= 5; n++) {
-    if (n === 0) {
-      OUTCOMES[n] = [[]];
-      continue;
-    }
-    const cur = [];
-    for (const sub of OUTCOMES[n - 1]) {
-      for (let face = 1; face <= 6; face++) {
-        cur.push([face, ...sub]);
-      }
-    }
-    OUTCOMES[n] = cur;
-  }
-  function enumerateOutcomes(n) {
-    return OUTCOMES[n];
-  }
-
-  // src/dreadful.ts
+  // src/characters/horseman/dreadful.ts
   var MARGINAL_VALUE = [3, 3, 3, 5, 0.5];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
@@ -88,7 +217,17 @@ var HHEngine = (() => {
     return total;
   }
 
-  // src/abilities.ts
+  // src/characters/horseman/abilities.ts
+  function hhFaceToSymbol(face) {
+    if (face <= 3) return "A";
+    if (face <= 5) return "B";
+    return "C";
+  }
+  function classify(dice) {
+    const counts = { A: 0, B: 0, C: 0 };
+    for (const face of dice) counts[hhFaceToSymbol(face)]++;
+    return counts;
+  }
   function hasStraight(dice, length) {
     const unique = new Set(dice);
     for (let start = 1; start <= 7 - length; start++) {
@@ -104,7 +243,7 @@ var HHEngine = (() => {
     return false;
   }
   function getCandidates(dice, dreadful, hasHead) {
-    const { A: a, B: b, C: c } = classifyDice(dice);
+    const { A: a, B: b, C: c } = classify(dice);
     const out = [];
     if (c >= 5) {
       const base = DREADFUL_CHARGE_VALUE;
@@ -183,144 +322,38 @@ var HHEngine = (() => {
     ];
   }
 
-  // src/evaluator.ts
-  var evMemo = /* @__PURE__ */ new Map();
-  var distMemo = /* @__PURE__ */ new Map();
-  function cacheKey(kept, rollsRemaining, dreadful, hasHead) {
-    return `${kept.join(",")}|${rollsRemaining}|${dreadful}|${hasHead ? 1 : 0}`;
+  // src/characters/horseman/config.ts
+  var hhConfig = {
+    id: "hh",
+    faceToSymbol(face) {
+      return hhFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      return bestAbilityValue(dice, state.dreadful, state.hasHead);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName(dice, state.dreadful, state.hasHead);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard(dice, state.dreadful, state.hasHead);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates(dice, state.dreadful, state.hasHead);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}`;
+    }
+  };
+
+  // src/index.ts
+  function evalState2(kept, rollsRemaining, dreadful, hasHead) {
+    const state = { dreadful, hasHead };
+    return evalState(hhConfig, kept, rollsRemaining, state);
   }
-  function clearCache() {
-    evMemo.clear();
-    distMemo.clear();
-  }
-  function evalState(kept, rollsRemaining, dreadful, hasHead) {
-    if (rollsRemaining === 0) {
-      if (kept.length !== 5) throw new Error(`evalState: need 5 dice at rolls=0, got ${kept.length}`);
-      return bestAbilityValue(kept, dreadful, hasHead);
-    }
-    const key = cacheKey(kept, rollsRemaining, dreadful, hasHead);
-    const cached = evMemo.get(key);
-    if (cached !== void 0) return cached;
-    const nReroll = 5 - kept.length;
-    const prob = Math.pow(1 / 6, nReroll);
-    let totalEv = 0;
-    for (const outcome of enumerateOutcomes(nReroll)) {
-      const full = [...kept, ...outcome].sort((a, b) => a - b);
-      totalEv += prob * _bestKeepEv(full, rollsRemaining - 1, dreadful, hasHead);
-    }
-    evMemo.set(key, totalEv);
-    return totalEv;
-  }
-  function _bestKeepEv(full, rollsRemaining, dreadful, hasHead) {
-    if (rollsRemaining === 0) return evalState(full, 0, dreadful, hasHead);
-    let best = -Infinity;
-    for (let mask = 0; mask < 32; mask++) {
-      const kept = [];
-      for (let i = 0; i < 5; i++) {
-        if (mask & 1 << i) kept.push(full[i]);
-      }
-      kept.sort((a, b) => a - b);
-      const ev = evalState(kept, rollsRemaining, dreadful, hasHead);
-      if (ev > best) best = ev;
-    }
-    return best;
-  }
-  function _optimalKeep(full, rollsRemaining, dreadful, hasHead) {
-    if (rollsRemaining === 0) return full;
-    let bestEv = -Infinity;
-    let bestKept = full;
-    for (let mask = 0; mask < 32; mask++) {
-      const kept = [];
-      for (let i = 0; i < 5; i++) {
-        if (mask & 1 << i) kept.push(full[i]);
-      }
-      kept.sort((a, b) => a - b);
-      const ev = evalState(kept, rollsRemaining, dreadful, hasHead);
-      if (ev > bestEv) {
-        bestEv = ev;
-        bestKept = kept;
-      }
-    }
-    return bestKept;
-  }
-  function _abilityDist(kept, rollsRemaining, dreadful, hasHead) {
-    if (rollsRemaining === 0) {
-      if (kept.length !== 5) throw new Error("Need 5 dice at rolls=0");
-      return { [bestAbilityName(kept, dreadful, hasHead)]: 1 };
-    }
-    const key = cacheKey(kept, rollsRemaining, dreadful, hasHead);
-    const cached = distMemo.get(key);
-    if (cached !== void 0) return cached;
-    const nReroll = 5 - kept.length;
-    const prob = Math.pow(1 / 6, nReroll);
-    const dist = {};
-    for (const outcome of enumerateOutcomes(nReroll)) {
-      const full = [...kept, ...outcome].sort((a, b) => a - b);
-      const bestKept = _optimalKeep(full, rollsRemaining - 1, dreadful, hasHead);
-      const sub = _abilityDist(bestKept, rollsRemaining - 1, dreadful, hasHead);
-      for (const [name, p] of Object.entries(sub)) {
-        dist[name] = (dist[name] ?? 0) + prob * p;
-      }
-    }
-    distMemo.set(key, dist);
-    return dist;
-  }
-  function calculateOptimalKeep(dice, rollsRemaining, dreadful, hasHead) {
-    const sorted = [...dice].sort((a, b) => a - b);
-    const currentEv = bestAbilityValue(sorted, dreadful, hasHead);
-    if (rollsRemaining === 0) {
-      const dist = _abilityDist(sorted, 0, dreadful, hasHead);
-      return {
-        currentEv,
-        topOptions: [{
-          kept: sorted,
-          ev: currentEv,
-          probDist: _distToPercent(dist)
-        }],
-        abilities: buildAbilityBoard(sorted, dreadful, hasHead)
-      };
-    }
-    const seenKeys = /* @__PURE__ */ new Set();
-    const options = [];
-    for (let mask = 0; mask < 32; mask++) {
-      const kept = [];
-      for (let i = 0; i < 5; i++) {
-        if (mask & 1 << i) kept.push(sorted[i]);
-      }
-      kept.sort((a, b) => a - b);
-      const kKey = kept.join(",");
-      if (seenKeys.has(kKey)) continue;
-      seenKeys.add(kKey);
-      const ev = evalState(kept, rollsRemaining, dreadful, hasHead);
-      const dist = _abilityDist(kept, rollsRemaining, dreadful, hasHead);
-      options.push({ kept, ev, probDist: _distToPercent(dist) });
-    }
-    options.sort((a, b) => b.ev - a.ev);
-    let topOptions = options.slice(0, 5);
-    const currentAbility = bestAbilityName(sorted, dreadful, hasHead);
-    if (currentAbility !== "Whiff" && rollsRemaining > 0) {
-      const keepAllKey = sorted.join(",");
-      const existing = topOptions.find((o) => o.kept.join(",") === keepAllKey);
-      if (existing) {
-        existing.isGuaranteed = true;
-      } else {
-        const keepAllOpt = options.find((o) => o.kept.join(",") === keepAllKey);
-        keepAllOpt.isGuaranteed = true;
-        topOptions = [...topOptions, keepAllOpt];
-      }
-    }
-    return {
-      currentEv,
-      topOptions,
-      abilities: buildAbilityBoard(sorted, dreadful, hasHead)
-    };
-  }
-  function _distToPercent(dist) {
-    const out = {};
-    for (const [name, p] of Object.entries(dist)) {
-      out[name] = Math.round(p * 1e4) / 100;
-    }
-    return out;
+  function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead) {
+    const state = { dreadful, hasHead };
+    return calculateOptimalKeep(hhConfig, dice, rollsRemaining, state);
   }
   return __toCommonJS(src_exports);
 })();

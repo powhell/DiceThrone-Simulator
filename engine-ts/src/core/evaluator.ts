@@ -1,12 +1,10 @@
-import { bestAbilityValue, bestAbilityName, buildAbilityBoard, AbilityEntry } from './abilities.js'
+import type { CharacterConfig, AbilityEntry } from './types.js'
 import { enumerateOutcomes } from './dice.js'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface KeepOption {
   kept: number[]
   ev: number
-  probDist: Record<string, number>  // ability name → probability % (0-100)
+  probDist: Record<string, number>
   isGuaranteed?: boolean
 }
 
@@ -16,13 +14,11 @@ export interface SolverResult {
   abilities: AbilityEntry[]
 }
 
-// ─── Memoization ─────────────────────────────────────────────────────────────
-
 const evMemo = new Map<string, number>()
 const distMemo = new Map<string, Record<string, number>>()
 
-function cacheKey(kept: number[], rollsRemaining: number, dreadful: number, hasHead: boolean): string {
-  return `${kept.join(',')}|${rollsRemaining}|${dreadful}|${hasHead ? 1 : 0}`
+function cacheKey<S>(cfg: CharacterConfig<S>, kept: number[], rollsRemaining: number, state: S): string {
+  return `${cfg.id}|${kept.join(',')}|${rollsRemaining}|${cfg.stateKey(state)}`
 }
 
 export function clearCache(): void {
@@ -30,20 +26,18 @@ export function clearCache(): void {
   distMemo.clear()
 }
 
-// ─── Core solver ─────────────────────────────────────────────────────────────
-
-export function evalState(
+export function evalState<S>(
+  cfg: CharacterConfig<S>,
   kept: number[],
   rollsRemaining: number,
-  dreadful: number,
-  hasHead: boolean,
+  state: S,
 ): number {
   if (rollsRemaining === 0) {
     if (kept.length !== 5) throw new Error(`evalState: need 5 dice at rolls=0, got ${kept.length}`)
-    return bestAbilityValue(kept, dreadful, hasHead)
+    return cfg.bestAbilityValue(kept, state)
   }
 
-  const key = cacheKey(kept, rollsRemaining, dreadful, hasHead)
+  const key = cacheKey(cfg, kept, rollsRemaining, state)
   const cached = evMemo.get(key)
   if (cached !== undefined) return cached
 
@@ -53,42 +47,39 @@ export function evalState(
   let totalEv = 0.0
   for (const outcome of enumerateOutcomes(nReroll)) {
     const full = [...kept, ...outcome].sort((a, b) => a - b)
-    totalEv += prob * _bestKeepEv(full, rollsRemaining - 1, dreadful, hasHead)
+    totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state)
   }
 
   evMemo.set(key, totalEv)
   return totalEv
 }
 
-// Given exactly 5 dice, find the EV of the best keeping strategy.
-function _bestKeepEv(
+function _bestKeepEv<S>(
+  cfg: CharacterConfig<S>,
   full: number[],
   rollsRemaining: number,
-  dreadful: number,
-  hasHead: boolean,
+  state: S,
 ): number {
-  if (rollsRemaining === 0) return evalState(full, 0, dreadful, hasHead)
+  if (rollsRemaining === 0) return evalState(cfg, full, 0, state)
 
   let best = -Infinity
-  // All 2^5 = 32 subsets via bitmask
   for (let mask = 0; mask < 32; mask++) {
     const kept: number[] = []
     for (let i = 0; i < 5; i++) {
       if (mask & (1 << i)) kept.push(full[i])
     }
     kept.sort((a, b) => a - b)
-    const ev = evalState(kept, rollsRemaining, dreadful, hasHead)
+    const ev = evalState(cfg, kept, rollsRemaining, state)
     if (ev > best) best = ev
   }
   return best
 }
 
-// Given exactly 5 dice, return the optimal kept subset (sorted).
-function _optimalKeep(
+function _optimalKeep<S>(
+  cfg: CharacterConfig<S>,
   full: number[],
   rollsRemaining: number,
-  dreadful: number,
-  hasHead: boolean,
+  state: S,
 ): number[] {
   if (rollsRemaining === 0) return full
 
@@ -101,28 +92,24 @@ function _optimalKeep(
       if (mask & (1 << i)) kept.push(full[i])
     }
     kept.sort((a, b) => a - b)
-    const ev = evalState(kept, rollsRemaining, dreadful, hasHead)
+    const ev = evalState(cfg, kept, rollsRemaining, state)
     if (ev > bestEv) { bestEv = ev; bestKept = kept }
   }
   return bestKept
 }
 
-// ─── Ability distribution ────────────────────────────────────────────────────
-
-// Returns probability distribution over ability names (values sum to 1.0),
-// assuming optimal play from the given state.
-function _abilityDist(
+function _abilityDist<S>(
+  cfg: CharacterConfig<S>,
   kept: number[],
   rollsRemaining: number,
-  dreadful: number,
-  hasHead: boolean,
+  state: S,
 ): Record<string, number> {
   if (rollsRemaining === 0) {
     if (kept.length !== 5) throw new Error('Need 5 dice at rolls=0')
-    return { [bestAbilityName(kept, dreadful, hasHead)]: 1.0 }
+    return { [cfg.bestAbilityName(kept, state)]: 1.0 }
   }
 
-  const key = cacheKey(kept, rollsRemaining, dreadful, hasHead)
+  const key = cacheKey(cfg, kept, rollsRemaining, state)
   const cached = distMemo.get(key)
   if (cached !== undefined) return cached
 
@@ -132,8 +119,8 @@ function _abilityDist(
 
   for (const outcome of enumerateOutcomes(nReroll)) {
     const full = [...kept, ...outcome].sort((a, b) => a - b)
-    const bestKept = _optimalKeep(full, rollsRemaining - 1, dreadful, hasHead)
-    const sub = _abilityDist(bestKept, rollsRemaining - 1, dreadful, hasHead)
+    const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state)
+    const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state)
     for (const [name, p] of Object.entries(sub)) {
       dist[name] = (dist[name] ?? 0) + prob * p
     }
@@ -143,19 +130,17 @@ function _abilityDist(
   return dist
 }
 
-// ─── Public entry point ───────────────────────────────────────────────────────
-
-export function calculateOptimalKeep(
+export function calculateOptimalKeep<S>(
+  cfg: CharacterConfig<S>,
   dice: number[],
   rollsRemaining: number,
-  dreadful: number,
-  hasHead: boolean,
+  state: S,
 ): SolverResult {
   const sorted = [...dice].sort((a, b) => a - b)
-  const currentEv = bestAbilityValue(sorted, dreadful, hasHead)
+  const currentEv = cfg.bestAbilityValue(sorted, state)
 
   if (rollsRemaining === 0) {
-    const dist = _abilityDist(sorted, 0, dreadful, hasHead)
+    const dist = _abilityDist(cfg, sorted, 0, state)
     return {
       currentEv,
       topOptions: [{
@@ -163,11 +148,10 @@ export function calculateOptimalKeep(
         ev: currentEv,
         probDist: _distToPercent(dist),
       }],
-      abilities: buildAbilityBoard(sorted, dreadful, hasHead),
+      abilities: cfg.buildAbilityBoard(sorted, state),
     }
   }
 
-  // Enumerate all 32 unique subsets, compute EV + distribution for each
   const seenKeys = new Set<string>()
   const options: KeepOption[] = []
 
@@ -181,8 +165,8 @@ export function calculateOptimalKeep(
     if (seenKeys.has(kKey)) continue
     seenKeys.add(kKey)
 
-    const ev = evalState(kept, rollsRemaining, dreadful, hasHead)
-    const dist = _abilityDist(kept, rollsRemaining, dreadful, hasHead)
+    const ev = evalState(cfg, kept, rollsRemaining, state)
+    const dist = _abilityDist(cfg, kept, rollsRemaining, state)
     options.push({ kept, ev, probDist: _distToPercent(dist) })
   }
 
@@ -190,8 +174,7 @@ export function calculateOptimalKeep(
 
   let topOptions = options.slice(0, 5)
 
-  const currentAbility = bestAbilityName(sorted, dreadful, hasHead)
-  if (currentAbility !== 'Whiff' && rollsRemaining > 0) {
+  if (cfg.hasMatchedAbility(sorted, state) && rollsRemaining > 0) {
     const keepAllKey = sorted.join(',')
     const existing = topOptions.find(o => o.kept.join(',') === keepAllKey)
     if (existing) {
@@ -206,14 +189,14 @@ export function calculateOptimalKeep(
   return {
     currentEv,
     topOptions,
-    abilities: buildAbilityBoard(sorted, dreadful, hasHead),
+    abilities: cfg.buildAbilityBoard(sorted, state),
   }
 }
 
 function _distToPercent(dist: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [name, p] of Object.entries(dist)) {
-    out[name] = Math.round(p * 10000) / 100  // two decimal places, as %
+    out[name] = Math.round(p * 10000) / 100
   }
   return out
 }

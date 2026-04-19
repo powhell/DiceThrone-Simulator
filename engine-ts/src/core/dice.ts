@@ -1,14 +1,15 @@
-export type Symbol = 'A' | 'B' | 'C'
+import type { CharacterConfig, Symbol } from './types.js'
 
-export function faceToSymbol(face: number): Symbol {
-  if (face <= 3) return 'A'
-  if (face <= 5) return 'B'
-  return 'C'
+export function faceToSymbol<S>(face: number, cfg: CharacterConfig<S>): Symbol {
+  return cfg.faceToSymbol(face)
 }
 
-export function classifyDice(dice: number[]): { A: number; B: number; C: number } {
-  const counts = { A: 0, B: 0, C: 0 }
-  for (const face of dice) counts[faceToSymbol(face)]++
+export function classifyDice<S>(dice: number[], cfg: CharacterConfig<S>): Record<Symbol, number> {
+  const counts: Record<Symbol, number> = {}
+  for (const face of dice) {
+    const s = cfg.faceToSymbol(face)
+    counts[s] = (counts[s] ?? 0) + 1
+  }
   return counts
 }
 
