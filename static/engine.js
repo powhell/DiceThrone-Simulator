@@ -1,5 +1,5 @@
 "use strict";
-var HHEngine = (() => {
+var Engine = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -21,6 +21,8 @@ var HHEngine = (() => {
   // src/index.ts
   var src_exports = {};
   __export(src_exports, {
+    BWEngine: () => BWEngine,
+    HHEngine: () => HHEngine,
     calculateOptimalKeep: () => calculateOptimalKeep2,
     clearCache: () => clearCache,
     evalState: () => evalState2
@@ -346,14 +348,206 @@ var HHEngine = (() => {
     }
   };
 
+  // src/characters/black_widow/constants.ts
+  var BATON_STRIKE_3B = 5;
+  var BATON_STRIKE_4B = 6;
+  var BATON_STRIKE_5B = 7;
+  var INFILTRATE_BASE_DMG = 0;
+  var INFILTRATE_TB_INFLICTED = 1;
+  var INFILTRATE_AGILITY_GAIN = 1;
+  var GAUNTLETS_BASE_DMG = 6;
+  var GAUNTLETS_CP_GAIN = 1;
+  var HACKED_BASE_DMG = 5;
+  var HACKED_THRESHOLD_UPGRADES = 3;
+  var HACKED_THRESHOLD_BONUS = 2;
+  var HACKED_TB_INFLICTED = 1;
+  var GRAPPLE_BASE_DMG = 5;
+  var GRAPPLE_AGILITY_GAIN = 1;
+  var VENGEANCE_BASE_DMG = 7;
+  var VENGEANCE_AGILITY_GAIN = 1;
+  var VENGEANCE_RIDER_DICE = 4;
+  var WIDOWS_BITE_BASE_DMG = 10;
+  var WIDOWS_BITE_TB_INFLICTED = 1;
+  var RRT_THRESHOLD_UPGRADES = 5;
+  var RRT_ALL_ATTACK_BONUS = 1;
+  var AGILITY_VALUE = 2;
+  var CP_TO_DMG_EQUIV = 1.5;
+  var WHIFF_VALUE = 0;
+
+  // src/characters/black_widow/timebomb.ts
+  var TB_VALUE_LOW = 2.8;
+  var TB_VALUE_HIGH = 3.36;
+  var TB_STACK_CAP = 2;
+  function tbMarginalValue(upgrades, currentTB) {
+    if (currentTB >= TB_STACK_CAP) return 0;
+    return upgrades >= 6 ? TB_VALUE_HIGH : TB_VALUE_LOW;
+  }
+  function tbGainValue(upgrades, currentTB, gained) {
+    let total = 0;
+    for (let i = 0; i < gained; i++) {
+      total += tbMarginalValue(upgrades, currentTB + i);
+    }
+    return total;
+  }
+
+  // src/characters/black_widow/abilities.ts
+  function bwFaceToSymbol(face) {
+    if (face <= 2) return "A";
+    if (face <= 5) return "B";
+    return "C";
+  }
+  function classify2(dice) {
+    const counts = { A: 0, B: 0, C: 0 };
+    for (const face of dice) counts[bwFaceToSymbol(face)]++;
+    return counts;
+  }
+  function hasStraight2(dice, length) {
+    const unique = new Set(dice);
+    for (let start = 1; start <= 7 - length; start++) {
+      let ok = true;
+      for (let i = 0; i < length; i++) {
+        if (!unique.has(start + i)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return true;
+    }
+    return false;
+  }
+  function binom(n, k) {
+    let r = 1;
+    for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+    return r;
+  }
+  function vengeanceRiderEV(upgrades, tbOnOpp) {
+    const n = VENGEANCE_RIDER_DICE;
+    const riderDmg = n * (5 / 6);
+    const p1 = 1 / 6, p0 = 5 / 6;
+    let tbEV = 0;
+    for (let k = 0; k <= n; k++) {
+      const p = binom(n, k) * Math.pow(p1, k) * Math.pow(p0, n - k);
+      const gained = Math.min(k, 2 - tbOnOpp);
+      tbEV += p * tbGainValue(upgrades, tbOnOpp, gained);
+    }
+    return riderDmg + tbEV;
+  }
+  function getCandidates2(dice, upgrades, tbOnOpp) {
+    const { A: a, B: b, C: c } = classify2(dice);
+    const out = [];
+    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    if (b >= 5) {
+      out.push(["Baton Strike 5B", BATON_STRIKE_5B + rrt, BATON_STRIKE_5B]);
+    } else if (b === 4) {
+      out.push(["Baton Strike 4B", BATON_STRIKE_4B + rrt, BATON_STRIKE_4B]);
+    } else if (b === 3) {
+      out.push(["Baton Strike 3B", BATON_STRIKE_3B + rrt, BATON_STRIKE_3B]);
+    }
+    if (a >= 2 && b >= 1 && c >= 1) {
+      const tb = tbGainValue(upgrades, tbOnOpp, INFILTRATE_TB_INFLICTED);
+      const agility = INFILTRATE_AGILITY_GAIN * AGILITY_VALUE;
+      out.push(["Infiltrate", INFILTRATE_BASE_DMG + tb + agility + rrt, INFILTRATE_BASE_DMG]);
+    }
+    if (a >= 3 && b >= 2) {
+      const val = GAUNTLETS_BASE_DMG + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
+      out.push(["Widow's Gauntlets", val, GAUNTLETS_BASE_DMG]);
+    }
+    if (hasStraight2(dice, 4)) {
+      const thresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
+      const tb = tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED);
+      out.push(["Hacked", HACKED_BASE_DMG + thresh + tb + rrt, HACKED_BASE_DMG]);
+    }
+    if (c >= 4) {
+      const val = GRAPPLE_BASE_DMG + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + rrt;
+      out.push(["Grapple", val, GRAPPLE_BASE_DMG]);
+    }
+    if (hasStraight2(dice, 5)) {
+      const rider = vengeanceRiderEV(upgrades, tbOnOpp);
+      const agility = VENGEANCE_AGILITY_GAIN * AGILITY_VALUE;
+      out.push(["Vengeance", VENGEANCE_BASE_DMG + rider + agility + rrt, VENGEANCE_BASE_DMG]);
+    }
+    if (c >= 5) {
+      const tb = tbGainValue(upgrades, tbOnOpp, WIDOWS_BITE_TB_INFLICTED);
+      out.push(["Widow's Bite", WIDOWS_BITE_BASE_DMG + tb + rrt, WIDOWS_BITE_BASE_DMG]);
+    }
+    out.push(["Whiff", WHIFF_VALUE, WHIFF_VALUE]);
+    return out;
+  }
+  function bestAbilityValue2(dice, upgrades, tbOnOpp) {
+    return Math.max(...getCandidates2(dice, upgrades, tbOnOpp).map(([, v]) => v));
+  }
+  function bestAbilityName2(dice, upgrades, tbOnOpp) {
+    const cands = getCandidates2(dice, upgrades, tbOnOpp);
+    return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
+  }
+  function buildAbilityBoard2(dice, upgrades, tbOnOpp) {
+    const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp).map(([n]) => n));
+    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const infiltrateVal = INFILTRATE_BASE_DMG + tbGainValue(upgrades, tbOnOpp, INFILTRATE_TB_INFLICTED) + INFILTRATE_AGILITY_GAIN * AGILITY_VALUE + rrt;
+    const gauntletsVal = GAUNTLETS_BASE_DMG + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
+    const hackedThresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
+    const hackedVal = HACKED_BASE_DMG + hackedThresh + tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED) + rrt;
+    const grappleVal = GRAPPLE_BASE_DMG + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + rrt;
+    const vengeanceVal = VENGEANCE_BASE_DMG + vengeanceRiderEV(upgrades, tbOnOpp) + VENGEANCE_AGILITY_GAIN * AGILITY_VALUE + rrt;
+    const biteVal = WIDOWS_BITE_BASE_DMG + tbGainValue(upgrades, tbOnOpp, WIDOWS_BITE_TB_INFLICTED) + rrt;
+    return [
+      { name: "Widow's Bite (CCCCC)", value: biteVal, baseDamage: WIDOWS_BITE_BASE_DMG, matched: matched.has("Widow's Bite") },
+      { name: "Grapple (CCCC)", value: grappleVal, baseDamage: GRAPPLE_BASE_DMG, matched: matched.has("Grapple") },
+      { name: "Widow's Gauntlets (AAABB)", value: gauntletsVal, baseDamage: GAUNTLETS_BASE_DMG, matched: matched.has("Widow's Gauntlets") },
+      { name: "Vengeance (5-straight)", value: vengeanceVal, baseDamage: VENGEANCE_BASE_DMG, matched: matched.has("Vengeance") },
+      { name: "Hacked (4-straight)", value: hackedVal, baseDamage: HACKED_BASE_DMG, matched: matched.has("Hacked") },
+      { name: "Infiltrate (AABC)", value: infiltrateVal, baseDamage: INFILTRATE_BASE_DMG, matched: matched.has("Infiltrate") },
+      { name: "Baton Strike 5B (BBBBB)", value: BATON_STRIKE_5B + rrt, baseDamage: BATON_STRIKE_5B, matched: matched.has("Baton Strike 5B") },
+      { name: "Baton Strike 4B (BBBB)", value: BATON_STRIKE_4B + rrt, baseDamage: BATON_STRIKE_4B, matched: matched.has("Baton Strike 4B") },
+      { name: "Baton Strike 3B (BBB)", value: BATON_STRIKE_3B + rrt, baseDamage: BATON_STRIKE_3B, matched: matched.has("Baton Strike 3B") },
+      { name: "Whiff", value: WHIFF_VALUE, baseDamage: WHIFF_VALUE, matched: matched.has("Whiff") }
+    ];
+  }
+
+  // src/characters/black_widow/config.ts
+  var bwConfig = {
+    id: "bw",
+    faceToSymbol(face) {
+      return bwFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates2(dice, state.upgrades, state.tbOnOpp);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      return `${state.upgrades}|${state.tbOnOpp}`;
+    }
+  };
+
   // src/index.ts
   function evalState2(kept, rollsRemaining, dreadful, hasHead) {
-    const state = { dreadful, hasHead };
-    return evalState(hhConfig, kept, rollsRemaining, state);
+    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead });
   }
   function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead) {
-    const state = { dreadful, hasHead };
-    return calculateOptimalKeep(hhConfig, dice, rollsRemaining, state);
+    return calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead });
   }
+  var HHEngine = {
+    calculateOptimalKeep: calculateOptimalKeep2,
+    evalState: evalState2,
+    clearCache
+  };
+  var BWEngine = {
+    calculateOptimalKeep(dice, rollsRemaining, state) {
+      return calculateOptimalKeep(bwConfig, dice, rollsRemaining, state);
+    },
+    evalState(kept, rollsRemaining, state) {
+      return evalState(bwConfig, kept, rollsRemaining, state);
+    },
+    clearCache
+  };
   return __toCommonJS(src_exports);
 })();

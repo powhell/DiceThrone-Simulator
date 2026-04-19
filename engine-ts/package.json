@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "esbuild src/index.ts --bundle --format=iife --global-name=HHEngine --outfile=../static/engine.js && node inline.mjs"
+    "build": "esbuild src/index.ts --bundle --format=iife --global-name=Engine --outfile=../static/engine.js && node inline.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.21.5",
