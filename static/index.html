@@ -181,6 +181,17 @@
   .strat-lethal { background: rgba(233,69,96,0.12); border-left: 2px solid var(--accent); padding: 6px 8px; border-radius: 0 4px 4px 0; }
   .strat-lethal strong { color: var(--accent); }
 
+  /* Character selector */
+  .char-selector { display: flex; justify-content: center; gap: 8px; margin-bottom: 18px; }
+  .char-btn {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 6px 14px; cursor: pointer;
+    font-size: 0.85rem; letter-spacing: 0.5px; transition: all 0.15s;
+  }
+  .char-btn:hover { border-color: var(--gold); }
+  .char-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .char-btn.disabled-char:not(.active) { opacity: 0.55; }
+
   @media (max-width: 680px) { .layout { grid-template-columns: 1fr; } }
   @media (max-width: 520px) {
     .die { width: 64px; height: 64px; padding: 5px 6px 4px; }
@@ -191,8 +202,10 @@
 </head>
 <body>
 
-<h1>☠ HEADLESS HORSEMAN</h1>
+<h1 id="charTitle">☠ HEADLESS HORSEMAN</h1>
 <p class="subtitle">Dice Throne · Strategy Simulator</p>
+
+<div class="char-selector" id="charSelector"></div>
 
 <div class="layout">
   <!-- Left column -->
@@ -221,19 +234,8 @@
         <button class="secondary" onclick="resetTurn()">↺ Reset</button>
       </div>
 
-      <div class="controls">
-        <div class="ctrl-group">
-          <label>Dreadful Tokens</label>
-          <div class="btn-row">
-            <button onclick="adjustDreadful(-1)">−</button>
-            <span class="counter-display" id="dreadfulDisplay">0</span>
-            <button onclick="adjustDreadful(1)">+</button>
-          </div>
-        </div>
-        <div class="ctrl-group">
-          <label>Haunted Head</label>
-          <div class="btn-row" id="headCtrl"></div>
-        </div>
+      <div class="controls" id="controlsRow">
+        <div id="stateInputs" style="display:flex;gap:12px;flex-wrap:wrap"></div>
         <div class="ctrl-group">
           <label>HP (You / Ennemi)</label>
           <div class="btn-row" style="gap:6px;align-items:center">
@@ -266,12 +268,7 @@
     <div class="sep"></div>
     <div id="abilityBoard"></div>
     <div class="sep"></div>
-    <h2 style="margin-top:12px">Hallowed Reckoning</h2>
-    <div class="hr-toggle">
-      <button id="hrBase" class="active" onclick="setHR('base')">Base</button>
-      <button id="hrUpg" onclick="setHR('upgraded')">Upgraded</button>
-    </div>
-    <div id="hrTable"></div>
+    <div id="defensePanel"></div>
   </div>
 </div>
 
@@ -830,16 +827,34 @@ var Engine = (() => {
 })();
 </script><!-- ENGINE_BUNDLE_END -->
 <script>
-function callEngine(diceArr, rollsRem, dreadfulCount, headLoc) {
-  const result = Engine.HHEngine.calculateOptimalKeep(diceArr, rollsRem, dreadfulCount, headLoc === 'player');
-  return {
-    current_ev: result.currentEv,
-    top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist, is_guaranteed: o.isGuaranteed ?? false })),
-    abilities: result.abilities.map(a => ({ name: a.name, value: a.value, base_damage: a.baseDamage, matched: a.matched })),
-  };
+// ─── HH dice/ability config ──────────────────────────────────────────────────
+const HH_SYMCLASS  = {1:'a',2:'a',3:'a',4:'b',5:'b',6:'c'};
+const HH_FACE_LABEL = {1:'A',2:'A',3:'A',4:'B',5:'B',6:'C'};
+const HH_DIE_COLORS = { a: '#ffffff', b: '#42a5f5', c: '#ff8c00' };
+
+// SVG icons: axe (A), horseshoe (B), pumpkin head (C)
+function hhGetDieSvg(sc) {
+  const c = HH_DIE_COLORS[sc];
+  if (sc === 'a') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect x="11.5" y="9" width="2.5" height="14" rx="1.2" fill="${c}"/>
+    <path d="M12.5 3 C7 3 3 6 3 10 C3 14 7 16 12.5 12 L12.5 3 Z" fill="${c}"/>
+    <path d="M14 4 L18 5 L18 9 L14 10 Z" fill="${c}"/>
+  </svg>`;
+  if (sc === 'b') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="5" cy="4" r="2" fill="${c}"/>
+    <circle cx="19" cy="4" r="2" fill="${c}"/>
+    <path d="M5 4 L5 14 Q5 21.5 12 21.5 Q19 21.5 19 14 L19 4 L16.5 4 L16.5 14 Q16.5 19 12 19 Q7.5 19 7.5 14 L7.5 4 Z" fill="${c}"/>
+  </svg>`;
+  return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect x="11" y="1" width="2" height="3.5" rx="1" fill="${c}"/>
+    <path d="M3.5 13 Q3.5 21 12 21 Q20.5 21 20.5 13 Q20.5 7 17.5 5.5 Q15 4.5 12 5.5 Q9 4.5 6.5 5.5 Q3.5 7 3.5 13 Z" fill="${c}"/>
+    <polygon points="8,11 11,11 9.5,14" fill="#0d0d1f"/>
+    <polygon points="13,11 16,11 14.5,14" fill="#0d0d1f"/>
+    <path d="M8.5 16.5 L10.5 15.5 L12 17.5 L13.5 15.5 L15.5 16.5" fill="none" stroke="#0d0d1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
 }
 
-const ABILITY_COLOR = {
+const HH_ABILITY_COLOR = {
   'Dreadful Charge': '#ab47bc',
   'Horrify':         '#7b1fa2',
   'Spectral Assault':'#5c6bc0',
@@ -853,35 +868,66 @@ const ABILITY_COLOR = {
   'Whiff':           '#555',
 };
 
-const SYMCLASS  = {1:'a',2:'a',3:'a',4:'b',5:'b',6:'c'};
-const FACE_LABEL = {1:'A',2:'A',3:'A',4:'B',5:'B',6:'C'};
+const HH_ABILITY_GAINS = {
+  'Dreadful Charge (CCCCC)':    { dreadful: 4 },
+  'Horrify (CCCC)':             { dreadful: 3, note: 'ou GP · les 2 si Tête' },
+  'Spectral Assault (AAACC)':   { note: '+1.5 dmg/☠' },
+  'Cleave 5A (AAAAA)':          { dreadful: 1, note: 'si 4 identiques' },
+  'Cleave 4A (AAAA)':           { dreadful: 1, note: 'si 4 identiques' },
+  'Cleave 3A (AAA)':            {},
+  'Ride Down (AAABB)':          { gp: 2 },
+  'Reap (BBBC)':                { dreadful: 2, note: '+carte si Tête' },
+  'Sow Despair L (5-straight)': { dreadful: 2 },
+  'Sow Despair S (4-straight)': { dreadful: 1 },
+  'Whiff':                      { gp: 1 },
+};
 
-// SVG icons: axe (A), horseshoe (B), pumpkin head (C)
-// Colors baked directly to avoid currentColor cascade issues
-const DIE_COLORS = { a: '#ffffff', b: '#42a5f5', c: '#ff8c00' };
+// ─── Character registry ─────────────────────────────────────────────────────
+const CHARACTERS = {
+  horseman: {
+    id: 'horseman',
+    title: '☠ HEADLESS HORSEMAN',
+    label: '☠ Horseman',
+    implemented: true,
+    dice: { symClass: HH_SYMCLASS, faceLabel: HH_FACE_LABEL, dieColors: HH_DIE_COLORS, getSvg: hhGetDieSvg },
+    stateInputs: [
+      { id:'dreadful',     label:'Dreadful Tokens', type:'counter', min:0, max:5 },
+      { id:'headLocation', label:'Haunted Head',    type:'toggle',
+        options:[{value:'player',label:'Player'},{value:'opponent',label:'Opponent'}] },
+    ],
+    abilityGains: HH_ABILITY_GAINS,
+    abilityColor: HH_ABILITY_COLOR,
+    callEngine: hhCallEngine,
+    renderStrategy: renderHorsemanStrategy,
+    renderDefensePanel: renderHHDefense,
+    onStateChange: (id) => { if (id === 'dreadful') renderHR(); },
+  },
+  bw: {
+    id: 'bw',
+    title: '🕷 BLACK WIDOW',
+    label: '🕷 Black Widow',
+    implemented: false, // phase 4 — issue #15
+    dice: { symClass: HH_SYMCLASS, faceLabel: HH_FACE_LABEL, dieColors: HH_DIE_COLORS, getSvg: hhGetDieSvg },
+    stateInputs: [],
+    abilityGains: {},
+    abilityColor: {},
+    callEngine: null,
+    renderStrategy: renderBWPlaceholderStrategy,
+    renderDefensePanel: renderBWPlaceholderDefense,
+    onStateChange: () => {},
+  },
+};
 
-function getDieSvg(sc) {
-  const c = DIE_COLORS[sc];
-  if (sc === 'a') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <rect x="11.5" y="9" width="2.5" height="14" rx="1.2" fill="${c}"/>
-    <path d="M12.5 3 C7 3 3 6 3 10 C3 14 7 16 12.5 12 L12.5 3 Z" fill="${c}"/>
-    <path d="M14 4 L18 5 L18 9 L14 10 Z" fill="${c}"/>
-  </svg>`;
-  if (sc === 'b') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="5" cy="4" r="2" fill="${c}"/>
-    <circle cx="19" cy="4" r="2" fill="${c}"/>
-    <path d="M5 4 L5 14 Q5 21.5 12 21.5 Q19 21.5 19 14 L19 4 L16.5 4 L16.5 14 Q16.5 19 12 19 Q7.5 19 7.5 14 L7.5 4 Z" fill="${c}"/>
-  </svg>`;
-  // pumpkin
-  return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <rect x="11" y="1" width="2" height="3.5" rx="1" fill="${c}"/>
-    <path d="M3.5 13 Q3.5 21 12 21 Q20.5 21 20.5 13 Q20.5 7 17.5 5.5 Q15 4.5 12 5.5 Q9 4.5 6.5 5.5 Q3.5 7 3.5 13 Z" fill="${c}"/>
-    <polygon points="8,11 11,11 9.5,14" fill="#0d0d1f"/>
-    <polygon points="13,11 16,11 14.5,14" fill="#0d0d1f"/>
-    <path d="M8.5 16.5 L10.5 15.5 L12 17.5 L13.5 15.5 L15.5 16.5" fill="none" stroke="#0d0d1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
+// ─── Global state ───────────────────────────────────────────────────────────
+let currentCharId = localStorage.getItem('characterId') || 'horseman';
+if (!CHARACTERS[currentCharId]) currentCharId = 'horseman';
 
+const charState = {
+  horseman: { dreadful: 0, headLocation: 'opponent' },
+  bw:       {},
+};
+
+// Legacy aliases read by renderHorsemanStrategy — kept in sync with charState.horseman
 let dice           = [1, 1, 4, 4, 6];
 let kept           = [false, false, false, false, false];
 let rollsRemaining = 2;
@@ -890,6 +936,23 @@ let headLocation   = 'opponent';
 let hpPlayer       = 50;
 let hpEnemy        = 50;
 let turnPhase      = 0;
+
+// ─── Engine adapters ────────────────────────────────────────────────────────
+function hhCallEngine(diceArr, rollsRem, state) {
+  const result = Engine.HHEngine.calculateOptimalKeep(
+    diceArr, rollsRem, state.dreadful, state.headLocation === 'player');
+  return {
+    current_ev: result.currentEv,
+    top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist, is_guaranteed: o.isGuaranteed ?? false })),
+    abilities: result.abilities.map(a => ({ name: a.name, value: a.value, base_damage: a.baseDamage, matched: a.matched })),
+  };
+}
+
+function callEngine(diceArr, rollsRem) {
+  const cfg = CHARACTERS[currentCharId];
+  if (!cfg.callEngine) return null;
+  return cfg.callEngine(diceArr, rollsRem, charState[currentCharId]);
+}
 
 // ─── Roll logic ──────────────────────────────────────────────────────────────
 
@@ -979,18 +1042,19 @@ function updateTurnIndicator() {
 // ─── Dice UI ─────────────────────────────────────────────────────────────────
 
 function buildDiceRow() {
+  const cfg = CHARACTERS[currentCharId];
   const row = document.getElementById('diceRow');
   row.innerHTML = '';
   dice.forEach((face, i) => {
-    const sc = SYMCLASS[face];
+    const sc = cfg.dice.symClass[face];
     const d = document.createElement('div');
     d.className = `die type-${sc}${kept[i] ? ' kept' : ''}`;
     d.innerHTML = `
       <div class="die-header">
         <span class="die-num">${face}</span>
-        <span class="die-type-badge">${FACE_LABEL[face]}</span>
+        <span class="die-type-badge">${cfg.dice.faceLabel[face]}</span>
       </div>
-      <div class="die-icon">${getDieSvg(sc)}</div>
+      <div class="die-icon">${cfg.dice.getSvg(sc)}</div>
       <div class="die-footer">◀ ▶</div>`;
     d.addEventListener('click', () => { cycleDie(i, 1); });
     d.addEventListener('contextmenu', e => { e.preventDefault(); toggleKept(i); });
@@ -1012,6 +1076,7 @@ function toggleKept(i) {
 }
 
 function updateKeptLabel() {
+  const cfg = CHARACTERS[currentCharId];
   const keptDice = dice.filter((_, i) => kept[i]);
   const label = document.getElementById('keptLabel');
   if (turnPhase === 3) {
@@ -1021,40 +1086,83 @@ function updateKeptLabel() {
     label.textContent = 'Right-click dice to mark as kept for next reroll';
     label.style.color = 'var(--muted)';
   } else {
-    label.textContent = `Kept: ${keptDice.map(f => FACE_LABEL[f]).join(' ')} — click Roll to reroll the rest`;
+    label.textContent = `Kept: ${keptDice.map(f => cfg.dice.faceLabel[f]).join(' ')} — click Roll to reroll the rest`;
     label.style.color = 'var(--green)';
   }
 }
 
-// ─── Controls ────────────────────────────────────────────────────────────────
+// ─── State inputs (generic, driven by CHARACTERS[id].stateInputs) ─────────────
 
-function buildHeadCtrl() {
-  const c = document.getElementById('headCtrl');
-  c.innerHTML = '';
-  ['player','opponent'].forEach(loc => {
-    const b = document.createElement('button');
-    b.textContent = loc === 'player' ? 'Player' : 'Opponent';
-    b.className = headLocation === loc ? 'active' : '';
-    b.onclick = () => { headLocation = loc; buildHeadCtrl(); liveBoardUpdate(); };
-    c.appendChild(b);
+function buildStateInputs() {
+  const cfg = CHARACTERS[currentCharId];
+  const container = document.getElementById('stateInputs');
+  container.innerHTML = '';
+  const s = charState[currentCharId];
+  cfg.stateInputs.forEach(input => {
+    const g = document.createElement('div');
+    g.className = 'ctrl-group';
+    if (input.type === 'counter') {
+      g.innerHTML = `
+        <label>${input.label}</label>
+        <div class="btn-row">
+          <button data-act="dec">−</button>
+          <span class="counter-display">${s[input.id]}</span>
+          <button data-act="inc">+</button>
+        </div>`;
+      const disp = g.querySelector('.counter-display');
+      g.querySelector('[data-act="dec"]').onclick = () => adjustStateCounter(input, -1, disp);
+      g.querySelector('[data-act="inc"]').onclick = () => adjustStateCounter(input,  1, disp);
+    } else if (input.type === 'toggle') {
+      g.innerHTML = `<label>${input.label}</label>`;
+      const row = document.createElement('div');
+      row.className = 'btn-row';
+      input.options.forEach(opt => {
+        const b = document.createElement('button');
+        b.textContent = opt.label;
+        if (s[input.id] === opt.value) b.className = 'active';
+        b.onclick = () => setStateToggle(input, opt.value);
+        row.appendChild(b);
+      });
+      g.appendChild(row);
+    }
+    container.appendChild(g);
   });
 }
 
-function adjustDreadful(delta) {
-  dreadful = Math.max(0, Math.min(5, dreadful + delta));
-  document.getElementById('dreadfulDisplay').textContent = dreadful;
+function adjustStateCounter(input, delta, displayEl) {
+  const s = charState[currentCharId];
+  s[input.id] = Math.max(input.min, Math.min(input.max, s[input.id] + delta));
+  displayEl.textContent = s[input.id];
+  syncLegacyAliases();
+  CHARACTERS[currentCharId].onStateChange(input.id, s[input.id]);
   liveBoardUpdate();
-  renderHR();
+}
+
+function setStateToggle(input, value) {
+  charState[currentCharId][input.id] = value;
+  syncLegacyAliases();
+  CHARACTERS[currentCharId].onStateChange(input.id, value);
+  buildStateInputs();
+  liveBoardUpdate();
+}
+
+function syncLegacyAliases() {
+  if (currentCharId === 'horseman') {
+    dreadful     = charState.horseman.dreadful;
+    headLocation = charState.horseman.headLocation;
+  }
 }
 
 // ─── Backend calls ───────────────────────────────────────────────────────────
 
 async function liveBoardUpdate() {
+  const cfg = CHARACTERS[currentCharId];
+  if (!cfg.implemented) { renderDisabledPanels(); return; }
   if (rollsRemaining === 0) {
     await runEval(true);
   } else {
     try {
-      const data = callEngine(dice, 0, dreadful, headLocation);
+      const data = callEngine(dice, 0);
       renderAbilities(data.abilities, data.current_ev);
       renderStrategy(data);
     } catch(e) {}
@@ -1062,8 +1170,10 @@ async function liveBoardUpdate() {
 }
 
 async function runEval(silent = false) {
+  const cfg = CHARACTERS[currentCharId];
+  if (!cfg.implemented) { renderDisabledPanels(); return; }
   try {
-    const data = callEngine(dice, rollsRemaining, dreadful, headLocation);
+    const data = callEngine(dice, rollsRemaining);
     renderAbilities(data.abilities, data.current_ev);
     if (!silent || rollsRemaining === 0) renderOptions(data.top_options);
     renderStrategy(data);
@@ -1073,28 +1183,24 @@ async function runEval(silent = false) {
   }
 }
 
+function renderDisabledPanels() {
+  document.getElementById('currentEv').textContent = '—';
+  document.getElementById('abilityBoard').innerHTML =
+    '<p class="status">Personnage non implémenté (phase 4)</p>';
+  document.getElementById('optionsList').innerHTML =
+    '<p class="status">Personnage non implémenté (phase 4)</p>';
+  CHARACTERS[currentCharId].renderStrategy(null);
+}
+
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
-const ABILITY_GAINS = {
-  'Dreadful Charge (CCCCC)':    { dreadful: 4 },
-  'Horrify (CCCC)':             { dreadful: 3, note: 'ou GP · les 2 si Tête' },
-  'Spectral Assault (AAACC)':   { note: '+1.5 dmg/☠' },
-  'Cleave 5A (AAAAA)':          { dreadful: 1, note: 'si 4 identiques' },
-  'Cleave 4A (AAAA)':           { dreadful: 1, note: 'si 4 identiques' },
-  'Cleave 3A (AAA)':            {},
-  'Ride Down (AAABB)':          { gp: 2 },
-  'Reap (BBBC)':                { dreadful: 2, note: '+carte si Tête' },
-  'Sow Despair L (5-straight)': { dreadful: 2 },
-  'Sow Despair S (4-straight)': { dreadful: 1 },
-  'Whiff':                      { gp: 1 },
-};
-
 function renderAbilities(abilities, currentEv) {
+  const cfg = CHARACTERS[currentCharId];
   document.getElementById('currentEv').textContent = currentEv.toFixed(2);
   const board = document.getElementById('abilityBoard');
   board.innerHTML = abilities.map(ab => {
     const dmgCol = `<span class="ability-dmg"><span>${ab.base_damage.toFixed(1)}</span> dmg</span>`;
-    const g = ABILITY_GAINS[ab.name] || {};
+    const g = cfg.abilityGains[ab.name] || {};
     let gainsHtml = '';
     if (g.dreadful) gainsHtml += `<span class="gain-badge gain-dread">+${g.dreadful}☠</span>`;
     if (g.gp)       gainsHtml += `<span class="gain-badge gain-gp">+${g.gp}GP</span>`;
@@ -1112,10 +1218,12 @@ function renderAbilities(abilities, currentEv) {
 
 function renderProbBars(probDist) {
   if (!probDist) return '';
+  const cfg = CHARACTERS[currentCharId];
   const entries = Object.entries(probDist).sort((a, b) => b[1] - a[1]);
   const significant = entries.filter(([, p]) => p >= 1);
   const bars = significant.map(([name, pct]) => {
-    const color = ABILITY_COLOR[name] || '#888';
+    const baseName = name.replace(/\s*\(.*\)$/, '');
+    const color = cfg.abilityColor[baseName] || cfg.abilityColor[name] || '#888';
     return `<div class="prob-row">
       <span class="prob-label">${name}</span>
       <div class="prob-track"><div class="prob-fill" style="width:${pct}%;background:${color}"></div></div>
@@ -1132,6 +1240,7 @@ function isFork(probDist) {
 }
 
 function renderOptions(options) {
+  const cfg = CHARACTERS[currentCharId];
   const list = document.getElementById('optionsList');
   if (!options || options.length === 0) {
     list.innerHTML = '<p class="status">No options.</p>';
@@ -1140,7 +1249,7 @@ function renderOptions(options) {
   list.innerHTML = options.map((opt, i) => {
     const diceHtml = opt.kept.length === 0
       ? '<span style="color:var(--muted);font-size:0.75rem">re-roll all</span>'
-      : opt.kept.map(f => `<div class="mini-die ${SYMCLASS[f]}">${getDieSvg(SYMCLASS[f])}</div>`).join('');
+      : opt.kept.map(f => `<div class="mini-die ${cfg.dice.symClass[f]}">${cfg.dice.getSvg(cfg.dice.symClass[f])}</div>`).join('');
     const label = i === 0 ? '★ Best' : `#${i+1}`;
     const forkBadge = isFork(opt.prob_dist) ? '<span class="fork-badge">FORK</span>' : '';
     const guarBadge = opt.is_guaranteed ? '<span class="guar-badge">🔒 STOP</span>' : '';
@@ -1177,6 +1286,15 @@ function applyKeep(keptFaces) {
 // ─── Conseil Stratégique ─────────────────────────────────────────────────────
 
 function renderStrategy(data) {
+  CHARACTERS[currentCharId].renderStrategy(data);
+}
+
+function renderBWPlaceholderStrategy() {
+  document.getElementById('strategyContent').innerHTML =
+    '<p class="status">Black Widow — phase 4 (non implémenté)</p>';
+}
+
+function renderHorsemanStrategy(data) {
   const panel = document.getElementById('strategyContent');
   if (!data) { panel.innerHTML = ''; return; }
 
@@ -1327,13 +1445,28 @@ function renderStrategy(data) {
     </div>`;
 }
 
-// ─── Hallowed Reckoning ──────────────────────────────────────────────────────
+// ─── Defense panel (char-specific) ───────────────────────────────────────────
 
 const HR_VALUES = {
   base:     [0.75, 1.61, 2.51, 3.41, 4.13, 3.08],
   upgraded: [1.65, 2.63, 3.63, 4.61, 4.45, 3.40],
 };
 let hrMode = 'base';
+
+function renderHHDefense(el) {
+  el.innerHTML = `
+    <h2 style="margin-top:12px">Hallowed Reckoning</h2>
+    <div class="hr-toggle">
+      <button id="hrBase" onclick="setHR('base')">Base</button>
+      <button id="hrUpg" onclick="setHR('upgraded')">Upgraded</button>
+    </div>
+    <div id="hrTable"></div>`;
+  setHR(hrMode);
+}
+
+function renderBWPlaceholderDefense(el) {
+  el.innerHTML = '<p class="status" style="margin-top:12px">Sabotage — phase 4 (non implémenté)</p>';
+}
 
 function setHR(mode) {
   hrMode = mode;
@@ -1343,23 +1476,80 @@ function setHR(mode) {
 }
 
 function renderHR() {
+  if (currentCharId !== 'horseman') return;
+  const el = document.getElementById('hrTable');
+  if (!el) return;
   const vals = HR_VALUES[hrMode];
   const rows = vals.map((v, i) => {
     const cls = i === dreadful ? ' class="hr-current"' : '';
     return `<tr${cls}><td>${i}</td><td>${v.toFixed(2)}</td></tr>`;
   }).join('');
-  document.getElementById('hrTable').innerHTML =
+  el.innerHTML =
     `<table class="hr-table"><thead><tr><th>Tokens</th><th>Def EV</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ─── Character selector / switch ─────────────────────────────────────────────
+
+function renderCharSelector() {
+  const el = document.getElementById('charSelector');
+  el.innerHTML = '';
+  Object.values(CHARACTERS).forEach(cfg => {
+    const b = document.createElement('button');
+    let cls = 'char-btn';
+    if (cfg.id === currentCharId) cls += ' active';
+    if (!cfg.implemented)          cls += ' disabled-char';
+    b.className = cls;
+    b.textContent = cfg.label;
+    b.onclick = () => switchCharacter(cfg.id);
+    el.appendChild(b);
+  });
+}
+
+function renderTitle() {
+  document.getElementById('charTitle').textContent = CHARACTERS[currentCharId].title;
+}
+
+function renderDefensePanel() {
+  CHARACTERS[currentCharId].renderDefensePanel(document.getElementById('defensePanel'));
+}
+
+function switchCharacter(id) {
+  if (!CHARACTERS[id] || id === currentCharId) return;
+  currentCharId = id;
+  localStorage.setItem('characterId', id);
+
+  dice           = [1, 1, 1, 1, 1];
+  kept           = [false, false, false, false, false];
+  rollsRemaining = 2;
+  turnPhase      = 0;
+
+  syncLegacyAliases();
+
+  renderCharSelector();
+  renderTitle();
+  buildStateInputs();
+  buildDiceRow();
+  renderDefensePanel();
+  updateTurnIndicator();
+  updateRollButton();
+  document.getElementById('optionsList').innerHTML =
+    '<p class="status">Press Roll to start your turn, or Evaluate for manual analysis.</p>';
+  document.getElementById('strategyContent').innerHTML =
+    '<p class="status">Évalue ta main pour voir les conseils.</p>';
+  liveBoardUpdate();
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 
+syncLegacyAliases();
+renderCharSelector();
+renderTitle();
+buildStateInputs();
 buildDiceRow();
-buildHeadCtrl();
+renderDefensePanel();
 updateTurnIndicator();
 updateRollButton();
 liveBoardUpdate();
-renderHR();
 </script>
 
 </body>
