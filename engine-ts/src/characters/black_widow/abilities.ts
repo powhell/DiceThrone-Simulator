@@ -124,6 +124,27 @@ export function bestAbilityName(dice: number[], upgrades: number, tbOnOpp: numbe
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
+// Direct HP damage per ability this turn, excluding TB / Agility / CP gain EV.
+// Keys match short names returned by getCandidates / bestAbilityName (what probDist uses).
+// Vengeance rider: dmg-only contribution is 4 × 5/6 (each non-1 face, a "1" inflicts TB instead).
+export function directDamageByName(upgrades: number, _tbOnOpp: number): Record<string, number> {
+  const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0
+  const hackedThresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0
+  const vengeanceRiderDmg = VENGEANCE_RIDER_DICE * (5 / 6)
+  return {
+    'Baton Strike 3B':    BATON_STRIKE_3B + rrt,
+    'Baton Strike 4B':    BATON_STRIKE_4B + rrt,
+    'Baton Strike 5B':    BATON_STRIKE_5B + rrt,
+    'Infiltrate':         INFILTRATE_BASE_DMG + rrt,
+    "Widow's Gauntlets":  GAUNTLETS_BASE_DMG + upgrades + rrt,
+    'Hacked':             HACKED_BASE_DMG + hackedThresh + rrt,
+    'Grapple':            GRAPPLE_BASE_DMG + upgrades + rrt,
+    'Vengeance':          VENGEANCE_BASE_DMG + vengeanceRiderDmg + rrt,
+    "Widow's Bite":       WIDOWS_BITE_BASE_DMG + rrt,
+    'Whiff':              0,
+  }
+}
+
 export function buildAbilityBoard(dice: number[], upgrades: number, tbOnOpp: number): AbilityEntry[] {
   const matched = new Set(getCandidates(dice, upgrades, tbOnOpp).map(([n]) => n))
   const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0

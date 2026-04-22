@@ -6,6 +6,10 @@ export interface KeepOption {
   ev: number
   probDist: Record<string, number>
   isGuaranteed?: boolean
+  // Max direct HP damage across outcomes with non-zero probability, excluding TB/Agility/CP
+  // EV. Present only when the config exposes `directDamageByName`. Used by UI for lethal
+  // detection — EV includes non-damage gains so can't be compared directly to enemy HP.
+  directDamage?: number
 }
 
 export interface SolverResult {
@@ -138,16 +142,29 @@ export function calculateOptimalKeep<S>(
 ): SolverResult {
   const sorted = [...dice].sort((a, b) => a - b)
   const currentEv = cfg.bestAbilityValue(sorted, state)
+  const directMap = cfg.directDamageByName?.(state) ?? null
+
+  const annotateDirect = (opt: KeepOption): KeepOption => {
+    if (!directMap) return opt
+    let max = 0
+    for (const [name, p] of Object.entries(opt.probDist)) {
+      if (p <= 0) continue
+      const d = directMap[name] ?? 0
+      if (d > max) max = d
+    }
+    opt.directDamage = max
+    return opt
+  }
 
   if (rollsRemaining === 0) {
     const dist = _abilityDist(cfg, sorted, 0, state)
     return {
       currentEv,
-      topOptions: [{
+      topOptions: [annotateDirect({
         kept: sorted,
         ev: currentEv,
         probDist: _distToPercent(dist),
-      }],
+      })],
       abilities: cfg.buildAbilityBoard(sorted, state),
     }
   }
@@ -167,7 +184,7 @@ export function calculateOptimalKeep<S>(
 
     const ev = evalState(cfg, kept, rollsRemaining, state)
     const dist = _abilityDist(cfg, kept, rollsRemaining, state)
-    options.push({ kept, ev, probDist: _distToPercent(dist) })
+    options.push(annotateDirect({ kept, ev, probDist: _distToPercent(dist) }))
   }
 
   options.sort((a, b) => b.ev - a.ev)

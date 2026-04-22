@@ -132,15 +132,27 @@ var Engine = (() => {
   function calculateOptimalKeep(cfg, dice, rollsRemaining, state) {
     const sorted = [...dice].sort((a, b) => a - b);
     const currentEv = cfg.bestAbilityValue(sorted, state);
+    const directMap = cfg.directDamageByName?.(state) ?? null;
+    const annotateDirect = (opt) => {
+      if (!directMap) return opt;
+      let max = 0;
+      for (const [name, p] of Object.entries(opt.probDist)) {
+        if (p <= 0) continue;
+        const d = directMap[name] ?? 0;
+        if (d > max) max = d;
+      }
+      opt.directDamage = max;
+      return opt;
+    };
     if (rollsRemaining === 0) {
       const dist = _abilityDist(cfg, sorted, 0, state);
       return {
         currentEv,
-        topOptions: [{
+        topOptions: [annotateDirect({
           kept: sorted,
           ev: currentEv,
           probDist: _distToPercent(dist)
-        }],
+        })],
         abilities: cfg.buildAbilityBoard(sorted, state)
       };
     }
@@ -157,7 +169,7 @@ var Engine = (() => {
       seenKeys.add(kKey);
       const ev = evalState(cfg, kept, rollsRemaining, state);
       const dist = _abilityDist(cfg, kept, rollsRemaining, state);
-      options.push({ kept, ev, probDist: _distToPercent(dist) });
+      options.push(annotateDirect({ kept, ev, probDist: _distToPercent(dist) }));
     }
     options.sort((a, b) => b.ev - a.ev);
     let topOptions = options.slice(0, 5);
@@ -480,6 +492,23 @@ var Engine = (() => {
     const cands = getCandidates2(dice, upgrades, tbOnOpp);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
+  function directDamageByName(upgrades, _tbOnOpp) {
+    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const hackedThresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
+    const vengeanceRiderDmg = VENGEANCE_RIDER_DICE * (5 / 6);
+    return {
+      "Baton Strike 3B": BATON_STRIKE_3B + rrt,
+      "Baton Strike 4B": BATON_STRIKE_4B + rrt,
+      "Baton Strike 5B": BATON_STRIKE_5B + rrt,
+      "Infiltrate": INFILTRATE_BASE_DMG + rrt,
+      "Widow's Gauntlets": GAUNTLETS_BASE_DMG + upgrades + rrt,
+      "Hacked": HACKED_BASE_DMG + hackedThresh + rrt,
+      "Grapple": GRAPPLE_BASE_DMG + upgrades + rrt,
+      "Vengeance": VENGEANCE_BASE_DMG + vengeanceRiderDmg + rrt,
+      "Widow's Bite": WIDOWS_BITE_BASE_DMG + rrt,
+      "Whiff": 0
+    };
+  }
   function buildAbilityBoard2(dice, upgrades, tbOnOpp) {
     const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp).map(([n]) => n));
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
@@ -525,6 +554,9 @@ var Engine = (() => {
     },
     stateKey(state) {
       return `${state.upgrades}|${state.tbOnOpp}`;
+    },
+    directDamageByName(state) {
+      return directDamageByName(state.upgrades, state.tbOnOpp);
     }
   };
 

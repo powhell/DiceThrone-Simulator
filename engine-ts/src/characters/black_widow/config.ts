@@ -1,6 +1,7 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
 import {
   bwFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
+  directDamageByName,
 } from './abilities.js'
 
 export interface BWState {
@@ -28,5 +29,8 @@ export const bwConfig: CharacterConfig<BWState> = {
   },
   stateKey(state) {
     return `${state.upgrades}|${state.tbOnOpp}`
+  },
+  directDamageByName(state) {
+    return directDamageByName(state.upgrades, state.tbOnOpp)
   },
 }
