@@ -1000,8 +1000,8 @@ const CHARACTERS = {
     abilityBoardFooter: '<div class="passive-note"><strong>Red Room Training</strong> (passive) — start +3 CO · upgrades en Roll Phase · +1 dmg à toutes attaques si upgrades ≥ 5</div>',
     callEngine: bwCallEngine,
     renderStrategy: renderBWStrategy,
-    renderDefensePanel: renderBWPlaceholderDefense,
-    onStateChange: () => {},
+    renderDefensePanel: renderBWDefense,
+    onStateChange: (id) => { if (id === 'upgrades' || id === 'tbOnOpp') renderSabotageTable(); },
   },
 };
 
@@ -1682,6 +1682,130 @@ function renderHHDefense(el) {
 
 function renderBWPlaceholderDefense(el) {
   el.innerHTML = '<p class="status" style="margin-top:12px">Sabotage — phase 4 (non implémenté)</p>';
+}
+
+// ─── Sabotage (défense BW) ───────────────────────────────────────────────────
+// Dés BW : p(A)=2/6, p(B)=3/6, p(C)=1/6.
+// 1 dmg par B + 1 prévention par A. CC (≥2C) → inflige 1 TB.
+// Si upgrades≥4 : reroll de n'importe lequel des dés.
+const BW_P_A = 2/6, BW_P_B = 3/6, BW_P_C = 1/6;
+
+function _sabotageTbValue(upgrades, tbOnOpp) {
+  if (tbOnOpp >= 2) return 0;
+  return upgrades >= 6 ? 3.36 : 2.8;
+}
+
+function _pCCExact(c_kept, rerollCount) {
+  if (c_kept >= 2) return 1;
+  if (rerollCount === 0) return 0;
+  const q = 5/6;
+  if (c_kept === 1) return 1 - Math.pow(q, rerollCount);
+  return 1 - Math.pow(q, rerollCount) - rerollCount * (1/6) * Math.pow(q, rerollCount - 1);
+}
+
+function sabotageEV(diceCount, allowReroll, upgrades, tbOnOpp) {
+  const tbVal = _sabotageTbValue(upgrades, tbOnOpp);
+  if (!allowReroll) {
+    const dmg = diceCount * BW_P_B;
+    const prev = diceCount * BW_P_A;
+    const pCC = _pCCExact(0, diceCount);
+    return { ev: dmg + prev + pCC * tbVal, dmg, prev, pCC };
+  }
+  const n = diceCount;
+  const p = Math.pow(1/6, n);
+  let totalEV = 0, totalDmg = 0, totalPrev = 0, totalPCC = 0;
+  const outcome = new Array(n);
+  const recurse = (depth) => {
+    if (depth === n) {
+      let bestEV = -Infinity, bestDmg = 0, bestPrev = 0, bestPCC = 0;
+      for (let mask = 0; mask < (1 << n); mask++) {
+        let keptA = 0, keptB = 0, keptC = 0, rerollCount = 0;
+        for (let i = 0; i < n; i++) {
+          if (mask & (1 << i)) {
+            const f = outcome[i];
+            if (f <= 2) keptA++;
+            else if (f <= 5) keptB++;
+            else keptC++;
+          } else {
+            rerollCount++;
+          }
+        }
+        const dmg = keptB + rerollCount * BW_P_B;
+        const prev = keptA + rerollCount * BW_P_A;
+        const pCC = _pCCExact(keptC, rerollCount);
+        const ev = dmg + prev + pCC * tbVal;
+        if (ev > bestEV) { bestEV = ev; bestDmg = dmg; bestPrev = prev; bestPCC = pCC; }
+      }
+      totalEV   += p * bestEV;
+      totalDmg  += p * bestDmg;
+      totalPrev += p * bestPrev;
+      totalPCC  += p * bestPCC;
+      return;
+    }
+    for (let f = 1; f <= 6; f++) {
+      outcome[depth] = f;
+      recurse(depth + 1);
+    }
+  };
+  recurse(0);
+  return { ev: totalEV, dmg: totalDmg, prev: totalPrev, pCC: totalPCC };
+}
+
+let bwSabotageMode = 'base'; // 'base' (3 dés) | 'upg' (4 dés)
+
+function renderBWDefense(el) {
+  el.innerHTML = `
+    <h2 style="margin-top:12px">Sabotage</h2>
+    <div class="hr-toggle">
+      <button id="sbBase" onclick="setSabotageMode('base')">Base (3 dés)</button>
+      <button id="sbUpg"  onclick="setSabotageMode('upg')">Upgraded (4 dés)</button>
+    </div>
+    <div id="sbTable"></div>`;
+  setSabotageMode(bwSabotageMode);
+}
+
+function setSabotageMode(mode) {
+  bwSabotageMode = mode;
+  const bBase = document.getElementById('sbBase');
+  const bUpg  = document.getElementById('sbUpg');
+  if (bBase) bBase.classList.toggle('active', mode === 'base');
+  if (bUpg)  bUpg.classList.toggle('active', mode === 'upg');
+  renderSabotageTable();
+}
+
+function renderSabotageTable() {
+  if (currentCharId !== 'bw') return;
+  const el = document.getElementById('sbTable');
+  if (!el) return;
+  const state = charState.bw;
+  const n = bwSabotageMode === 'base' ? 3 : 4;
+  const rerollAvailable = state.upgrades >= 4;
+
+  const noReroll   = sabotageEV(n, false, state.upgrades, state.tbOnOpp);
+  const withReroll = rerollAvailable ? sabotageEV(n, true, state.upgrades, state.tbOnOpp) : null;
+  const currentIsReroll = rerollAvailable;
+
+  const fmt = r => `<td>${r.ev.toFixed(2)}</td><td>${r.dmg.toFixed(2)}</td><td>${r.prev.toFixed(2)}</td><td>${(r.pCC*100).toFixed(0)}%</td>`;
+
+  let rows = `
+    <tr${!currentIsReroll ? ' class="hr-current"' : ''}>
+      <td>Sans reroll</td>${fmt(noReroll)}
+    </tr>`;
+  if (withReroll) {
+    rows += `
+    <tr class="hr-current">
+      <td>+ reroll (upg≥4)</td>${fmt(withReroll)}
+    </tr>`;
+  } else {
+    rows += `
+    <tr><td colspan="5" style="color:var(--muted);font-style:italic">+ reroll dispo à 4 upgrades (actuellement ${state.upgrades})</td></tr>`;
+  }
+
+  el.innerHTML = `
+    <table class="hr-table">
+      <thead><tr><th></th><th>EV</th><th>dmg</th><th>prev</th><th>P(TB)</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function setHR(mode) {
