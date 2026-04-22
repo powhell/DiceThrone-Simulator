@@ -144,9 +144,14 @@
   .ability-dmg span { color: var(--text); font-weight: 600; }
   .ability-val { font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 42px; text-align: right; }
   .gain-badge { font-size: 0.58rem; border-radius: 3px; padding: 1px 4px; margin-left: 3px; }
-  .gain-dread { background: rgba(171,71,188,0.25); color: #ce93d8; border: 1px solid #7b1fa2; }
-  .gain-gp    { background: rgba(245,166,35,0.2);  color: var(--gold); border: 1px solid #a0722a; }
-  .gain-note  { font-size: 0.58rem; color: var(--muted); margin-left: 4px; font-style: italic; }
+  .gain-dread   { background: rgba(171,71,188,0.25); color: #ce93d8; border: 1px solid #7b1fa2; }
+  .gain-gp      { background: rgba(245,166,35,0.2);  color: var(--gold); border: 1px solid #a0722a; }
+  .gain-tb      { background: rgba(239,83,80,0.2);   color: #ef5350; border: 1px solid #b71c1c; }
+  .gain-agility { background: rgba(38,198,218,0.2);  color: #26c6da; border: 1px solid #00838f; }
+  .gain-cp      { background: rgba(156,204,101,0.2); color: #c5e1a5; border: 1px solid #558b2f; }
+  .gain-note    { font-size: 0.58rem; color: var(--muted); margin-left: 4px; font-style: italic; }
+  .passive-note { font-size: 0.7rem; color: var(--muted); margin-top: 8px; padding: 6px 8px; border-left: 2px solid var(--border); background: rgba(255,255,255,0.02); border-radius: 0 4px 4px 0; font-style: italic; }
+  .passive-note strong { color: var(--text); font-style: normal; }
 
   .status { text-align: center; font-size: 0.8rem; color: var(--muted); padding: 6px; }
   .ev-display { text-align: center; margin: 8px 0; }
@@ -882,6 +887,82 @@ const HH_ABILITY_GAINS = {
   'Whiff':                      { gp: 1 },
 };
 
+// ─── BW dice/ability config ──────────────────────────────────────────────────
+// BW anatomie : faces 1-2 = A (Espionage), 3-5 = B (Batons), 6 = C (Widow)
+const BW_SYMCLASS  = {1:'a',2:'a',3:'b',4:'b',5:'b',6:'c'};
+const BW_FACE_LABEL = {1:'A',2:'A',3:'B',4:'B',5:'B',6:'C'};
+const BW_DIE_COLORS = { a: '#b0bec5', b: '#ef5350', c: '#ba68c8' };
+
+// SVG icons BW : mask (A), batons croisés (B), araignée (C)
+function bwGetDieSvg(sc) {
+  const c = BW_DIE_COLORS[sc];
+  if (sc === 'a') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 9 Q2 7 4 7 L20 7 Q22 7 22 9 L22 11 Q22 13 20 13 L14 13 L12 16 L10 13 L4 13 Q2 13 2 11 Z" fill="${c}"/>
+    <circle cx="8" cy="10" r="1.3" fill="#0d0d1f"/>
+    <circle cx="16" cy="10" r="1.3" fill="#0d0d1f"/>
+  </svg>`;
+  if (sc === 'b') return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g transform="rotate(45 12 12)"><rect x="11" y="2" width="2" height="20" rx="1" fill="${c}"/></g>
+    <g transform="rotate(-45 12 12)"><rect x="11" y="2" width="2" height="20" rx="1" fill="${c}"/></g>
+    <circle cx="12" cy="12" r="1.6" fill="#0d0d1f"/>
+  </svg>`;
+  return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="12" cy="14" rx="4.2" ry="5" fill="${c}"/>
+    <circle cx="12" cy="8" r="2.6" fill="${c}"/>
+    <path d="M9 10 L3 7 M9 12 L2 12 M9 14 L3 17 M15 10 L21 7 M15 12 L22 12 M15 14 L21 17"
+          stroke="${c}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+    <path d="M10.5 13 L13.5 13 L12 15 L13.5 17 L10.5 17 L12 15 Z" fill="#e94560"/>
+  </svg>`;
+}
+
+const BW_ABILITY_COLOR = {
+  'Baton Strike 3B': '#ef5350',
+  'Baton Strike 4B': '#f44336',
+  'Baton Strike 5B': '#d32f2f',
+  'Infiltrate':      '#42a5f5',
+  "Widow's Gauntlets": '#ffa726',
+  'Hacked':          '#26a69a',
+  'Grapple':         '#8e24aa',
+  'Vengeance':       '#ab47bc',
+  "Widow's Bite":    '#e91e63',
+  'Whiff':           '#555',
+};
+
+const BW_ABILITY_GAINS = {
+  'Baton Strike 3B (BBB)':      {},
+  'Baton Strike 4B (BBBB)':     {},
+  'Baton Strike 5B (BBBBB)':    {},
+  'Infiltrate (AABC)':          { tb: 1, agility: 1 },
+  "Widow's Gauntlets (AAABB)":  { cp: 1, note: '+1 dmg/upg' },
+  'Hacked (4-straight)':        { tb: 1, note: '+2 dmg si upg≥3' },
+  'Grapple (CCCC)':             { agility: 1, note: '+1 dmg/upg · non défendable' },
+  'Vengeance (5-straight)':     { agility: 1, note: 'rider 4 dés' },
+  "Widow's Bite (CCCCC)":       { tb: 1, note: 'ultimate' },
+  'Whiff':                      {},
+};
+
+const BW_BOARD_ORDER = [
+  'Baton Strike 3B',
+  'Baton Strike 4B',
+  'Baton Strike 5B',
+  'Infiltrate',
+  "Widow's Gauntlets",
+  'Hacked',
+  'Grapple',
+  'Vengeance',
+  "Widow's Bite",
+  'Whiff',
+];
+
+function bwReorderAbilities(abilities) {
+  const baseName = n => n.replace(/\s*\(.*\)$/, '');
+  return abilities.slice().sort((a, b) => {
+    const ia = BW_BOARD_ORDER.indexOf(baseName(a.name));
+    const ib = BW_BOARD_ORDER.indexOf(baseName(b.name));
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+}
+
 // ─── Character registry ─────────────────────────────────────────────────────
 const CHARACTERS = {
   horseman: {
@@ -906,13 +987,19 @@ const CHARACTERS = {
     id: 'bw',
     title: '🕷 BLACK WIDOW',
     label: '🕷 Black Widow',
-    implemented: false, // phase 4 — issue #15
-    dice: { symClass: HH_SYMCLASS, faceLabel: HH_FACE_LABEL, dieColors: HH_DIE_COLORS, getSvg: hhGetDieSvg },
-    stateInputs: [],
-    abilityGains: {},
-    abilityColor: {},
-    callEngine: null,
-    renderStrategy: renderBWPlaceholderStrategy,
+    implemented: true,
+    dice: { symClass: BW_SYMCLASS, faceLabel: BW_FACE_LABEL, dieColors: BW_DIE_COLORS, getSvg: bwGetDieSvg },
+    stateInputs: [
+      { id:'upgrades',  label:'Upgrades',  type:'counter',  min:0, max:8 },
+      { id:'tbOnOpp',   label:'TB on Opp', type:'counter',  min:0, max:2 },
+      { id:'covertOps', label:'Covert Ops',type:'readonly', min:0, max:3 },
+      { id:'agility',   label:'Agility',   type:'readonly', min:0, max:2 },
+    ],
+    abilityGains: BW_ABILITY_GAINS,
+    abilityColor: BW_ABILITY_COLOR,
+    abilityBoardFooter: '<div class="passive-note"><strong>Red Room Training</strong> (passive) — start +3 CO · upgrades en Roll Phase · +1 dmg à toutes attaques si upgrades ≥ 5</div>',
+    callEngine: bwCallEngine,
+    renderStrategy: renderBWStrategy,
     renderDefensePanel: renderBWPlaceholderDefense,
     onStateChange: () => {},
   },
@@ -924,7 +1011,7 @@ if (!CHARACTERS[currentCharId]) currentCharId = 'horseman';
 
 const charState = {
   horseman: { dreadful: 0, headLocation: 'opponent' },
-  bw:       {},
+  bw:       { upgrades: 0, tbOnOpp: 0, covertOps: 0, agility: 0 },
 };
 
 // Legacy aliases read by renderHorsemanStrategy — kept in sync with charState.horseman
@@ -945,6 +1032,18 @@ function hhCallEngine(diceArr, rollsRem, state) {
     current_ev: result.currentEv,
     top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist, is_guaranteed: o.isGuaranteed ?? false })),
     abilities: result.abilities.map(a => ({ name: a.name, value: a.value, base_damage: a.baseDamage, matched: a.matched })),
+  };
+}
+
+function bwCallEngine(diceArr, rollsRem, state) {
+  const result = Engine.BWEngine.calculateOptimalKeep(diceArr, rollsRem, state);
+  const abilities = result.abilities.map(a => ({
+    name: a.name, value: a.value, base_damage: a.baseDamage, matched: a.matched,
+  }));
+  return {
+    current_ev: result.currentEv,
+    top_options: result.topOptions.map(o => ({ kept: o.kept, ev: o.ev, prob_dist: o.probDist, is_guaranteed: o.isGuaranteed ?? false })),
+    abilities: bwReorderAbilities(abilities),
   };
 }
 
@@ -1124,6 +1223,10 @@ function buildStateInputs() {
         row.appendChild(b);
       });
       g.appendChild(row);
+    } else if (input.type === 'readonly') {
+      g.innerHTML = `
+        <label>${input.label}</label>
+        <div class="counter-display" style="min-width:56px;opacity:0.65;cursor:default" title="suivi manuel non implémenté">${s[input.id] ?? 0}${input.max ? ' / ' + input.max : ''}</div>`;
     }
     container.appendChild(g);
   });
@@ -1204,6 +1307,9 @@ function renderAbilities(abilities, currentEv) {
     let gainsHtml = '';
     if (g.dreadful) gainsHtml += `<span class="gain-badge gain-dread">+${g.dreadful}☠</span>`;
     if (g.gp)       gainsHtml += `<span class="gain-badge gain-gp">+${g.gp}GP</span>`;
+    if (g.tb)       gainsHtml += `<span class="gain-badge gain-tb">+${g.tb}TB</span>`;
+    if (g.agility)  gainsHtml += `<span class="gain-badge gain-agility">+${g.agility}⚡</span>`;
+    if (g.cp)       gainsHtml += `<span class="gain-badge gain-cp">+${g.cp}CP</span>`;
     if (g.note)     gainsHtml += `<span class="gain-note">${g.note}</span>`;
     return `
     <div class="ability ${ab.matched ? 'matched' : ''}">
@@ -1213,7 +1319,7 @@ function renderAbilities(abilities, currentEv) {
         <span class="ability-val">${ab.value.toFixed(1)} EV</span>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + (cfg.abilityBoardFooter || '');
 }
 
 function renderProbBars(probDist) {
@@ -1292,6 +1398,116 @@ function renderStrategy(data) {
 function renderBWPlaceholderStrategy() {
   document.getElementById('strategyContent').innerHTML =
     '<p class="status">Black Widow — phase 4 (non implémenté)</p>';
+}
+
+function bwHasStraightShot(length) {
+  const unique = new Set(dice);
+  for (let start = 1; start <= 7 - length; start++) {
+    let count = 0;
+    for (let i = 0; i < length; i++) if (unique.has(start + i)) count++;
+    if (count >= length) return true;
+  }
+  return false;
+}
+
+function renderBWStrategy(data) {
+  const panel = document.getElementById('strategyContent');
+  if (!data) { panel.innerHTML = ''; return; }
+
+  const topOpt = data.top_options?.[0];
+  const opts   = data.top_options || [];
+  const board  = data.abilities  || [];
+  const state  = charState.bw;
+
+  const boardSorted = board.filter(a => a.name !== 'Whiff').sort((a, b) => b.value - a.value);
+  const dominant    = boardSorted[0];
+
+  // ── Kept text (BW: A=1-2, B=3-5, C=6) ──────────────────────────────
+  let keptText = 'Relance tout';
+  if (topOpt?.kept?.length > 0) {
+    const counts = { A: 0, B: 0, C: 0 };
+    topOpt.kept.forEach(f => {
+      if (f <= 2) counts.A++;
+      else if (f <= 5) counts.B++;
+      else counts.C++;
+    });
+    const parts = ['A', 'B', 'C'].filter(k => counts[k] > 0).map(k => `${counts[k]}${k}`);
+    keptText = 'Garde ' + parts.join(' + ');
+  }
+
+  // ── Target ability ─────────────────────────────────────────────────
+  let abilityText = '';
+  let topProbName = '';
+  if (topOpt?.prob_dist) {
+    const top = Object.entries(topOpt.prob_dist)
+      .filter(([, v]) => v > 5)
+      .sort((a, b) => b[1] - a[1])[0];
+    if (top) { topProbName = top[0]; abilityText = ` → vise <strong>${top[0]}</strong> (${top[1].toFixed(0)}%)`; }
+  }
+
+  // ── Objectif : Gauntlets si 2A opening → straight → Baton ─────────
+  const dc = { a: 0, b: 0, c: 0 };
+  dice.forEach(f => { if (f <= 2) dc.a++; else if (f <= 5) dc.b++; else dc.c++; });
+
+  let objectifText;
+  if (dominant) {
+    objectifText = `Vise <strong>${dominant.name}</strong> (${dominant.value.toFixed(1)} EV)`;
+  } else if (dc.a >= 2) {
+    objectifText = `2A d'ouverture — chase <strong>Widow's Gauntlets</strong> (3A 2B)`;
+  } else if (bwHasStraightShot(4)) {
+    objectifText = `Suite possible — vise <strong>Hacked</strong> ou <strong>Vengeance</strong>`;
+  } else {
+    objectifText = `Fallback <strong>Baton Strike</strong> (3B)`;
+  }
+
+  // ── EV delta ───────────────────────────────────────────────────────
+  let tightText = '';
+  if (opts.length >= 2) {
+    const diff  = (opts[0].ev - opts[1].ev).toFixed(2);
+    const label = parseFloat(diff) < 0.5 ? '⚠ Choix serré' : 'Option #2';
+    tightText   = `${label} : ${opts[1].ev.toFixed(2)} EV (écart ${diff})`;
+  }
+
+  // ── Lethal detection (simple — #17 raffinera) ─────────────────────
+  let lethalCallout = '';
+  if (hpEnemy > 0 && board.length > 0) {
+    const abilityMap     = Object.fromEntries(board.map(a => [a.name, a]));
+    const probKeys       = topOpt?.prob_dist ? Object.keys(topOpt.prob_dist) : [];
+    const maxDmgThisTurn = probKeys.reduce((max, name) => {
+      const ab = abilityMap[name];
+      return ab && ab.base_damage > max ? ab.base_damage : max;
+    }, 0);
+    if (maxDmgThisTurn >= hpEnemy) {
+      const lethalAb = board.find(a => a.base_damage >= hpEnemy && probKeys.includes(a.name));
+      lethalCallout  = `💀 <strong>LETHAL possible</strong> avec ${lethalAb?.name ?? 'une ability'} (${maxDmgThisTurn} dmg / ${hpEnemy} HP)`;
+    }
+  }
+
+  // ── Resources ─────────────────────────────────────────────────────
+  const resText = `Upgrades <strong>${state.upgrades}</strong>${state.upgrades >= 5 ? ' 🔥RRT' : ''} · TB opp <strong>${state.tbOnOpp}/2</strong> · CO <strong>${state.covertOps}/3</strong> · Agility <strong>${state.agility}/2</strong>`;
+
+  const conseilLabel  = dominant ? `Conseil — ${topProbName || dominant.name}` : 'Conseil';
+  const lethalSection = lethalCallout
+    ? `<div class="strat-section strat-lethal" style="margin-top:8px"><div class="strat-text">${lethalCallout}</div></div>`
+    : '';
+
+  panel.innerHTML = `
+    <div class="strat-section strat-highlight">
+      <div class="strat-label">${conseilLabel}</div>
+      <div class="strat-text">${keptText}${abilityText}</div>
+    </div>
+    ${lethalSection}
+    ${tightText ? `<div class="strat-section" style="margin-top:8px">
+      <div class="strat-text">${tightText}</div>
+    </div>` : ''}
+    <div class="strat-section" style="margin-top:10px">
+      <div class="strat-label">Objectif du tour</div>
+      <div class="strat-text">${objectifText}</div>
+    </div>
+    <div class="strat-section" style="margin-top:10px">
+      <div class="strat-label">Resources BW</div>
+      <div class="strat-text">${resText}</div>
+    </div>`;
 }
 
 function renderHorsemanStrategy(data) {
