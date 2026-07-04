@@ -842,20 +842,28 @@ var Game = (() => {
     return heroId === "hh" ? hhConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
+    const dice = rollDice(5, rng).sort((a, b) => a - b);
+    return completeOffensiveRoll(heroId, initialOracleState, dice, 2, rng, beforeReroll);
+  }
+  function completeOffensiveRoll(heroId, initialOracleState, initialDice, initialRollsRemaining, rng, beforeReroll) {
     const cfg = cfgFor(heroId);
     let oracleState = initialOracleState;
-    let dice = rollDice(5, rng).sort((a, b) => a - b);
-    let rollsRemaining = 2;
-    while (rollsRemaining > 0) {
+    let dice = initialDice.slice().sort((a, b) => a - b);
+    let rollsRemaining = initialRollsRemaining;
+    while (true) {
       if (beforeReroll) {
         const update = beforeReroll({ rollsRemaining, dice });
         oracleState = update.oracleState;
         dice = update.dice.slice().sort((a, b) => a - b);
         rollsRemaining += update.extraRollsGranted ?? 0;
       }
+      if (rollsRemaining <= 0) break;
       const result = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleState);
       const kept = result.topOptions[0].kept;
-      if (kept.length === 5) break;
+      if (kept.length === 5) {
+        rollsRemaining = 0;
+        continue;
+      }
       const nReroll = 5 - kept.length;
       const rerolled = rollDice(nReroll, rng);
       dice = [...kept, ...rerolled].sort((a, b) => a - b);
@@ -1367,15 +1375,18 @@ var Game = (() => {
     self.upgradesPlayedThisTurn = 0;
     self.grimPursuitBonusUsedThisTurn = false;
     self.covertOpsUsedThisTurn = false;
+    self.grimPursuitRerollUsedThisTurn = false;
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
       if (choice === "terrorize" && eligible) {
+        opp.tokens.head = 0;
         const r = resolveTerrorize(self);
         opp.hp -= r.damageToOpponent;
         log(state, playerIdx, "upkeep", `Terrorize: ${r.damageToOpponent} dmg to opponent, +${r.cpGained} CP, reclaimed Head`);
       } else if (choice === "giveHead") {
         self.tokens.head = 0;
+        opp.tokens.head = 1;
         log(state, playerIdx, "upkeep", "Gave the Haunted Head to the opponent");
       }
     }
@@ -1593,6 +1604,12 @@ var Game = (() => {
           dice = r.dice;
           extraRollsGranted += r.extraRollsGranted;
         }
+      }
+      if (step.rollsRemaining === 0 && self.heroId === "hh" && self.tokens.grimPursuit >= 1 && !self.grimPursuitRerollUsedThisTurn && policy.chooseGrimPursuitReroll?.(state, playerIdx, dice)) {
+        spendGrimPursuit(self, 1);
+        self.grimPursuitRerollUsedThisTurn = true;
+        extraRollsGranted += 1;
+        log(state, playerIdx, "roll", "Grim Pursuit (mode a): +1 additional Roll Attempt");
       }
       return { oracleState: oracleStateFor(self, opp), dice, extraRollsGranted };
     };
@@ -2236,7 +2253,8 @@ var Game = (() => {
       timeBombs: [],
       upgradesPlayedThisTurn: 0,
       grimPursuitBonusUsedThisTurn: false,
-      covertOpsUsedThisTurn: false
+      covertOpsUsedThisTurn: false,
+      grimPursuitRerollUsedThisTurn: false
     };
   }
   function createInitialGameState(heroA, heroB, rng) {
@@ -2498,15 +2516,41 @@ var Game = (() => {
 
   // src/sim/rl/features.ts
   var MAX_HP = STARTING_HP + HEAL_CAP_ABOVE_STARTING;
-  var DECK_SIZE_HH = buildFullDeck("hh").length;
-  var DECK_SIZE_BW = buildFullDeck("bw").length;
   var MAX_UPGRADES_IN_PLAY = 8;
   var MAX_UPGRADES_PLAYED_PER_TURN = 4;
-  function deckNormalizer(heroId) {
-    return heroId === "hh" ? DECK_SIZE_HH : DECK_SIZE_BW;
+  function buildHeroEncoding(heroId) {
+    const hero = heroTemplateFor(heroId);
+    const upgradeIds = hero.cards.filter((c) => c.kind === "upgrade").map((c) => c.id);
+    const deck = buildFullDeck(heroId);
+    return {
+      upgradeIds,
+      deckIndex: new Map(deck.map((id, i) => [id, i])),
+      deckSize: deck.length
+    };
+  }
+  var ENCODINGS = { hh: buildHeroEncoding("hh"), bw: buildHeroEncoding("bw") };
+  var UPGRADE_ONEHOT_SIZE = 8;
+  var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize);
+  function encodeUpgradesInPlay(p) {
+    const enc = ENCODINGS[p.heroId];
+    const out = new Array(UPGRADE_ONEHOT_SIZE).fill(0);
+    for (const id of p.upgradesInPlay) {
+      const idx = enc.upgradeIds.indexOf(id);
+      if (idx >= 0 && idx < UPGRADE_ONEHOT_SIZE) out[idx] = 1;
+    }
+    return out;
+  }
+  function encodeHand(p) {
+    const enc = ENCODINGS[p.heroId];
+    const out = new Array(HAND_ONEHOT_SIZE).fill(0);
+    for (const id of p.hand) {
+      const idx = enc.deckIndex.get(id);
+      if (idx !== void 0) out[idx] = 1;
+    }
+    return out;
   }
   function encodePlayer(p) {
-    const deckSize = deckNormalizer(p.heroId);
+    const deckSize = ENCODINGS[p.heroId].deckSize;
     const isHH = p.heroId === "hh" ? 1 : 0;
     const isBW = p.heroId === "bw" ? 1 : 0;
     return [
@@ -2520,15 +2564,15 @@ var Game = (() => {
       p.upgradesPlayedThisTurn / MAX_UPGRADES_PLAYED_PER_TURN,
       isHH,
       isBW,
-      // Hero-specific tokens. Read straight from the generic bag, but still gated by hero so the
-      // vector keeps its fixed shape/semantics: a token a hero can't normally hold stays 0 (identical
-      // encoding to the old HHTokens|BWTokens split, since only HH holds dreadful/grimPursuit/head and
-      // only BW holds agility/covertOps until cross-player token transfer is wired in a later stage).
-      isHH ? p.tokens.dreadful / DREADFUL_CAP : 0,
-      isHH ? p.tokens.grimPursuit / GRIM_PURSUIT_CAP : 0,
-      isHH ? p.tokens.head : 0,
-      isBW ? p.tokens.agility / AGILITY_CAP : 0,
-      isBW ? p.tokens.covertOps / COVERT_OPS_CAP : 0
+      // Tokens read straight from the generic bag for BOTH heroes (v2: un-gated). Cross-player
+      // token transfer cards mean any player can end up holding any bag token; gating by hero
+      // hid that from the network.
+      p.tokens.dreadful / DREADFUL_CAP,
+      p.tokens.grimPursuit / GRIM_PURSUIT_CAP,
+      p.tokens.head,
+      p.tokens.agility / AGILITY_CAP,
+      p.tokens.covertOps / COVERT_OPS_CAP,
+      ...encodeUpgradesInPlay(p)
     ];
   }
   function encodeState(state, forPlayerIdx) {
@@ -2537,10 +2581,12 @@ var Game = (() => {
     return [
       state.turnNumber / MAX_TURNS,
       ...encodePlayer(self),
+      ...encodeHand(self),
       ...encodePlayer(opp)
     ];
   }
-  var FEATURE_COUNT = 1 + 15 * 2;
+  var PLAYER_BLOCK_SIZE = 15 + UPGRADE_ONEHOT_SIZE;
+  var FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE;
 
   // src/sim/rl/lookahead.ts
   function cloneForLookahead(state) {
@@ -2597,6 +2643,55 @@ var Game = (() => {
   }
   function enumerateSmallCardSubsets(eligibleCardIds) {
     return powerset(eligibleCardIds);
+  }
+  function enumerateForCard(cardId, dice) {
+    const n = dice.length;
+    const out = [];
+    if (cardId === "six-it") {
+      for (let i = 0; i < n; i++) out.push({ cardId, dieIndices: [i], values: [6] });
+    } else if (cardId === "so-wild") {
+      const soWildValues = Array.from(/* @__PURE__ */ new Set([6, ...dice]));
+      for (let i = 0; i < n; i++) {
+        for (const v of soWildValues) {
+          if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] });
+        }
+      }
+    } else if (cardId === "samesies") {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (i !== j) out.push({ cardId, dieIndices: [i], values: [dice[j]] });
+        }
+      }
+    } else if (cardId === "twice-as-wild") {
+      const counts = /* @__PURE__ */ new Map();
+      for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+      const mode = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      const candidateValues = Array.from(/* @__PURE__ */ new Set([6, mode]));
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          for (const v1 of candidateValues) {
+            for (const v2 of candidateValues) {
+              out.push({ cardId, dieIndices: [i, j], values: [v1, v2] });
+            }
+          }
+        }
+      }
+    } else if (cardId === "try-try-again") {
+      for (let i = 0; i < n; i++) out.push({ cardId, dieIndices: [i] });
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) out.push({ cardId, dieIndices: [i, j] });
+      }
+    } else if (cardId === "one-more-time") {
+      out.push({ cardId });
+    }
+    return out;
+  }
+  function enumerateRollManipulationChoices(dice, eligibleCardIds) {
+    const options = [[]];
+    for (const cardId of eligibleCardIds) {
+      for (const choice of enumerateForCard(cardId, dice)) options.push([choice]);
+    }
+    return options;
   }
 
   // src/sim/rl/valueGreedyPolicy.ts
@@ -2810,13 +2905,83 @@ var Game = (() => {
           }
         );
       },
-      // v1 gap, not an oversight: both of these fire from WITHIN oracle.ts's runOffensiveRoll
-      // loop, whose in-progress dice/rollsRemaining aren't resumable via any exported re-entry
-      // point (playOffensiveRollPhase always starts a fresh 5-dice roll). Scoring these properly
-      // would need an oracle.ts change to expose a resumable roll step, out of scope for v1 — see
-      // the RL plan. Matches greedyHighestDamagePolicy's own default (never play these).
+      // v1 gap, not an oversight: fires from WITHIN oracle.ts's roll loop for BW's mid-roll
+      // upgrade plays (Red Room Training); scoring it would need the same resume machinery as
+      // below plus upgrade-play replay — still future work. Matches greedy's default.
       chooseMidRollCards: () => [],
-      chooseRollManipulationCards: () => []
+      // Roll-manipulation cards (Six-It!/So Wild!/Twice As Wild!/Samesies!/Try Try Again!/One
+      // More Time!) — un-stubbed (was the "5 cards the RL literally cannot play" gap). Scored by
+      // full resolve-through in V units, no hand-tuned CP-to-damage constant anywhere: for each
+      // candidate (including "play nothing"), clone the state, apply the card (real
+      // applyRollManipulationCard: CP debit + discard), roll the modified dice FORWARD to their
+      // final state with the real DP loop (oracle.completeOffensiveRoll — the resumable re-entry
+      // point added for exactly this), resolve the attack on those final dice, then let V judge.
+      // Same per-decision seed across candidates (RNG-fairness rule), so "played Six-It!" vs
+      // "didn't" are compared under identical reroll luck.
+      //
+      // Only acts on the FINAL window (rollsRemaining === 0, fired since the oracle's final-window
+      // change): the dice are otherwise final, so value-setters are DETERMINISTIC (no reroll can
+      // undo them) and their rollout is a single resolve — maximum information at minimum cost.
+      // One More Time! grants +1 attempt and is rolled forward through the granted attempt.
+      chooseRollManipulationCards(state, playerIdx, dice, rollsRemaining, eligibleCardIds) {
+        if (rollsRemaining !== 0 || eligibleCardIds.length === 0) return [];
+        const options = enumerateRollManipulationChoices(dice, eligibleCardIds);
+        if (options.length === 1) return options[0];
+        const heroId = state.players[playerIdx].heroId;
+        const oppIdx = 1 - playerIdx;
+        return scoreCandidatesByReplay(
+          network,
+          playerIdx,
+          state,
+          seedFor(state, 12),
+          options,
+          (clone, choices, rng) => {
+            let d = dice;
+            let extra = 0;
+            for (const choice of choices) {
+              const r = applyRollManipulationCard(clone, playerIdx, choice, d, rng);
+              d = r.dice;
+              extra += r.extraRollsGranted;
+            }
+            const finalDice = completeOffensiveRoll(
+              heroId,
+              oracleStateFor(clone.players[playerIdx], clone.players[oppIdx]),
+              d,
+              rollsRemaining + extra,
+              rng
+            );
+            resolveAbilityPhase(clone, playerIdx, finalDice, rng, [policy, policy]);
+          }
+        );
+      },
+      // Grim Pursuit mode (a): same resolve-through scoring as the roll-manipulation cards above —
+      // "keep these final dice" vs "spend 1 Grim Pursuit for one more DP attempt", both rolled
+      // forward under the same seed and judged by V. No hand-tuned token-value constant anywhere.
+      chooseGrimPursuitReroll(state, playerIdx, dice) {
+        const heroId = state.players[playerIdx].heroId;
+        const oppIdx = 1 - playerIdx;
+        return scoreCandidatesByReplay(
+          network,
+          playerIdx,
+          state,
+          seedFor(state, 13),
+          [false, true],
+          (clone, spend, rng) => {
+            if (spend) {
+              spendGrimPursuit(clone.players[playerIdx], 1);
+              clone.players[playerIdx].grimPursuitRerollUsedThisTurn = true;
+            }
+            const finalDice = completeOffensiveRoll(
+              heroId,
+              oracleStateFor(clone.players[playerIdx], clone.players[oppIdx]),
+              dice,
+              spend ? 1 : 0,
+              rng
+            );
+            resolveAbilityPhase(clone, playerIdx, finalDice, rng, [policy, policy]);
+          }
+        );
+      }
     };
     return policy;
   }
