@@ -1,0 +1,147 @@
+export type HeroId = 'hh' | 'bw'
+
+// Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
+// Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
+// (PlayerState.timeBombs).
+export type TokenKind = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'timeBomb'
+
+export type TimeBombPosition = '0:02' | '0:01'
+
+// A player's generic token bag. Any kind can sit on ANY player, because cards like Transference! /
+// Get That Outta Here! / What Status Effects? move status tokens across players (e.g. HH ends up
+// holding BW's Agility, or a Time Bomb is sent back to BW). So tokens are stored hero-agnostically,
+// keyed by kind, instead of in a hero-typed struct (the old HHTokens|BWTokens union). Two things
+// stay off the bag: Time Bomb is positional (PlayerState.timeBombs — the original hero-agnostic
+// precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
+// opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
+// arithmetic like `tokens.dreadful += 1` needs no guard.
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head'
+export type Tokens = Record<BagToken, number>
+
+export interface PlayerState {
+  heroId: HeroId
+  hp: number
+  cp: number
+  upgradesInPlay: string[]
+  hand: string[]
+  deck: string[]
+  discard: string[]
+  tokens: Tokens
+  // Time Bomb is inflicted BY Black Widow but stacks on whichever opponent she hits, so it
+  // lives on PlayerState directly rather than inside BWTokens (which is BW's own resources).
+  // Stack cap 2 (Black_Widow_Guide.md). Position tracks how close to detonation.
+  timeBombs: TimeBombPosition[]
+  // Reset to 0 at the start of this player's own turn (playUpkeepPhase). Counts Hero Upgrade
+  // cards played this turn (Main Phase or, for bw, mid-Roll via Red Room Training) — needed by
+  // BW's Subversion! card ("+1 dmg per Ability Upgrade played this turn").
+  upgradesPlayedThisTurn: number
+  // Reset to false each own-turn upkeep. Grim Pursuit's mode (b) — "after attacking, roll 1 die and
+  // add that many dmg" — is usable once per turn (verified token def); this guards the once-per-turn.
+  grimPursuitBonusUsedThisTurn: boolean
+}
+
+// Verified order (official rulebook, characters/rules/Turn Phases.png, 2026-07-01):
+// Upkeep -> Income -> Main1 -> OffensiveRoll -> DefensiveRoll -> Main2 -> Discard.
+export type Phase =
+  | 'upkeep'
+  | 'income'
+  | 'main1'
+  | 'roll'
+  | 'resolveAttack'
+  | 'defense'
+  | 'main2'
+  | 'discard'
+  | 'endOfTurn'
+
+export interface TurnLogEntry {
+  turn: number
+  playerIdx: 0 | 1
+  phase: Phase
+  message: string
+}
+
+export interface GameState {
+  turnNumber: number
+  activePlayerIdx: 0 | 1
+  players: [PlayerState, PlayerState]
+  log: TurnLogEntry[]
+  // winner === null means EITHER "game still ongoing" OR "draw" (both players at <=0 HP,
+  // simultaneously) OR "timeout" — these are indistinguishable by `winner` alone, which is why
+  // `gameOver` exists: loops must gate on `!gameOver` (not `winner === null`), otherwise a draw
+  // (winner set to null on a mutual kill) reads as "ongoing" and spins the game to MAX_TURNS.
+  winner: 0 | 1 | null
+  // Set true by checkGameOver on any terminal HP state (win OR mutual-kill draw). The match/
+  // self-play/replay loops stop on `!gameOver` so a draw ends immediately instead of spinning.
+  gameOver: boolean
+  // Golden Rule #4 (Advanced Rules): damage is accumulated and applied SIMULTANEOUSLY at the
+  // conclusion of the Phase, so a mutual kill (attack + counter-damage both lethal) is a draw.
+  // Indexed by playerIdx = damage queued AGAINST that player. queueDamage/flushDamage in turn.ts;
+  // flushed at the end of each attack-resolution unit. Always [0,0] between resolution units.
+  pendingDamage: [number, number]
+  // Transient during a Defensive Roll Phase: the attack currently being defended. `remaining` is
+  // the still-unprevented incoming damage, so defensive-card plays in the DRP5 response window can
+  // whittle it down uniformly (via applyWindowAction), then DRP6 (finalizePendingAttackDamage)
+  // queues it and applies simultaneously with the counter-damage. null outside a DRP.
+  pendingAttack: { attackerIdx: 0 | 1; defenderIdx: 0 | 1; remaining: number } | null
+  // Transient during the Offensive Roll Phase's "opponent may alter my dice" window (ORP2): the
+  // roller and their just-rolled dice. alterDie/rerollDie actions mutate `dice` in place; once the
+  // window closes the (possibly altered) dice are matched to an ability, so the roller re-decides
+  // on whatever the dice became. null outside that window.
+  pendingRoll: { rollerIdx: 0 | 1; dice: number[] } | null
+}
+
+export interface AbilityCandidate {
+  name: string
+  baseDamage: number | null
+  defendable: boolean
+}
+
+// --- Unified decision model (see plan quiet-conjuring-duckling.md, Stage 2) ---------------------
+// A single legal move a player can make when the engine asks them to decide, via Policy.decide.
+// The engine enumerates the legal WindowActions at each decision point; the Policy picks one.
+// Kept intentionally small — new action kinds (spend token, alter die, activate ability) are
+// added as later stages migrate more decisions onto this model.
+// Status-effect token kinds that cross-player cards (Transference! / Get That Outta Here! / What
+// Status Effects?) may move or remove. Per verified hero.json token defs: all status effects EXCEPT
+// covertOps ("may not be transferred or removed by any means"). The Haunted Head has its own
+// dedicated card (Rolling Pumpkin! → moveHead) and is deliberately excluded here.
+export type TransferableToken = 'dreadful' | 'grimPursuit' | 'agility' | 'timeBomb'
+
+export type WindowAction =
+  | { kind: 'pass' } // decline to act — a pass-pass (both players pass in a row) closes the window
+  | { kind: 'playCard'; cardId: string }
+  | { kind: 'alterDie'; cardId: string; dieIndex: number; delta: 1 | -1 } // Tip It!: nudge a die ±1
+  | { kind: 'rerollDie'; cardId: string; dieIndex: number } // Helping Hand!: force a die reroll
+  | { kind: 'rerollAll'; cardId: string } // Better D!: reroll all of the roller's dice (defense only)
+  // So Wild! (1 set) / Twice As Wild! (2 sets): set the value of any die on the in-progress roll —
+  // either player may target the roller's dice (user-confirmed "any die" includes the opponent's).
+  | { kind: 'setDie'; cardId: string; sets: { dieIndex: number; value: number }[] }
+  // An Instant self-buff (Getting Paid!, Double/Triple Up!, Dark Surprise!, Assemble!) playable in
+  // ANY response window by ANY participant; resolves immediately for the player who plays it.
+  | { kind: 'playInstant'; cardId: string }
+  // Transference!: move one status-effect token from one player to another (1v1: to = the other).
+  | { kind: 'transferToken'; cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1 }
+  // Get That Outta Here!: remove one status-effect token from a chosen player.
+  | { kind: 'removeToken'; cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1 }
+  // What Status Effects?: remove ALL status-effect tokens from a chosen player.
+  | { kind: 'removeAllTokens'; cardId: string; targetIdx: 0 | 1 }
+  // Rolling Pumpkin!: move the Haunted Head to a chosen player.
+  | { kind: 'moveHead'; cardId: string; toIdx: 0 | 1 }
+  // Grim Pursuit spend mode (b): after attacking, roll 1 die and add it as bonus damage (not a card).
+  | { kind: 'spendGrimPursuitBonus' }
+
+// What kind of decision point this is, plus any context the enumeration/application needs.
+export interface WindowContext {
+  // 'offensiveRoll' / 'defenseRoll' both alter an in-progress roll on state.pendingRoll (ORP2 /
+  // DRP3); they differ only in which extra actions are legal (Better D! is defense-only).
+  windowType: 'mainPhase' | 'defense' | 'offensiveRoll' | 'defenseRoll'
+  phase?: Phase // for card plays that are phase-scoped (playCard needs it)
+  eludeEligible?: boolean // 'defense' window only: Elude! is offered only if the Agility roll was 5-6
+}
+
+// Handed to Policy.decide: the context plus every legal action (a response window always includes
+// a { kind: 'pass' } option). The Policy must return one of `options`.
+export interface DecisionRequest {
+  ctx: WindowContext
+  options: WindowAction[]
+}

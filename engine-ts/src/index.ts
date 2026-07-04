@@ -15,8 +15,9 @@ export function evalState(
   rollsRemaining: number,
   dreadful: number,
   hasHead: boolean,
+  upgradeIds?: string[],
 ): number {
-  return core.evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead })
+  return core.evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds })
 }
 
 export function calculateOptimalKeep(
@@ -24,8 +25,9 @@ export function calculateOptimalKeep(
   rollsRemaining: number,
   dreadful: number,
   hasHead: boolean,
+  upgradeIds?: string[],
 ): core.SolverResult {
-  return core.calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead })
+  return core.calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead, upgradeIds })
 }
 
 // ─── Namespaced per-character engines ────────────────────────────────────────

@@ -208,7 +208,7 @@
 <body>
 
 <h1 id="charTitle">☠ HEADLESS HORSEMAN</h1>
-<p class="subtitle">Dice Throne · Strategy Simulator</p>
+<p class="subtitle">Dice Throne · Strategy Simulator · <a href="verify.html" style="color:var(--blue)">vérifier les données →</a></p>
 
 <div class="char-selector" id="charSelector"></div>
 
@@ -481,22 +481,42 @@ var Engine = (() => {
   var GRIM_PURSUIT_AVG_DMG = 1.66;
   var CARD_DRAW_VALUE = 2;
   var SPECTRAL_ASSAULT_BASE = 8;
+  var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
   var DREADFUL_CHARGE_VALUE = 15;
   var DREADFUL_CHARGE_DREADFUL_GIVEN = 4;
   var CLEAVE_3A = 4;
   var CLEAVE_4A = 5;
   var CLEAVE_5A = 7;
+  var CLEAVE_3A_UPGRADED = 5;
+  var CLEAVE_4A_UPGRADED = 6;
+  var CLEAVE_5A_UPGRADED = 8;
   var REAP_UNDEFENDABLE = 3;
+  var REAP_UNDEFENDABLE_UPGRADED = 4;
   var REAP_DREADFUL_GIVEN = 2;
   var RIDE_DOWN_BASE = 6;
+  var RIDE_DOWN_GRIM_PURSUIT = 2;
+  var RIDE_DOWN_GRIM_PURSUIT_UPGRADED = 3;
   var SOW_SMALL_DMG = 7;
   var SOW_SMALL_DREADFUL = 1;
+  var SOW_SMALL_DREADFUL_UPGRADED = 2;
   var SOW_LARGE_DMG = 9;
+  var SOW_LARGE_DMG_UPGRADED = 10;
   var SOW_LARGE_DREADFUL = 2;
+  var SOW_LARGE_DREADFUL_UPGRADED = 3;
   var HORRIFY_BASE_UNDEFENDABLE = 6;
   var HORRIFY_DREADFUL_GIVEN = 3;
+  var HORRIFY_GRIM_PURSUIT_UPGRADED = 2;
   var WHIFF_PURSUIT_TOKENS = 1;
+  var GHOSTLY_CHARGE_DMG = 2;
+  var GHOSTLY_CHARGE_GRIM_PURSUIT = 2;
+  var CURSED_GALLOP_DMG = 1;
+  var CURSED_GALLOP_GRIM_PURSUIT = 1;
+  var THE_REAPER_DMG = 4;
+  var THE_REAPER_DREADFUL_GIVEN = 3;
+  var HAUNTED_STRIKE_DMG = 4;
+  var SPOOKY_DMG = 7;
+  var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
   var MARGINAL_VALUE = [3, 3, 3, 5, 0.5];
@@ -535,84 +555,151 @@ var Engine = (() => {
     }
     return false;
   }
-  function getCandidates(dice, dreadful, hasHead) {
+  function getCandidates(dice, dreadful, hasHead, upgradeIds = []) {
     const { A: a, B: b, C: c } = classify(dice);
     const out = [];
+    const has = (id) => upgradeIds.includes(id);
+    if (has("cleave-ii") && a >= 2 && b >= 1 && c >= 1) {
+      const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      out.push(["Ghostly Charge", val, GHOSTLY_CHARGE_DMG]);
+    }
+    if (has("ride-down-ii") && b >= 3) {
+      const val = CURSED_GALLOP_DMG + CURSED_GALLOP_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      out.push(["Cursed Gallop", val, CURSED_GALLOP_DMG]);
+    }
+    if (has("reap-ii") && b >= 3 && c >= 2) {
+      const val = THE_REAPER_DMG + dreadfulValueOfGaining(dreadful, THE_REAPER_DREADFUL_GIVEN) + CARD_DRAW_VALUE;
+      out.push(["The Reaper", val, THE_REAPER_DMG]);
+    }
+    if (has("spectral-assault-ii") && a >= 2 && c >= 2) {
+      out.push(["Haunted Strike", HAUNTED_STRIKE_DMG, HAUNTED_STRIKE_DMG]);
+    }
+    if (has("horrify-ii") && c >= 3) {
+      const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      out.push(["Spooky", val, SPOOKY_DMG]);
+    }
     if (c >= 5) {
       const base = DREADFUL_CHARGE_VALUE;
       out.push(["Dreadful Charge", base + dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN), base]);
     }
     if (c >= 4) {
       const base = HORRIFY_BASE_UNDEFENDABLE;
+      const horrifyUpgraded = has("horrify-ii");
       let val = base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
-      if (hasHead) val += GRIM_PURSUIT_AVG_DMG;
+      if (horrifyUpgraded) val += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
+      else if (hasHead) val += GRIM_PURSUIT_AVG_DMG;
       out.push(["Horrify", val, base]);
     }
     if (a >= 3 && c >= 2) {
-      const val = SPECTRAL_ASSAULT_BASE + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL;
-      out.push(["Spectral Assault", val, SPECTRAL_ASSAULT_BASE]);
+      const base = has("spectral-assault-ii") ? SPECTRAL_ASSAULT_BASE_UPGRADED : SPECTRAL_ASSAULT_BASE;
+      const val = base + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL;
+      out.push(["Spectral Assault", val, base]);
     }
+    const cleaveUpgraded = has("cleave-ii");
     if (a >= 5) {
-      out.push(["Cleave 5A", CLEAVE_5A, CLEAVE_5A]);
+      const dmg = cleaveUpgraded ? CLEAVE_5A_UPGRADED : CLEAVE_5A;
+      out.push(["Cleave 5A", dmg, dmg]);
     } else if (a === 4) {
-      out.push(["Cleave 4A", CLEAVE_4A, CLEAVE_4A]);
+      const dmg = cleaveUpgraded ? CLEAVE_4A_UPGRADED : CLEAVE_4A;
+      out.push(["Cleave 4A", dmg, dmg]);
     } else if (a === 3) {
-      out.push(["Cleave 3A", CLEAVE_3A, CLEAVE_3A]);
+      const dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A;
+      out.push(["Cleave 3A", dmg, dmg]);
     }
     if (a >= 2 && b >= 2 && c === 0) {
-      const val = RIDE_DOWN_BASE + 2 * GRIM_PURSUIT_AVG_DMG;
+      const grimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
+      const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG;
       out.push(["Ride Down", val, RIDE_DOWN_BASE]);
     }
     if (b >= 3 && c >= 1) {
-      let val = REAP_UNDEFENDABLE + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
+      const dmg = has("reap-ii") ? REAP_UNDEFENDABLE_UPGRADED : REAP_UNDEFENDABLE;
+      let val = dmg + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
       if (hasHead) val += CARD_DRAW_VALUE;
-      out.push(["Reap", val, REAP_UNDEFENDABLE]);
+      out.push(["Reap", val, dmg]);
     }
+    const sowUpgraded = has("sow-despair-ii");
     if (hasStraight(dice, 5)) {
-      const val = SOW_LARGE_DMG + dreadfulValueOfGaining(dreadful, SOW_LARGE_DREADFUL);
-      out.push(["Sow Despair L", val, SOW_LARGE_DMG]);
+      const dmg = sowUpgraded ? SOW_LARGE_DMG_UPGRADED : SOW_LARGE_DMG;
+      const dreadfulGiven = sowUpgraded ? SOW_LARGE_DREADFUL_UPGRADED : SOW_LARGE_DREADFUL;
+      const val = dmg + dreadfulValueOfGaining(dreadful, dreadfulGiven);
+      out.push(["Sow Despair L", val, dmg]);
     }
     if (hasStraight(dice, 4)) {
-      const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, SOW_SMALL_DREADFUL);
+      const dreadfulGiven = sowUpgraded ? SOW_SMALL_DREADFUL_UPGRADED : SOW_SMALL_DREADFUL;
+      const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, dreadfulGiven);
       out.push(["Sow Despair S", val, SOW_SMALL_DMG]);
     }
     const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG;
     out.push(["Whiff", whiffVal, whiffVal]);
     return out;
   }
-  function bestAbilityValue(dice, dreadful, hasHead) {
-    return Math.max(...getCandidates(dice, dreadful, hasHead).map(([, v]) => v));
+  function bestAbilityValue(dice, dreadful, hasHead, upgradeIds = []) {
+    return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds).map(([, v]) => v));
   }
-  function bestAbilityName(dice, dreadful, hasHead) {
-    const cands = getCandidates(dice, dreadful, hasHead);
+  function bestAbilityName(dice, dreadful, hasHead, upgradeIds = []) {
+    const cands = getCandidates(dice, dreadful, hasHead, upgradeIds);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function buildAbilityBoard(dice, dreadful, hasHead) {
-    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead).map(([name]) => name));
+  function buildAbilityBoard(dice, dreadful, hasHead, upgradeIds = []) {
+    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds).map(([name]) => name));
+    const has = (id) => upgradeIds.includes(id);
+    const cleaveUpgraded = has("cleave-ii");
+    const sowUpgraded = has("sow-despair-ii");
+    const horrifyUpgraded = has("horrify-ii");
+    const cleave5Dmg = cleaveUpgraded ? CLEAVE_5A_UPGRADED : CLEAVE_5A;
+    const cleave4Dmg = cleaveUpgraded ? CLEAVE_4A_UPGRADED : CLEAVE_4A;
+    const cleave3Dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A;
+    const reapDmg = has("reap-ii") ? REAP_UNDEFENDABLE_UPGRADED : REAP_UNDEFENDABLE;
+    const rideDownGrimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
+    const sowLDmg = sowUpgraded ? SOW_LARGE_DMG_UPGRADED : SOW_LARGE_DMG;
+    const sowLDreadful = sowUpgraded ? SOW_LARGE_DREADFUL_UPGRADED : SOW_LARGE_DREADFUL;
+    const sowSDreadful = sowUpgraded ? SOW_SMALL_DREADFUL_UPGRADED : SOW_SMALL_DREADFUL;
+    const spectralAssaultBase = has("spectral-assault-ii") ? SPECTRAL_ASSAULT_BASE_UPGRADED : SPECTRAL_ASSAULT_BASE;
     const dc = dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN);
     const horrifyGain = dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
     let horrifyVal = HORRIFY_BASE_UNDEFENDABLE + horrifyGain;
-    if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG;
-    let reapVal = REAP_UNDEFENDABLE + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
+    if (horrifyUpgraded) horrifyVal += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
+    else if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG;
+    let reapVal = reapDmg + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
     if (hasHead) reapVal += CARD_DRAW_VALUE;
-    const sowLVal = SOW_LARGE_DMG + dreadfulValueOfGaining(dreadful, SOW_LARGE_DREADFUL);
-    const sowSVal = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, SOW_SMALL_DREADFUL);
-    const rdVal = RIDE_DOWN_BASE + 2 * GRIM_PURSUIT_AVG_DMG;
-    const saVal = SPECTRAL_ASSAULT_BASE + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL;
+    const sowLVal = sowLDmg + dreadfulValueOfGaining(dreadful, sowLDreadful);
+    const sowSVal = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, sowSDreadful);
+    const rdVal = RIDE_DOWN_BASE + rideDownGrimPursuit * GRIM_PURSUIT_AVG_DMG;
+    const saVal = spectralAssaultBase + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL;
     const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG;
-    return [
+    const ghostlyChargeVal = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+    const cursedGallopVal = CURSED_GALLOP_DMG + CURSED_GALLOP_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+    const theReaperVal = THE_REAPER_DMG + dreadfulValueOfGaining(dreadful, THE_REAPER_DREADFUL_GIVEN) + CARD_DRAW_VALUE;
+    const spookyVal = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+    const entries = [
       { name: "Dreadful Charge (CCCCC)", value: DREADFUL_CHARGE_VALUE + dc, baseDamage: DREADFUL_CHARGE_VALUE, matched: matchedSet.has("Dreadful Charge") },
       { name: "Horrify (CCCC)", value: horrifyVal, baseDamage: HORRIFY_BASE_UNDEFENDABLE, matched: matchedSet.has("Horrify") },
-      { name: "Spectral Assault (AAACC)", value: saVal, baseDamage: SPECTRAL_ASSAULT_BASE, matched: matchedSet.has("Spectral Assault") },
-      { name: "Cleave 5A (AAAAA)", value: CLEAVE_5A, baseDamage: CLEAVE_5A, matched: matchedSet.has("Cleave 5A") },
-      { name: "Cleave 4A (AAAA)", value: CLEAVE_4A, baseDamage: CLEAVE_4A, matched: matchedSet.has("Cleave 4A") },
-      { name: "Cleave 3A (AAA)", value: CLEAVE_3A, baseDamage: CLEAVE_3A, matched: matchedSet.has("Cleave 3A") },
+      { name: "Spectral Assault (AAACC)", value: saVal, baseDamage: spectralAssaultBase, matched: matchedSet.has("Spectral Assault") },
+      { name: "Cleave 5A (AAAAA)", value: cleave5Dmg, baseDamage: cleave5Dmg, matched: matchedSet.has("Cleave 5A") },
+      { name: "Cleave 4A (AAAA)", value: cleave4Dmg, baseDamage: cleave4Dmg, matched: matchedSet.has("Cleave 4A") },
+      { name: "Cleave 3A (AAA)", value: cleave3Dmg, baseDamage: cleave3Dmg, matched: matchedSet.has("Cleave 3A") },
       { name: "Ride Down (AAABB)", value: rdVal, baseDamage: RIDE_DOWN_BASE, matched: matchedSet.has("Ride Down") },
-      { name: "Reap (BBBC)", value: reapVal, baseDamage: REAP_UNDEFENDABLE, matched: matchedSet.has("Reap") },
-      { name: "Sow Despair L (5-straight)", value: sowLVal, baseDamage: SOW_LARGE_DMG, matched: matchedSet.has("Sow Despair L") },
+      { name: "Reap (BBBC)", value: reapVal, baseDamage: reapDmg, matched: matchedSet.has("Reap") },
+      { name: "Sow Despair L (5-straight)", value: sowLVal, baseDamage: sowLDmg, matched: matchedSet.has("Sow Despair L") },
       { name: "Sow Despair S (4-straight)", value: sowSVal, baseDamage: SOW_SMALL_DMG, matched: matchedSet.has("Sow Despair S") },
       { name: "Whiff", value: whiffVal, baseDamage: whiffVal, matched: matchedSet.has("Whiff") }
     ];
+    if (has("cleave-ii")) {
+      entries.push({ name: "Ghostly Charge (AABC)", value: ghostlyChargeVal, baseDamage: GHOSTLY_CHARGE_DMG, matched: matchedSet.has("Ghostly Charge") });
+    }
+    if (has("ride-down-ii")) {
+      entries.push({ name: "Cursed Gallop (BBB)", value: cursedGallopVal, baseDamage: CURSED_GALLOP_DMG, matched: matchedSet.has("Cursed Gallop") });
+    }
+    if (has("reap-ii")) {
+      entries.push({ name: "The Reaper (BBBCC)", value: theReaperVal, baseDamage: THE_REAPER_DMG, matched: matchedSet.has("The Reaper") });
+    }
+    if (has("spectral-assault-ii")) {
+      entries.push({ name: "Haunted Strike (AACC)", value: HAUNTED_STRIKE_DMG, baseDamage: HAUNTED_STRIKE_DMG, matched: matchedSet.has("Haunted Strike") });
+    }
+    if (has("horrify-ii")) {
+      entries.push({ name: "Spooky (CCC)", value: spookyVal, baseDamage: SPOOKY_DMG, matched: matchedSet.has("Spooky") });
+    }
+    return entries;
   }
 
   // src/characters/horseman/config.ts
@@ -622,20 +709,21 @@ var Engine = (() => {
       return hhFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue(dice, state.dreadful, state.hasHead);
+      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead);
+      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard(dice, state.dreadful, state.hasHead);
+      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates(dice, state.dreadful, state.hasHead);
+      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      return `${state.dreadful}|${state.hasHead ? 1 : 0}`;
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${upgrades}`;
     }
   };
 
@@ -643,17 +731,25 @@ var Engine = (() => {
   var BATON_STRIKE_3B = 5;
   var BATON_STRIKE_4B = 6;
   var BATON_STRIKE_5B = 7;
+  var BATON_STRIKE_3B_UPGRADED = 6;
+  var BATON_STRIKE_4B_UPGRADED = 7;
+  var BATON_STRIKE_5B_UPGRADED = 8;
   var INFILTRATE_BASE_DMG = 0;
   var INFILTRATE_TB_INFLICTED = 1;
   var INFILTRATE_AGILITY_GAIN = 1;
   var GAUNTLETS_BASE_DMG = 6;
+  var GAUNTLETS_BASE_DMG_UPGRADED = 7;
   var GAUNTLETS_CP_GAIN = 1;
   var HACKED_BASE_DMG = 5;
+  var HACKED_BASE_DMG_UPGRADED = 6;
   var HACKED_THRESHOLD_UPGRADES = 3;
   var HACKED_THRESHOLD_BONUS = 2;
   var HACKED_TB_INFLICTED = 1;
-  var GRAPPLE_BASE_DMG = 5;
+  var GRAPPLE_BASE_DMG = 6;
+  var GRAPPLE_BASE_DMG_UPGRADED = 7;
   var GRAPPLE_AGILITY_GAIN = 1;
+  var GRAPPLE_CP_THRESHOLD_UPGRADES = 2;
+  var GRAPPLE_CP_GAIN = 1;
   var VENGEANCE_BASE_DMG = 7;
   var VENGEANCE_AGILITY_GAIN = 1;
   var VENGEANCE_RIDER_DICE = 4;
@@ -663,7 +759,13 @@ var Engine = (() => {
   var RRT_ALL_ATTACK_BONUS = 1;
   var AGILITY_VALUE = 2;
   var CP_TO_DMG_EQUIV = 1.5;
+  var COVERT_OPS_VALUE = 1.5;
   var WHIFF_VALUE = 0;
+  var COVERT_MISSION_DMG = 0;
+  var RECON_DMG = 0;
+  var RECON_UPGRADE_SEARCH_VALUE = 4;
+  var SPY_GAME_DMG = 6;
+  var SUBVERT_DMG = 0;
 
   // src/characters/black_widow/timebomb.ts
   var TB_VALUE_LOW = 2.8;
@@ -706,51 +808,69 @@ var Engine = (() => {
     }
     return false;
   }
-  function binom(n, k) {
-    let r = 1;
-    for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
-    return r;
+  function vengeanceRiderEV(upgrades, tbOnOpp, n = VENGEANCE_RIDER_DICE) {
+    const riderDmg = n * 0.5;
+    const pNoA = Math.pow(2 / 3, n);
+    const tbEV = (1 - pNoA) * tbGainValue(upgrades, tbOnOpp, Math.min(1, 2 - tbOnOpp));
+    const pC = 1 / 6;
+    const pFewerThanTwoC = Math.pow(1 - pC, n) + n * pC * Math.pow(1 - pC, n - 1);
+    const covertOpsEV = (1 - pFewerThanTwoC) * COVERT_OPS_VALUE;
+    return riderDmg + tbEV + covertOpsEV;
   }
-  function vengeanceRiderEV(upgrades, tbOnOpp) {
-    const n = VENGEANCE_RIDER_DICE;
-    const riderDmg = n * (5 / 6);
-    const p1 = 1 / 6, p0 = 5 / 6;
-    let tbEV = 0;
-    for (let k = 0; k <= n; k++) {
-      const p = binom(n, k) * Math.pow(p1, k) * Math.pow(p0, n - k);
-      const gained = Math.min(k, 2 - tbOnOpp);
-      tbEV += p * tbGainValue(upgrades, tbOnOpp, gained);
-    }
-    return riderDmg + tbEV;
-  }
-  function getCandidates2(dice, upgrades, tbOnOpp) {
+  function getCandidates2(dice, upgrades, tbOnOpp, upgradeIds = []) {
     const { A: a, B: b, C: c } = classify2(dice);
     const out = [];
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const has = (id) => upgradeIds.includes(id);
+    if (has("widows-gauntlets-ii") && a >= 2 && b >= 2) {
+      const tb = tbGainValue(upgrades, tbOnOpp, 1);
+      out.push(["Covert Mission", COVERT_MISSION_DMG + tb + rrt, COVERT_MISSION_DMG]);
+    }
+    if (has("grapple-ii") && c >= 3) {
+      const val = RECON_DMG + AGILITY_VALUE + RECON_UPGRADE_SEARCH_VALUE + rrt;
+      out.push(["Recon", val, RECON_DMG]);
+    }
+    if (has("infiltrate-ii") && a >= 2 && b >= 1 && c >= 2) {
+      const val = SPY_GAME_DMG + COVERT_OPS_VALUE + AGILITY_VALUE + rrt;
+      out.push(["Spy Game", val, SPY_GAME_DMG]);
+    }
+    if (has("vengeance-ii") && a >= 1 && b >= 3) {
+      const val = SUBVERT_DMG + COVERT_OPS_VALUE + AGILITY_VALUE + rrt;
+      out.push(["Subvert", val, SUBVERT_DMG]);
+    }
+    const batonStrikeUpgraded = has("baton-strike-ii");
     if (b >= 5) {
-      out.push(["Baton Strike 5B", BATON_STRIKE_5B + rrt, BATON_STRIKE_5B]);
+      const dmg = batonStrikeUpgraded ? BATON_STRIKE_5B_UPGRADED : BATON_STRIKE_5B;
+      out.push(["Baton Strike 5B", dmg + rrt, dmg]);
     } else if (b === 4) {
-      out.push(["Baton Strike 4B", BATON_STRIKE_4B + rrt, BATON_STRIKE_4B]);
+      const dmg = batonStrikeUpgraded ? BATON_STRIKE_4B_UPGRADED : BATON_STRIKE_4B;
+      out.push(["Baton Strike 4B", dmg + rrt, dmg]);
     } else if (b === 3) {
-      out.push(["Baton Strike 3B", BATON_STRIKE_3B + rrt, BATON_STRIKE_3B]);
+      const dmg = batonStrikeUpgraded ? BATON_STRIKE_3B_UPGRADED : BATON_STRIKE_3B;
+      out.push(["Baton Strike 3B", dmg + rrt, dmg]);
     }
     if (a >= 2 && b >= 1 && c >= 1) {
       const tb = tbGainValue(upgrades, tbOnOpp, INFILTRATE_TB_INFLICTED);
       const agility = INFILTRATE_AGILITY_GAIN * AGILITY_VALUE;
       out.push(["Infiltrate", INFILTRATE_BASE_DMG + tb + agility + rrt, INFILTRATE_BASE_DMG]);
     }
-    if (a >= 3 && b >= 2) {
-      const val = GAUNTLETS_BASE_DMG + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
-      out.push(["Widow's Gauntlets", val, GAUNTLETS_BASE_DMG]);
+    if (b >= 3 && a >= 2) {
+      const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
+      const val = gauntletsDmg + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
+      out.push(["Widow's Gauntlets", val, gauntletsDmg]);
     }
     if (hasStraight2(dice, 4)) {
+      const hackedDmg = has("hacked-ii") ? HACKED_BASE_DMG_UPGRADED : HACKED_BASE_DMG;
       const thresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
       const tb = tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED);
-      out.push(["Hacked", HACKED_BASE_DMG + thresh + tb + rrt, HACKED_BASE_DMG]);
+      out.push(["Hacked", hackedDmg + thresh + tb + rrt, hackedDmg]);
     }
     if (c >= 4) {
-      const val = GRAPPLE_BASE_DMG + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + rrt;
-      out.push(["Grapple", val, GRAPPLE_BASE_DMG]);
+      const grappleUpgraded = has("grapple-ii");
+      const grappleDmg = grappleUpgraded ? GRAPPLE_BASE_DMG_UPGRADED : GRAPPLE_BASE_DMG;
+      const cpGain = grappleUpgraded || upgrades >= GRAPPLE_CP_THRESHOLD_UPGRADES ? GRAPPLE_CP_GAIN * CP_TO_DMG_EQUIV : 0;
+      const val = grappleDmg + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + cpGain + rrt;
+      out.push(["Grapple", val, grappleDmg]);
     }
     if (hasStraight2(dice, 5)) {
       const rider = vengeanceRiderEV(upgrades, tbOnOpp);
@@ -764,52 +884,87 @@ var Engine = (() => {
     out.push(["Whiff", WHIFF_VALUE, WHIFF_VALUE]);
     return out;
   }
-  function bestAbilityValue2(dice, upgrades, tbOnOpp) {
-    return Math.max(...getCandidates2(dice, upgrades, tbOnOpp).map(([, v]) => v));
+  function bestAbilityValue2(dice, upgrades, tbOnOpp, upgradeIds = []) {
+    return Math.max(...getCandidates2(dice, upgrades, tbOnOpp, upgradeIds).map(([, v]) => v));
   }
-  function bestAbilityName2(dice, upgrades, tbOnOpp) {
-    const cands = getCandidates2(dice, upgrades, tbOnOpp);
+  function bestAbilityName2(dice, upgrades, tbOnOpp, upgradeIds = []) {
+    const cands = getCandidates2(dice, upgrades, tbOnOpp, upgradeIds);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function directDamageByName(upgrades, _tbOnOpp) {
+  function directDamageByName(upgrades, _tbOnOpp, upgradeIds = []) {
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const has = (id) => upgradeIds.includes(id);
+    const batonStrikeUpgraded = has("baton-strike-ii");
+    const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
+    const hackedDmg = has("hacked-ii") ? HACKED_BASE_DMG_UPGRADED : HACKED_BASE_DMG;
     const hackedThresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
-    const vengeanceRiderDmg = VENGEANCE_RIDER_DICE * (5 / 6);
+    const grappleDmg = has("grapple-ii") ? GRAPPLE_BASE_DMG_UPGRADED : GRAPPLE_BASE_DMG;
+    const vengeanceRiderDmg = VENGEANCE_RIDER_DICE * 0.5;
     return {
-      "Baton Strike 3B": BATON_STRIKE_3B + rrt,
-      "Baton Strike 4B": BATON_STRIKE_4B + rrt,
-      "Baton Strike 5B": BATON_STRIKE_5B + rrt,
+      "Baton Strike 3B": (batonStrikeUpgraded ? BATON_STRIKE_3B_UPGRADED : BATON_STRIKE_3B) + rrt,
+      "Baton Strike 4B": (batonStrikeUpgraded ? BATON_STRIKE_4B_UPGRADED : BATON_STRIKE_4B) + rrt,
+      "Baton Strike 5B": (batonStrikeUpgraded ? BATON_STRIKE_5B_UPGRADED : BATON_STRIKE_5B) + rrt,
       "Infiltrate": INFILTRATE_BASE_DMG + rrt,
-      "Widow's Gauntlets": GAUNTLETS_BASE_DMG + upgrades + rrt,
-      "Hacked": HACKED_BASE_DMG + hackedThresh + rrt,
-      "Grapple": GRAPPLE_BASE_DMG + upgrades + rrt,
+      "Widow's Gauntlets": gauntletsDmg + upgrades + rrt,
+      "Hacked": hackedDmg + hackedThresh + rrt,
+      "Grapple": grappleDmg + upgrades + rrt,
       "Vengeance": VENGEANCE_BASE_DMG + vengeanceRiderDmg + rrt,
       "Widow's Bite": WIDOWS_BITE_BASE_DMG + rrt,
-      "Whiff": 0
+      "Whiff": 0,
+      "Covert Mission": COVERT_MISSION_DMG + rrt,
+      "Recon": RECON_DMG + rrt,
+      "Spy Game": SPY_GAME_DMG + rrt,
+      "Subvert": SUBVERT_DMG + rrt
     };
   }
-  function buildAbilityBoard2(dice, upgrades, tbOnOpp) {
-    const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp).map(([n]) => n));
+  function buildAbilityBoard2(dice, upgrades, tbOnOpp, upgradeIds = []) {
+    const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp, upgradeIds).map(([n]) => n));
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const has = (id) => upgradeIds.includes(id);
+    const batonStrikeUpgraded = has("baton-strike-ii");
+    const batonStrike5Dmg = batonStrikeUpgraded ? BATON_STRIKE_5B_UPGRADED : BATON_STRIKE_5B;
+    const batonStrike4Dmg = batonStrikeUpgraded ? BATON_STRIKE_4B_UPGRADED : BATON_STRIKE_4B;
+    const batonStrike3Dmg = batonStrikeUpgraded ? BATON_STRIKE_3B_UPGRADED : BATON_STRIKE_3B;
+    const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
+    const hackedDmg = has("hacked-ii") ? HACKED_BASE_DMG_UPGRADED : HACKED_BASE_DMG;
+    const grappleDmg = has("grapple-ii") ? GRAPPLE_BASE_DMG_UPGRADED : GRAPPLE_BASE_DMG;
     const infiltrateVal = INFILTRATE_BASE_DMG + tbGainValue(upgrades, tbOnOpp, INFILTRATE_TB_INFLICTED) + INFILTRATE_AGILITY_GAIN * AGILITY_VALUE + rrt;
-    const gauntletsVal = GAUNTLETS_BASE_DMG + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
+    const gauntletsVal = gauntletsDmg + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
     const hackedThresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
-    const hackedVal = HACKED_BASE_DMG + hackedThresh + tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED) + rrt;
-    const grappleVal = GRAPPLE_BASE_DMG + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + rrt;
+    const hackedVal = hackedDmg + hackedThresh + tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED) + rrt;
+    const grappleCpGain = has("grapple-ii") || upgrades >= GRAPPLE_CP_THRESHOLD_UPGRADES ? GRAPPLE_CP_GAIN * CP_TO_DMG_EQUIV : 0;
+    const grappleVal = grappleDmg + upgrades + GRAPPLE_AGILITY_GAIN * AGILITY_VALUE + grappleCpGain + rrt;
     const vengeanceVal = VENGEANCE_BASE_DMG + vengeanceRiderEV(upgrades, tbOnOpp) + VENGEANCE_AGILITY_GAIN * AGILITY_VALUE + rrt;
     const biteVal = WIDOWS_BITE_BASE_DMG + tbGainValue(upgrades, tbOnOpp, WIDOWS_BITE_TB_INFLICTED) + rrt;
-    return [
+    const covertMissionVal = COVERT_MISSION_DMG + tbGainValue(upgrades, tbOnOpp, 1) + rrt;
+    const reconVal = RECON_DMG + AGILITY_VALUE + RECON_UPGRADE_SEARCH_VALUE + rrt;
+    const spyGameVal = SPY_GAME_DMG + COVERT_OPS_VALUE + AGILITY_VALUE + rrt;
+    const subvertVal = SUBVERT_DMG + COVERT_OPS_VALUE + AGILITY_VALUE + rrt;
+    const entries = [
       { name: "Widow's Bite (CCCCC)", value: biteVal, baseDamage: WIDOWS_BITE_BASE_DMG, matched: matched.has("Widow's Bite") },
-      { name: "Grapple (CCCC)", value: grappleVal, baseDamage: GRAPPLE_BASE_DMG, matched: matched.has("Grapple") },
-      { name: "Widow's Gauntlets (AAABB)", value: gauntletsVal, baseDamage: GAUNTLETS_BASE_DMG, matched: matched.has("Widow's Gauntlets") },
+      { name: "Grapple (CCCC)", value: grappleVal, baseDamage: grappleDmg, matched: matched.has("Grapple") },
+      { name: "Widow's Gauntlets (BBBAA)", value: gauntletsVal, baseDamage: gauntletsDmg, matched: matched.has("Widow's Gauntlets") },
       { name: "Vengeance (5-straight)", value: vengeanceVal, baseDamage: VENGEANCE_BASE_DMG, matched: matched.has("Vengeance") },
-      { name: "Hacked (4-straight)", value: hackedVal, baseDamage: HACKED_BASE_DMG, matched: matched.has("Hacked") },
+      { name: "Hacked (4-straight)", value: hackedVal, baseDamage: hackedDmg, matched: matched.has("Hacked") },
       { name: "Infiltrate (AABC)", value: infiltrateVal, baseDamage: INFILTRATE_BASE_DMG, matched: matched.has("Infiltrate") },
-      { name: "Baton Strike 5B (BBBBB)", value: BATON_STRIKE_5B + rrt, baseDamage: BATON_STRIKE_5B, matched: matched.has("Baton Strike 5B") },
-      { name: "Baton Strike 4B (BBBB)", value: BATON_STRIKE_4B + rrt, baseDamage: BATON_STRIKE_4B, matched: matched.has("Baton Strike 4B") },
-      { name: "Baton Strike 3B (BBB)", value: BATON_STRIKE_3B + rrt, baseDamage: BATON_STRIKE_3B, matched: matched.has("Baton Strike 3B") },
+      { name: "Baton Strike 5B (BBBBB)", value: batonStrike5Dmg + rrt, baseDamage: batonStrike5Dmg, matched: matched.has("Baton Strike 5B") },
+      { name: "Baton Strike 4B (BBBB)", value: batonStrike4Dmg + rrt, baseDamage: batonStrike4Dmg, matched: matched.has("Baton Strike 4B") },
+      { name: "Baton Strike 3B (BBB)", value: batonStrike3Dmg + rrt, baseDamage: batonStrike3Dmg, matched: matched.has("Baton Strike 3B") },
       { name: "Whiff", value: WHIFF_VALUE, baseDamage: WHIFF_VALUE, matched: matched.has("Whiff") }
     ];
+    if (has("widows-gauntlets-ii")) {
+      entries.push({ name: "Covert Mission", value: covertMissionVal, baseDamage: COVERT_MISSION_DMG, matched: matched.has("Covert Mission") });
+    }
+    if (has("grapple-ii")) {
+      entries.push({ name: "Recon", value: reconVal, baseDamage: RECON_DMG, matched: matched.has("Recon") });
+    }
+    if (has("infiltrate-ii")) {
+      entries.push({ name: "Spy Game", value: spyGameVal, baseDamage: SPY_GAME_DMG, matched: matched.has("Spy Game") });
+    }
+    if (has("vengeance-ii")) {
+      entries.push({ name: "Subvert", value: subvertVal, baseDamage: SUBVERT_DMG, matched: matched.has("Subvert") });
+    }
+    return entries;
   }
 
   // src/characters/black_widow/config.ts
@@ -819,32 +974,33 @@ var Engine = (() => {
       return bwFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp);
+      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp);
+      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp);
+      return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates2(dice, state.upgrades, state.tbOnOpp);
+      const cands = getCandidates2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      return `${state.upgrades}|${state.tbOnOpp}`;
+      const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(",");
+      return `${state.upgrades}|${state.tbOnOpp}|${upgradeIds}`;
     },
     directDamageByName(state) {
-      return directDamageByName(state.upgrades, state.tbOnOpp);
+      return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds);
     }
   };
 
   // src/index.ts
-  function evalState2(kept, rollsRemaining, dreadful, hasHead) {
-    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead });
+  function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIds) {
+    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds });
   }
-  function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead) {
-    return calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead });
+  function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead, upgradeIds) {
+    return calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead, upgradeIds });
   }
   var HHEngine = {
     calculateOptimalKeep: calculateOptimalKeep2,

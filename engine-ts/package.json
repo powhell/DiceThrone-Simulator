@@ -5,9 +5,10 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "esbuild src/index.ts --bundle --format=iife --global-name=Engine --outfile=../static/engine.js && node inline.mjs"
+    "build": "esbuild src/index.ts --bundle --format=iife --global-name=Engine --outfile=../static/engine.js && node inline.mjs && node gen-assets.mjs"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "esbuild": "^0.21.5",
     "typescript": "^5.4.0",
     "vitest": "^2.0.0"

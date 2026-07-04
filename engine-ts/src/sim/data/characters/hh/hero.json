@@ -1,0 +1,65 @@
+{
+  "id": "hh",
+  "name": "Headless Horseman",
+  "diceAnatomy": "AAABBC (face 1-3 = A/Axe, 4-5 = B/Horseshoe, 6 = C/Scare)",
+  "startingHp": null,
+  "cpIncomePerTurn": null,
+  "setupNotes": "Begin the game with the Haunted Head on your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful (Hero Setup, leaflet).",
+  "source": "VERIFIED against photos in characters/headless_horseman/{board,leaflet,cards}/ (deposited 2026-07-01). Read directly by Claude via the Read tool. 7 upgrade cards + 7 standalone unique-action cards = 14 hero cards total. 5 of the upgrades also unlock a second dice-triggered ability once in play (altAbility field) — these share the parent upgrade's CP cost, they are NOT separate cards.",
+  "tokens": [
+    { "id": "dreadful", "name": "Dreadful", "startingCount": 0, "stackCap": 5, "description": "Positive Status Effect. Boosts various abilities, including when you can Terrorize an opponent (need >=4)." },
+    { "id": "grimPursuit", "name": "Grim Pursuit", "startingCount": 0, "stackCap": 3, "description": "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) after attacking, roll 1 die and add that many dmg as an Attack Modifier. Each effect usable once per turn." }
+  ],
+  "flags": [
+    { "id": "hauntedHead", "name": "Haunted Head", "startingValue": true, "description": "Companion token. At the conclusion of your turn, if an opponent has it, gain 1 Dreadful. Move it via Terrorize, Rolling Pumpkin, or when Terrorized." }
+  ],
+  "abilities": [
+    { "id": "cleave_3a", "boardName": "Cleave 3A (AAA)", "dicePattern": "AAA", "baseDamage": 4.0, "defendable": true, "numberMatchBonus": { "ofAKind": 4, "tokensGranted": { "dreadful": 1 } }, "upgradedBy": { "upgradeId": "cleave-ii", "baseDamage": 5.0 }, "notes": "Base card requires 4-of-a-kind BY FACE VALUE (not just 3 A symbols) to grant the Dreadful bonus. Cleave II upgrade lowers this to 3-of-a-kind.", "verified": true },
+    { "id": "cleave_4a", "boardName": "Cleave 4A (AAAA)", "dicePattern": "AAAA", "baseDamage": 5.0, "defendable": true, "numberMatchBonus": { "ofAKind": 4, "tokensGranted": { "dreadful": 1 } }, "upgradedBy": { "upgradeId": "cleave-ii", "baseDamage": 6.0 }, "verified": true },
+    { "id": "cleave_5a", "boardName": "Cleave 5A (AAAAA)", "dicePattern": "AAAAA", "baseDamage": 7.0, "defendable": true, "numberMatchBonus": { "ofAKind": 4, "tokensGranted": { "dreadful": 1 } }, "upgradedBy": { "upgradeId": "cleave-ii", "baseDamage": 8.0 }, "verified": true },
+    { "id": "reap", "boardName": "Reap (BBBC)", "dicePattern": "BBBC", "baseDamage": 3.0, "defendable": false, "tokensGrantedToSelf": { "dreadful": 2 }, "cardDrawIfHasHead": true, "upgradedBy": { "upgradeId": "reap-ii", "baseDamage": 4.0 }, "verified": true },
+    { "id": "ride_down", "boardName": "Ride Down (AAABB)", "dicePattern": "AAABB", "baseDamage": 6.0, "defendable": true, "tokensGrantedToSelf": { "grimPursuit": 2 }, "upgradedBy": { "upgradeId": "ride-down-ii", "tokensGrantedToSelf": { "grimPursuit": 3 } }, "verified": true },
+    { "id": "sow_despair_s", "boardName": "Sow Despair S (4-straight)", "dicePattern": "4-straight", "baseDamage": 7.0, "defendable": true, "tokensGrantedToSelf": { "dreadful": 1 }, "upgradedBy": { "upgradeId": "sow-despair-ii", "tokensGrantedToSelf": { "dreadful": 2 } }, "verified": true },
+    { "id": "sow_despair_l", "boardName": "Sow Despair L (5-straight)", "dicePattern": "5-straight", "baseDamage": 9.0, "defendable": true, "tokensGrantedToSelf": { "dreadful": 2 }, "upgradedBy": { "upgradeId": "sow-despair-ii", "baseDamage": 10.0, "tokensGrantedToSelf": { "dreadful": 3 } }, "verified": true },
+    { "id": "horrify", "boardName": "Horrify (CCCC)", "dicePattern": "CCCC", "baseDamage": 6.0, "defendable": false, "tokensGrantedToSelf": { "dreadful": 3 }, "tokensGrantedIfHasHead": { "grimPursuit": 1 }, "upgradedBy": { "upgradeId": "horrify-ii", "tokensGrantedToSelf": { "dreadful": 3, "grimPursuit": 2 } }, "notes": "Real rule is a CHOICE: gain 3 Dreadful OR gain Grim Pursuit (count not printed on card, inferred 1 by convention); if you have the Haunted Head, do BOTH instead. The flat tokensGrantedToSelf/tokensGrantedIfHasHead fields here assume the Head-owner (both) case — engine logic still needs the XOR branch for the no-Head case. Horrify II drops the choice entirely: always both, with Grim Pursuit bumped 1->2.", "verified": true },
+    { "id": "spectral_assault", "boardName": "Spectral Assault (AAACC)", "dicePattern": "AAACC", "baseDamage": 8.0, "defendable": true, "tokensGrantedToSelf": { "dreadful": 1 }, "bonusRoll": { "diceCount": "1 per Dreadful token, up to 5 total", "perSymbolDamage": { "A": 1 }, "undefendableOnSymbolPair": "B", "perSymbolTokens": { "C": { "token": "grimPursuit", "amount": 1 } } }, "upgradedBy": { "upgradeId": "spectral-assault-ii", "baseDamage": 9.0 }, "notes": "Full text: 'Gain Dreadful. Then deal 8 dmg and roll 1 die per Dreadful (up to 5 total): Add 1 dmg per Axe. On 2 Horseshoe, this Attack becomes undefendable. Gain 1 Grim Pursuit per Scare.' Matches Spectral Assault II exactly except base dmg 8 vs 9.", "verified": true },
+    { "id": "dreadful_charge", "boardName": "Dreadful Charge (CCCCC)", "dicePattern": "CCCCC", "baseDamage": 14.0, "defendable": false, "tokensGrantedToSelf": { "dreadful": 4 }, "notes": "ULTIMATE. Card text: 'Dice may be altered to prevent an Ultimate. Otherwise, no action of any kind may be performed by any opponent until the ability fully completes.' Treated as undefendable since the opponent cannot take the 'action' of defending.", "verified": true }
+  ],
+  "passives": [
+    { "id": "headless_mayhem", "name": "Headless Mayhem", "trigger": "Upkeep Phase (your choice, one of the two)", "text": "During your Upkeep Phase, choose one: Terrorize an opponent (requires >=4 Dreadful; see Terrorize) -or- move the Haunted Head to a chosen player (gain 1 Dreadful if moved to an opponent). Separately (always active): if your Offensive Roll Phase does not successfully deal at least 1 dmg, gain 1 Grim Pursuit.", "verified": true },
+    { "id": "terrorize", "name": "Terrorize", "trigger": "Chosen during Upkeep Phase, requires >=4 Dreadful tokens", "text": "Terrorize an opponent: remove 4 Dreadful tokens from yourself, move the Haunted Head to your own Hero Board (if not already there), deal 3 undefendable dmg to a chosen opponent (isolated damage source), gain 1 Grim Pursuit and 1 CP.", "verified": true }
+  ],
+  "defense": {
+    "name": "Hallowed Reckoning",
+    "diceCount": "1 + current Dreadful count, up to 5 total",
+    "text": "Defense Roll 1-5: Roll 1 die plus 1 more for each Dreadful (up to 5 total). Deal 1 dmg per Axe rolled (counter-damage to the attacker). For every 2 Horseshoe rolled, prevent 1 incoming dmg. Gain 1 Dreadful per Scare rolled. (Hallowed Reckoning II upgrade: starts at 2 dice instead of 1, still capped at 5 total, and adds: on 2 Scare, also gain 1 Grim Pursuit.)",
+    "verified": true
+  },
+  "cards": [
+    { "id": "cleave-ii", "name": "Cleave II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "cleave", "text": "3A: Deal 5 dmg. 4A: Deal 6 dmg. 5A: Deal 8 dmg. On 3-of-a-kind (#'s), gain Dreadful.", "effect": { "other": "replaces base Cleave numbers (4/5/7 -> 5/6/8) and lowers the number-match bonus threshold from 4-of-a-kind to 3-of-a-kind" },
+      "altAbility": { "id": "ghostly_charge", "boardName": "Ghostly Charge (AABC)", "dicePattern": "AABC (2 Axe, 1 Horseshoe, 1 Scare)", "baseDamage": 2.0, "defendable": false, "tokensGrantedToSelf": { "grimPursuit": 2 }, "notes": "Card says 'pure' dmg, not 'undefendable' like other HH abilities — may bypass even prevention effects, verify the distinction. Unlocked once Cleave II is in play.", "verified": true },
+      "verified": true },
+    { "id": "ride-down-ii", "name": "Ride Down II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "ride_down", "text": "AAABB: Gain 3 Grim Pursuit. Then deal 6 dmg.", "effect": { "damage": 6, "tokensGrantedToSelf": { "grimPursuit": 3 } },
+      "altAbility": { "id": "cursed_gallop", "boardName": "Cursed Gallop (BBB)", "dicePattern": "BBB", "baseDamage": 1.0, "defendable": false, "tokensGrantedToSelf": { "grimPursuit": 1 }, "notes": "Unlocked once Ride Down II is in play.", "verified": true },
+      "verified": true },
+    { "id": "sow-despair-ii", "name": "Sow Despair II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "sow_despair", "text": "Small Straight: Gain 2 Dreadful, Deal 7 dmg. Large Straight: Gain 3 Dreadful, Deal 10 dmg.", "effect": { "other": "small: dreadful 1->2, dmg stays 7. large: dreadful 2->3, dmg 9->10" }, "notes": "Photo did not show a second alt-ability card in frame — unconfirmed whether one exists.", "verified": true },
+    { "id": "reap-ii", "name": "Reap II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "reap", "text": "BBBC: Gain 2 Dreadful. Deal 4 undefendable dmg. If you have the Haunted Head, draw 1.", "effect": { "damage": 4, "tokensGrantedToSelf": { "dreadful": 2 }, "cardDraw": 1 },
+      "altAbility": { "id": "the_reaper", "boardName": "The Reaper (BBBCC)", "dicePattern": "BBBCC (3 Horseshoe, 2 Scare)", "baseDamage": 4.0, "defendable": false, "tokensGrantedToSelf": { "dreadful": 3 }, "cardDraw": 1, "notes": "Unlocked once Reap II is in play.", "verified": true },
+      "verified": true },
+    { "id": "hallowed-reckoning-ii", "name": "Hallowed Reckoning II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "hallowed_reckoning", "text": "Defense Roll 2-5: Roll 2 plus 1 more for each Dreadful (up to 5 total). Deal 1 dmg per Axe. For every 2 Horseshoe, prevent 1 dmg. Gain 1 Dreadful per Scare. On 2 Scare, gain Grim Pursuit.", "effect": null, "notes": "Photo did not show a second alt-ability card in frame — unconfirmed whether one exists.", "verified": true },
+    { "id": "spectral-assault-ii", "name": "Spectral Assault II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "spectral_assault", "text": "AAACC: Gain Dreadful. Then deal 9 dmg and roll 1 die per Dreadful (up to 5 total): Add 1 dmg per Axe. On 2 Horseshoe, undefendable. Gain 1 Grim Pursuit per Scare.", "effect": { "damage": 9 },
+      "altAbility": { "id": "haunted_strike", "boardName": "Haunted Strike (AACC)", "dicePattern": "AACC (2 Axe, 2 Scare)", "baseDamage": 4.0, "defendable": false, "notes": "Unlocked once Spectral Assault II is in play.", "verified": true },
+      "verified": true },
+    { "id": "horrify-ii", "name": "Horrify II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "horrify", "text": "CCCC: Gain 3 Dreadful and 2 Grim Pursuit. Then deal 6 undefendable dmg.", "effect": { "damage": 6, "tokensGrantedToSelf": { "dreadful": 3, "grimPursuit": 2 } },
+      "altAbility": { "id": "spooky", "boardName": "Spooky (CCC)", "dicePattern": "CCC", "baseDamage": 7.0, "defendable": true, "tokensGrantedToSelf": { "grimPursuit": 2 }, "notes": "Unlocked once Horrify II is in play.", "verified": true },
+      "verified": true },
+
+    { "id": "dark-surprise", "name": "Dark Surprise!", "kind": "action", "cpCost": 2, "actionTiming": "instant", "text": "Instant Action. Gain 2 Dreadful.", "effect": { "tokensGrantedToSelf": { "dreadful": 2 } }, "verified": true },
+    { "id": "unescapable", "name": "Unescapable!", "kind": "action", "cpCost": 1, "actionTiming": "rollPhase", "text": "Roll Phase Action, Attack Modifier. Remove a Grim Pursuit to make this Attack undefendable.", "effect": { "other": "cost: 1 CP + spend 1 Grim Pursuit token" }, "verified": true },
+    { "id": "spirited-reprisal", "name": "Spirited Reprisal!", "kind": "action", "cpCost": 1, "actionTiming": "rollPhase", "text": "Roll Phase Action. Play only after being Attacked. If you have the Haunted Head, prevent 3 incoming dmg.", "effect": { "other": "no effect if you don't have the Head" }, "verified": true },
+    { "id": "cranial-assist", "name": "Cranial Assist!", "kind": "action", "cpCost": 2, "actionTiming": "rollPhase", "text": "Roll Phase Action, Attack Modifier. If your opponent has the Haunted Head, add 3 dmg.", "effect": { "other": "conditional on OPPONENT holding the Head, not self" }, "verified": true },
+    { "id": "dancing-pumpkin", "name": "Dancing Pumpkin!", "kind": "action", "cpCost": 2, "actionTiming": "mainPhase", "text": "Main Phase Action. If you have the Haunted Head, gain 2 Dreadful. Otherwise, gain 2 Grim Pursuit.", "effect": null, "verified": true },
+    { "id": "thundering-hooves", "name": "Thundering Hooves!", "kind": "action", "cpCost": 0, "actionTiming": "rollPhase", "text": "Roll Phase Action. Spend up to 3 CP. Then gain 1 Grim Pursuit per CP spent.", "effect": { "other": "0 CP to play the card itself; converts up to 3 additional CP into Grim Pursuit 1:1" }, "verified": true },
+    { "id": "rolling-pumpkin", "name": "Rolling Pumpkin!", "kind": "action", "cpCost": 0, "actionTiming": "instant", "text": "Instant Action. Move the Haunted Head to a chosen player.", "effect": null, "verified": true }
+  ]
+}

@@ -7,6 +7,10 @@ import {
 export interface BWState {
   upgrades: number
   tbOnOpp: number
+  // ids of Hero Upgrade cards in play (self.upgradesInPlay) — needed to know WHICH upgrades
+  // are active, not just how many, so alt-abilities (e.g. Grapple II -> Recon) can be gated
+  // correctly. Optional/defaults to none for legacy callers.
+  upgradeIds?: string[]
 }
 
 export const bwConfig: CharacterConfig<BWState> = {
@@ -15,22 +19,23 @@ export const bwConfig: CharacterConfig<BWState> = {
     return bwFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.upgrades, state.tbOnOpp)
+    return bestAbilityValue(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.upgrades, state.tbOnOpp)
+    return bestAbilityName(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
-    return buildAbilityBoard(dice, state.upgrades, state.tbOnOpp)
+    return buildAbilityBoard(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
   },
   hasMatchedAbility(dice, state) {
-    const cands = getCandidates(dice, state.upgrades, state.tbOnOpp)
+    const cands = getCandidates(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
     return cands.some(([name]) => name !== 'Whiff')
   },
   stateKey(state) {
-    return `${state.upgrades}|${state.tbOnOpp}`
+    const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(',')
+    return `${state.upgrades}|${state.tbOnOpp}|${upgradeIds}`
   },
   directDamageByName(state) {
-    return directDamageByName(state.upgrades, state.tbOnOpp)
+    return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds)
   },
 }

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dice Throne — Vérification données</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --accent: #e94560;
+    --gold: #f5a623;
+    --text: #eaeaea;
+    --muted: #888;
+    --green: #4caf50;
+    --red: #e94560;
+    --blue: #42a5f5;
+    --border: #2a2a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding: 20px; }
+  h1 { text-align: center; color: var(--accent); font-size: 1.6rem; letter-spacing: 2px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 0.8rem; margin-bottom: 20px; }
+  .subtitle a { color: var(--blue); }
+  .max { max-width: 1100px; margin: 0 auto; }
+
+  .tabs { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+  .tab { padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 0.95rem; }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+  .panel h2 { color: var(--gold); font-size: 1.05rem; margin-bottom: 10px; }
+  .panel .empty { color: var(--muted); font-style: italic; font-size: 0.9rem; }
+
+  .img-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .img-grid img { max-width: 220px; max-height: 300px; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.5px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+  .badge.verified { background: rgba(76,175,80,0.2); color: var(--green); }
+  .badge.unverified { background: rgba(233,69,96,0.2); color: var(--red); }
+  .mono { font-family: Consolas, monospace; font-size: 0.8rem; color: var(--blue); }
+
+  .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10; align-items: center; justify-content: center; cursor: zoom-out; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="max">
+  <h1>DICE THRONE — VÉRIFICATION</h1>
+  <div class="subtitle">Photo vs données extraites, côte à côte. <a href="index.html">← retour au calculateur</a></div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="content"></div>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lightbox-img" src=""></div>
+
+<!-- ASSETS_BUNDLE_START -->
+<script src="character-assets.generated.js"></script>
+<!-- ASSETS_BUNDLE_END -->
+<script>
+const DATA = window.CHARACTER_ASSETS || { heroes: {}, common: { images: [], data: { cards: [] } } };
+let currentHero = 'hh';
+
+function badge(verified) {
+  return `<span class="badge ${verified ? 'verified' : 'unverified'}">${verified ? 'vérifié' : 'à vérifier'}</span>`;
+}
+
+function imgGrid(paths) {
+  if (!paths || paths.length === 0) return '<div class="empty">Aucune image déposée pour l’instant.</div>';
+  return '<div class="img-grid">' + paths.map(p => `<img src="${p}" onclick="openLightbox('${p}')">`).join('') + '</div>';
+}
+
+function abilitiesTable(abilities) {
+  if (!abilities || abilities.length === 0) return '<div class="empty">Aucune abilité.</div>';
+  const rows = abilities.map(a => `
+    <tr>
+      <td>${a.boardName}</td>
+      <td class="mono">${a.dicePattern ?? ''}</td>
+      <td>${a.baseDamage ?? '<span class="empty">?</span>'}</td>
+      <td>${a.defendable === null ? '?' : (a.defendable ? 'oui' : 'non')}</td>
+      <td>${describeTokens(a)}</td>
+      <td>${badge(a.verified)}</td>
+    </tr>`).join('');
+  return `<table><thead><tr><th>Abilité</th><th>Dés</th><th>Dégâts</th><th>Défendable</th><th>Effets</th><th>Statut</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function describeTokens(a) {
+  const parts = [];
+  if (a.tokensGrantedToSelf) for (const [k, v] of Object.entries(a.tokensGrantedToSelf)) parts.push(`+${v} ${k}`);
+  if (a.tokensGrantedIfHasHead) for (const [k, v] of Object.entries(a.tokensGrantedIfHasHead)) parts.push(`+${v} ${k} (si Head)`);
+  if (a.tokensInflictedOnOpponent) for (const [k, v] of Object.entries(a.tokensInflictedOnOpponent)) parts.push(`inflige ${v} ${k}`);
+  if (a.cpGain) parts.push(`+${a.cpGain} CP`);
+  if (a.cardDraw) parts.push(`pioche ${a.cardDraw}`);
+  if (a.cardDrawIfHasHead) parts.push('pioche 1 (si Head)');
+  if (a.bonusDamagePerUpgrade) parts.push(`+${a.bonusDamagePerUpgrade} dmg/upgrade`);
+  if (a.thresholdBonus) parts.push(`+${a.thresholdBonus.bonusDamage} dmg si ≥${a.thresholdBonus.upgradesAtLeast} upgrades`);
+  if (a.advancesAllTimeBombsInPlay) parts.push('avance tous les TB en jeu');
+  if (a.searchUpgradesIntoPlay) parts.push(`cherche ${a.searchUpgradesIntoPlay} upgrades`);
+  if (a.notes) parts.push(`<em>${a.notes}</em>`);
+  return parts.join('<br>') || '—';
+}
+
+function cardsTable(cards) {
+  if (!cards || cards.length === 0) return '<div class="empty">Aucune carte.</div>';
+  const rows = cards.map(c => `
+    <tr>
+      <td>${c.name}${c.altAbility ? `<br><span class="mono">+ ${c.altAbility.boardName}</span>` : ''}</td>
+      <td>${c.kind}</td>
+      <td>${c.cpCost ?? '<span class="empty">?</span>'}</td>
+      <td>${c.text ?? ''}${c.altAbility ? `<br><em>Alt-ability: ${describeTokens(c.altAbility)} — dmg ${c.altAbility.baseDamage ?? '?'}, dés ${c.altAbility.dicePattern}</em>` : ''}</td>
+      <td>${badge(c.verified)}</td>
+    </tr>`).join('');
+  return `<table><thead><tr><th>Carte</th><th>Type</th><th>Coût CP</th><th>Texte</th><th>Statut</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function tokensTable(tokens, flags) {
+  const tRows = (tokens || []).map(t => `<tr><td>${t.name}</td><td>${t.startingCount}</td><td>${t.stackCap ?? 'illimité'}</td><td>${t.description}</td></tr>`).join('');
+  const fRows = (flags || []).map(f => `<tr><td>${f.name} (flag)</td><td>${f.startingValue}</td><td>—</td><td>${f.description}</td></tr>`).join('');
+  const rows = tRows + fRows;
+  if (!rows) return '<div class="empty">Aucun token.</div>';
+  return `<table><thead><tr><th>Token</th><th>Départ</th><th>Cap</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function passivesAndDefense(passives, defense, setupNotes) {
+  let html = '';
+  if (setupNotes) html += `<p style="margin-bottom:10px"><strong>Setup :</strong> ${setupNotes}</p>`;
+  if (passives && passives.length) {
+    html += '<table><thead><tr><th>Passif</th><th>Déclencheur</th><th>Texte</th><th>Statut</th></tr></thead><tbody>' +
+      passives.map(p => `<tr><td>${p.name}</td><td>${p.trigger}</td><td>${p.text}</td><td>${badge(p.verified)}</td></tr>`).join('') +
+      '</tbody></table>';
+  }
+  if (defense) {
+    html += `<table style="margin-top:10px"><thead><tr><th>Défense</th><th>Dés</th><th>Texte</th><th>Statut</th></tr></thead><tbody>
+      <tr><td>${defense.name}</td><td class="mono">${defense.diceCount}</td><td>${defense.text}</td><td>${badge(defense.verified)}</td></tr>
+      </tbody></table>`;
+  }
+  return html || '<div class="empty">Rien pour l’instant.</div>';
+}
+
+function render() {
+  const hero = DATA.heroes[currentHero];
+  document.getElementById('tabs').innerHTML = Object.keys(DATA.heroes).map(id =>
+    `<div class="tab ${id === currentHero ? 'active' : ''}" onclick="selectHero('${id}')">${DATA.heroes[id].data.name}</div>`
+  ).join('');
+
+  if (!hero) { document.getElementById('content').innerHTML = '<div class="panel empty">Pas de données pour ce héros.</div>'; return; }
+  const d = hero.data;
+
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h2>Leaflet (tokens + passifs + défense)</h2>
+      ${imgGrid(hero.leaflet)}
+      ${tokensTable(d.tokens, d.flags)}
+      ${passivesAndDefense(d.passives, d.defense, d.setupNotes)}
+    </div>
+    <div class="panel">
+      <h2>Board (abilités)</h2>
+      ${imgGrid(hero.board)}
+      ${abilitiesTable(d.abilities)}
+    </div>
+    <div class="panel">
+      <h2>Cartes de ${d.name}</h2>
+      ${imgGrid(hero.cards)}
+      ${cardsTable(d.cards)}
+    </div>
+    <div class="panel">
+      <h2>Cartes communes (tous les héros)</h2>
+      ${imgGrid(DATA.common.images)}
+      ${cardsTable(DATA.common.data.cards)}
+    </div>
+  `;
+}
+
+function selectHero(id) { currentHero = id; render(); }
+function openLightbox(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').classList.add('open'); }
+document.getElementById('lightbox').onclick = () => document.getElementById('lightbox').classList.remove('open');
+
+render();
+</script>
+</body>
+</html>

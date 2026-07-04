@@ -1,0 +1,1073 @@
+// Pure(ish) turn/phase step functions — see rng.ts for the "RNG threaded as an argument,
+// never Math.random() directly" convention that keeps a (seed, policies) pair reproducible.
+import type { GameState, PlayerState, HeroId, TokenKind, TransferableToken, TimeBombPosition, Phase, WindowAction, WindowContext } from './types.js'
+import { hasHead, TRANSFERABLE_TOKENS, countToken } from './tokens.js'
+import { resolveResponseWindow } from './decision.js'
+import type { HHState } from '../characters/horseman/config.js'
+import type { BWState } from '../characters/black_widow/config.js'
+import type { RNG } from './rng.js'
+import { shuffle, rollDie } from './rng.js'
+import type { Policy, RollManipulationChoice } from './policy.js'
+import type { RollStep, RollStepUpdate } from './oracle.js'
+import { runOffensiveRoll } from './oracle.js'
+import { resolveMatchedAbilities } from './ability-resolver.js'
+import type { CardTemplate, HeroTemplate } from './data/schema.js'
+import { heroTemplateFor, resolvedAbilityByBoardName, cardById } from './data/load.js'
+import * as hh from './hero/hh.rules.js'
+import * as bw from './hero/bw.rules.js'
+import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
+import { grantCp } from './cp.js'
+
+function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string): void {
+  state.log.push({ turn: state.turnNumber, playerIdx, phase, message })
+}
+
+function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
+  if (player.heroId === 'hh') {
+    const t = player.tokens
+    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay }
+  }
+  // opponent.timeBombs is on PlayerState directly (Time Bomb is hero-agnostic — it's
+  // inflicted BY Black Widow but stacks on whichever opponent she's hitting).
+  return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay }
+}
+
+function checkGameOver(state: GameState): boolean {
+  const [p0, p1] = state.players
+  // Mutual kill = draw (Advanced Rules, DRP6 note: "If all remaining players are simultaneously
+  // reduced to 0 health, the game is a draw"). winner stays null for a draw, so gameOver is what
+  // makes it terminal (loops gate on !gameOver, never on winner === null — see types.ts).
+  if (p0.hp <= 0 && p1.hp <= 0) { state.winner = null; state.gameOver = true; return true }
+  if (p0.hp <= 0) { state.winner = 1; state.gameOver = true; return true }
+  if (p1.hp <= 0) { state.winner = 0; state.gameOver = true; return true }
+  return false
+}
+
+// Golden Rule #4 (Advanced Rules): an attack's damage is accumulated and applied SIMULTANEOUSLY
+// at the conclusion of its resolution — so an Attack and the Defender's counter-damage that are
+// BOTH lethal resolve as a mutual kill (a draw), not "whoever's hp was subtracted first wins".
+// queueDamage accumulates onto state.pendingDamage; flushDamage applies it all at once at the end
+// of the attack-resolution unit (resolveDefense, or the undefendable branches of applyHHAbility/
+// applyBWAbility). Single-source damage that can never co-occur with a counter-source (Terrorize
+// and Time-Bomb upkeep — mutually exclusive hero branches; Main-Phase action cards) stays inline.
+function queueDamage(state: GameState, targetIdx: 0 | 1, amount: number): void {
+  if (amount > 0) state.pendingDamage[targetIdx] += amount
+}
+
+function flushDamage(state: GameState): void {
+  state.players[0].hp -= state.pendingDamage[0]
+  state.players[1].hp -= state.pendingDamage[1]
+  state.pendingDamage = [0, 0]
+}
+
+// DRP6: conclude a Defensive Roll Phase. Queues the defender's still-unprevented damage (held in
+// state.pendingAttack, whittled by the DRP5 window) alongside any counter-damage already queued
+// during the defense roll, then applies it all SIMULTANEOUSLY (Golden Rule #4). Exported because
+// the RL policy replays it on a clone to score defensive-card options — those only reduce
+// pendingAttack.remaining, so the HP payoff isn't visible until this runs. Clears pendingAttack;
+// a no-op flush is fine when pendingAttack is null.
+export function finalizePendingAttackDamage(state: GameState): void {
+  const pa = state.pendingAttack
+  if (pa) {
+    queueDamage(state, pa.defenderIdx, pa.remaining)
+    state.pendingAttack = null
+  }
+  flushDamage(state)
+}
+
+export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, policy: Policy): void {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  self.upgradesPlayedThisTurn = 0
+  self.grimPursuitBonusUsedThisTurn = false
+
+  if (self.heroId === 'hh') {
+    const eligible = hh.canTerrorize(self)
+    const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible)
+    if (choice === 'terrorize' && eligible) {
+      const r = hh.resolveTerrorize(self)
+      opp.hp -= r.damageToOpponent
+      log(state, playerIdx, 'upkeep', `Terrorize: ${r.damageToOpponent} dmg to opponent, +${r.cpGained} CP, reclaimed Head`)
+    } else if (choice === 'giveHead') {
+      self.tokens.head = 0
+      log(state, playerIdx, 'upkeep', 'Gave the Haunted Head to the opponent')
+    }
+  }
+
+  // Time Bombs tick at the start of ANY carrier's turn, whatever their hero. They're inflicted on
+  // the OPPONENT, so the carrier is usually NOT the BW who placed them (e.g. an HH victim). This
+  // used to be nested in a BW-only else branch, so bombs sitting on an HH player never ticked —
+  // placed and forgotten. Now hero-independent. Empty timeBombs -> no roll, so heroes never hit by
+  // a bomb (e.g. HH vs HH) are unaffected. tickTimeBombsUpkeep applies its own undefendable
+  // self-damage; playTurn's checkGameOver right after this catches a lethal detonation.
+  const tb = bw.tickTimeBombsUpkeep(self, rng)
+  if (tb.selfDamage > 0 || tb.defused > 0) {
+    log(state, playerIdx, 'upkeep', `Time Bomb upkeep: ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
+  }
+}
+
+// Verified (official rulebook, Income Phase): gain 1 CP (capped at 15) and draw 1 card from
+// the deck (reshuffling the discard pile into a fresh deck if it runs out). The Start Player
+// skips their first Income Phase entirely (no CP, no draw) — that's always player 0's turn 1,
+// since match.ts always gives the first turn to player 0.
+export function playIncomePhase(state: GameState, playerIdx: 0 | 1, rng: RNG): void {
+  if (playerIdx === 0 && state.turnNumber === 1) {
+    log(state, playerIdx, 'income', 'Start Player skips their first Income Phase')
+    return
+  }
+  const self = state.players[playerIdx]
+  grantCp(self, CP_INCOME_PER_TURN)
+  drawCards(self, 1, rng)
+  log(state, playerIdx, 'income', `+${CP_INCOME_PER_TURN} CP, drew 1 card (hand=${self.hand.length})`)
+}
+
+function drawCards(self: PlayerState, count: number, rng: RNG): void {
+  for (let i = 0; i < count; i++) {
+    if (self.deck.length === 0) {
+      if (self.discard.length === 0) return
+      self.deck = shuffle(self.discard, rng)
+      self.discard = []
+    }
+    self.hand.push(self.deck.shift()!)
+  }
+}
+
+// Verified (official rulebook, Discard Phase): sell cards from hand until at or below
+// MAX_HAND_SIZE, +1 CP per card sold regardless of its play cost. No other actions are legal
+// during this phase.
+export function playDiscardPhase(state: GameState, playerIdx: 0 | 1, policy: Policy): void {
+  const self = state.players[playerIdx]
+  const toSell = policy.chooseCardsToDiscard(state, playerIdx, MAX_HAND_SIZE)
+  for (const cardId of toSell) {
+    const idx = self.hand.indexOf(cardId)
+    if (idx === -1) continue
+    self.hand.splice(idx, 1)
+    self.discard.push(cardId)
+    grantCp(self, 1)
+  }
+  if (toSell.length > 0) {
+    log(state, playerIdx, 'discard', `Sold ${toSell.length} card(s) for +${toSell.length} CP (hand=${self.hand.length})`)
+  }
+}
+
+// Dispatches a card id from `chooseMainPhaseCards`/`chooseMidRollCards` to the mechanical
+// effect (CP cost, hand/upgradesInPlay/discard movement). See CardTemplate.actionTiming and
+// .upgradeSlot in schema.ts for the rules this implements (verified official rulebook,
+// characters/rules/{Hero Upgrades,Action Cards}.png, 2026-07-01).
+export function playCard(state: GameState, playerIdx: 0 | 1, phase: Phase, cardId: string, rng: RNG): void {
+  const self = state.players[playerIdx]
+  if (!self.hand.includes(cardId)) {
+    log(state, playerIdx, phase, `Card "${cardId}" not in hand, skipped`)
+    return
+  }
+  const hero = heroTemplateFor(self.heroId)
+  const card = cardById(hero, cardId)
+  if (!card) {
+    log(state, playerIdx, phase, `Unknown card "${cardId}", skipped`)
+    return
+  }
+  if (!isCardPlayableNow(card, phase, self.heroId)) {
+    log(state, playerIdx, phase, `TODO(user): ${card.name} (${card.actionTiming ?? 'Roll Phase Action, dice manipulation'}) not wired for phase "${phase}" — skipped`)
+    return
+  }
+
+  if (card.kind === 'upgrade') playUpgradeCard(state, playerIdx, phase, card, hero)
+  else playActionCard(state, playerIdx, phase, card, rng)
+}
+
+// Hero Upgrade cards are only playable during Main Phase (1) or (2) — except for Black
+// Widow, whose Red Room Training passive lets her play them during any Roll Phase too.
+// Instant Action cards are technically legal "at any time" per the rulebook; this engine
+// only offers them at the same decision points (Main Phase, and Roll Phase for bw) rather
+// than modeling true interrupt timing (TODO(user)). Main Phase Action cards are restricted
+// to Main Phase (1)/(2). Roll Phase Action cards (dice manipulation, extra rolls, attack
+// modifiers, "play after being Attacked" prevention) never go through this dispatcher at all —
+// they're offered directly by their own decision points (oracle.ts's beforeReroll hook via
+// eligibleRollManipulationCardIds/applyRollManipulationCard, applyAttackModifiers, and
+// resolveDefense's eligibleDefensiveCardIds/applyDefensiveCard). Not yet wired: Helping Hand!
+// (needs opponent-interrupt timing, same not-yet-modeled category as Instant Action cards
+// above) and Better D! (needs a "Defensive Roll Phase" reroll step that doesn't exist —
+// defense here is a single deterministic dice roll, see resolveDefense).
+function isCardPlayableNow(card: CardTemplate, phase: Phase, heroId: HeroId): boolean {
+  if (card.kind === 'upgrade') return phase === 'main1' || phase === 'main2' || (phase === 'roll' && heroId === 'bw')
+  if (card.actionTiming === 'instant') return true
+  if (card.actionTiming === 'mainPhase') return phase === 'main1' || phase === 'main2'
+  return false
+}
+
+function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: CardTemplate, hero: HeroTemplate): void {
+  const self = state.players[playerIdx]
+  if (!card.upgradeSlot) {
+    log(state, playerIdx, phase, `TODO(user): ${card.name} has no upgradeSlot data yet, skipped`)
+    return
+  }
+  // Verified rulebook: upgrading an already-upgraded slot (e.g. level II -> III) only costs
+  // the difference in CP, and replaces the old card in upgradesInPlay (not a second copy).
+  const existingId = self.upgradesInPlay.find(id => cardById(hero, id)?.upgradeSlot === card.upgradeSlot)
+  const existingCard = existingId ? cardById(hero, existingId) : undefined
+  const fullCost = card.cpCost ?? 0
+  const cost = existingCard ? Math.max(0, fullCost - (existingCard.cpCost ?? 0)) : fullCost
+  if (self.cp < cost) {
+    log(state, playerIdx, phase, `Not enough CP to play ${card.name} (needs ${cost}, have ${self.cp})`)
+    return
+  }
+  self.cp -= cost
+  self.hand.splice(self.hand.indexOf(card.id), 1)
+  if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter(id => id !== existingId)
+  self.upgradesInPlay.push(card.id)
+  self.upgradesPlayedThisTurn += 1
+  log(state, playerIdx, phase, `Played upgrade ${card.name} for ${cost} CP${existingCard ? ` (upgraded from ${existingCard.name})` : ''}`)
+}
+
+function grantTokenToSelf(self: PlayerState, kind: TokenKind, amount: number): void {
+  switch (kind) {
+    case 'dreadful': hh.grantDreadful(self, amount); break
+    case 'grimPursuit': hh.grantGrimPursuit(self, amount); break
+    case 'agility': bw.grantAgility(self, amount); break
+    case 'covertOps': bw.grantCovertOps(self, amount); break
+    case 'timeBomb': break // no current card data grants Time Bomb to oneself
+  }
+}
+
+function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: CardTemplate, rng: RNG): void {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const cost = card.cpCost ?? 0
+  if (self.cp < cost) {
+    log(state, playerIdx, phase, `Not enough CP to play ${card.name} (needs ${cost}, have ${self.cp})`)
+    return
+  }
+  self.cp -= cost
+  self.hand.splice(self.hand.indexOf(card.id), 1)
+  self.discard.push(card.id)
+
+  // Self-buff Action cards whose effect is conditional/random rather than a plain structured grant.
+  if (card.id === 'dancing-pumpkin') {
+    if (hasHead(self)) { hh.grantDreadful(self, 2); log(state, playerIdx, phase, 'Dancing Pumpkin!: +2 Dreadful (Haunted Head)') }
+    else { hh.grantGrimPursuit(self, 2); log(state, playerIdx, phase, 'Dancing Pumpkin!: +2 Grim Pursuit') }
+    return
+  }
+  if (card.id === 'vegas-baby') {
+    const v = rollDie(rng)
+    const gain = Math.ceil(v / 2)
+    grantCp(self, gain)
+    log(state, playerIdx, phase, `Vegas Baby!: rolled ${v}, +${gain} CP`)
+    return
+  }
+
+  const eff = card.effect
+  if (!eff) {
+    log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP — TODO(user): effect not structured yet, no game-state change applied`)
+    return
+  }
+
+  const parts: string[] = []
+  if (eff.cpGain) { grantCp(self, eff.cpGain); parts.push(`+${eff.cpGain} CP`) }
+  if (eff.cardDraw) { drawCards(self, eff.cardDraw, rng); parts.push(`drew ${eff.cardDraw}`) }
+  if (eff.damage) { opp.hp -= eff.damage; parts.push(`${eff.damage} dmg to opponent`) }
+  if (eff.tokensGrantedToSelf) {
+    for (const [kind, amount] of Object.entries(eff.tokensGrantedToSelf)) {
+      if (amount) { grantTokenToSelf(self, kind as TokenKind, amount); parts.push(`+${amount} ${kind}`) }
+    }
+  }
+  if (eff.tokensInflictedOnOpponent?.timeBomb && self.heroId === 'bw') {
+    const n = bw.inflictTimeBomb(opp, self.upgradesInPlay.length, eff.tokensInflictedOnOpponent.timeBomb)
+    if (n > 0) parts.push(`${n} TB inflicted`)
+  }
+  log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP (${parts.length > 0 ? parts.join(', ') : 'no effect'})`)
+}
+
+export function playOffensiveRollPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, policy: Policy): number[] {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+
+  const beforeReroll = (step: RollStep): RollStepUpdate => {
+    if (self.heroId === 'bw') {
+      const cardIds = policy.chooseMidRollCards(state, playerIdx, step.dice, step.rollsRemaining)
+      for (const id of cardIds) playCard(state, playerIdx, 'roll', id, rng)
+    }
+
+    let dice = step.dice
+    let extraRollsGranted = 0
+    const eligible = eligibleRollManipulationCardIds(self)
+    if (eligible.length > 0) {
+      const choices = policy.chooseRollManipulationCards(state, playerIdx, dice, step.rollsRemaining, eligible)
+      for (const choice of choices) {
+        const r = applyRollManipulationCard(state, playerIdx, choice, dice, rng)
+        dice = r.dice
+        extraRollsGranted += r.extraRollsGranted
+      }
+    }
+
+    return { oracleState: oracleStateFor(self, opp), dice, extraRollsGranted }
+  }
+
+  const finalDice = runOffensiveRoll(self.heroId, oracleStateFor(self, opp), rng, beforeReroll)
+  log(state, playerIdx, 'roll', `Final dice: ${finalDice.join(',')}`)
+  return finalDice
+}
+
+// ORP2: after the Offensive Roll, the rules open a response window to alter the just-rolled dice
+// BEFORE an ability is matched — the opponent may break the roller's combo (Helping Hand! reroll,
+// Tip It! ±1) and either player may Tip It!. Returns the (possibly altered) dice; the caller feeds
+// them to resolveAbilityPhase, so the roller re-decides on whatever the dice became (the engine's
+// re-match). Active player (the roller) has priority. The oracle already exhausted the roller's
+// Roll Attempts, so "re-decide" here means re-match an ability, not re-roll — noted as a known
+// simplification (a resumable offensive roll for post-alteration re-rolls is future work).
+export function resolveOffensiveAlterWindow(state: GameState, rollerIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): number[] {
+  const oppIdx = (1 - rollerIdx) as 0 | 1
+  state.pendingRoll = { rollerIdx, dice: [...dice] }
+  resolveResponseWindow(state, [rollerIdx, oppIdx], { windowType: 'offensiveRoll' }, rng, policies, enumerateWindowActions, applyWindowAction)
+  const finalDice = state.pendingRoll.dice
+  state.pendingRoll = null
+  if (finalDice.join(',') !== dice.join(',')) log(state, rollerIdx, 'roll', `Dice after alteration: ${finalDice.join(',')}`)
+  return finalDice
+}
+
+// Roll Phase Action cards that directly manipulate the roller's own dice mid-roll. Helping
+// Hand! ("force an opponent to re-roll one of their dice") and Better D! ("additional Roll
+// Attempt during your Defensive Roll Phase") are NOT included — both need timing/interrupt
+// infrastructure this engine doesn't have yet (Helping Hand! is played by the OPPONENT of
+// whoever is currently rolling, the same not-yet-modeled cross-player interrupt category as
+// "instant" cards per isCardPlayableNow's TODO; Better D! needs a "Defensive Roll Phase" with
+// its own keep/reroll decision, but defense here is a single deterministic dice roll with no
+// reroll step at all — see resolveDefense/hh.resolveHallowedReckoning/bw.resolveSabotage).
+const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies']
+
+function eligibleRollManipulationCardIds(self: PlayerState): string[] {
+  const hero = heroTemplateFor(self.heroId)
+  return ROLL_MANIPULATION_CARD_IDS.filter(id => self.hand.includes(id) && self.cp >= (cardById(hero, id)?.cpCost ?? 0))
+}
+
+function applyRollManipulationCard(
+  state: GameState, playerIdx: 0 | 1, choice: RollManipulationChoice, dice: number[], rng: RNG,
+): { dice: number[]; extraRollsGranted: number } {
+  const self = state.players[playerIdx]
+  const hero = heroTemplateFor(self.heroId)
+  const card = cardById(hero, choice.cardId)
+  if (!card || !self.hand.includes(choice.cardId) || self.cp < (card.cpCost ?? 0)) return { dice, extraRollsGranted: 0 }
+  self.cp -= card.cpCost ?? 0
+  self.hand.splice(self.hand.indexOf(choice.cardId), 1)
+  self.discard.push(choice.cardId)
+
+  if (choice.cardId === 'one-more-time') {
+    log(state, playerIdx, 'roll', 'One More Time!: +1 additional Roll Attempt')
+    return { dice, extraRollsGranted: 1 }
+  }
+
+  const newDice = dice.slice()
+  const indices = choice.dieIndices ?? []
+  if (choice.cardId === 'try-try-again') {
+    for (const i of indices) newDice[i] = rollDie(rng)
+    log(state, playerIdx, 'roll', `Try, Try Again!: rerolled ${indices.length} dice`)
+    return { dice: newDice, extraRollsGranted: 0 }
+  }
+
+  // six-it / so-wild / twice-as-wild / samesies: direct value sets (Policy already resolved
+  // Samesies!'s "match another die" into a concrete value in `values`).
+  const values = choice.values ?? []
+  indices.forEach((i, k) => { newDice[i] = values[k] })
+  log(state, playerIdx, 'roll', `${card.name}: set ${indices.length} dice to [${values.join(',')}]`)
+  return { dice: newDice, extraRollsGranted: 0 }
+}
+
+// Main Phase card play is now a response window (plan Stage 2). Single participant for now — the
+// active player only (Main Phase Actions/Upgrades are your-turn-only). When the interrupt layer
+// lands (later stages), the opponent's Instant-Action interrupts become extra participants here
+// without changing this call site. Behaviour matches the old chooseMainPhaseCards for greedy:
+// the window re-enumerates after each play, so every affordable upgrade still gets played.
+export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1' | 'main2', policies: [Policy, Policy], rng: RNG): void {
+  // Two participants now: the active player (upgrades/Main-Phase Actions/cross-player cards) and the
+  // opponent, present to interrupt with Instant Actions. The opponent only ever gets Instant/pass
+  // options here (enumerateWindowActions gates the turn-only plays on state.activePlayerIdx), so a
+  // scripted greedy opponent just passes — behaviour for greedy is unchanged.
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: 'mainPhase', phase }, rng, policies, enumerateWindowActions, applyWindowAction)
+}
+
+// Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
+// themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble']
+// Main Phase self-buff Actions (not Instant-timed, so only in your own Main Phase): Dancing Pumpkin!
+// (HH conditional Dreadful/Grim Pursuit) and Vegas Baby! (roll a die for CP).
+const MAIN_PHASE_SELFBUFF_IDS = ['dancing-pumpkin', 'vegas-baby']
+
+// Whether either player currently holds any transferable status effect (for gating What Status
+// Effects? / the head-move enumeration).
+function anyoneHasHead(state: GameState): boolean {
+  return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0
+}
+function hasAnyTransferable(p: PlayerState): boolean {
+  return TRANSFERABLE_TOKENS.some(k => countToken(p, k) > 0)
+}
+
+// Cross-player status-effect cards (Transference!, Get That Outta Here!, What Status Effects?),
+// offered to the active player in their Main Phase. covertOps/head are excluded (see TRANSFERABLE_
+// TOKENS / Rolling Pumpkin!). In 1v1 the "other chosen player" for a transfer is just 1 - from.
+function pushCrossPlayerOptions(state: GameState, canAfford: (id: string) => boolean, options: WindowAction[]): void {
+  if (canAfford('transference')) {
+    for (const from of [0, 1] as const) {
+      const to = (1 - from) as 0 | 1
+      for (const k of TRANSFERABLE_TOKENS) {
+        if (countToken(state.players[from], k) > 0) {
+          options.push({ kind: 'transferToken', cardId: 'transference', tokenKind: k, fromIdx: from, toIdx: to })
+        }
+      }
+    }
+  }
+  if (canAfford('get-that-outta-here')) {
+    for (const t of [0, 1] as const) {
+      for (const k of TRANSFERABLE_TOKENS) {
+        if (countToken(state.players[t], k) > 0) {
+          options.push({ kind: 'removeToken', cardId: 'get-that-outta-here', tokenKind: k, targetIdx: t })
+        }
+      }
+    }
+  }
+  if (canAfford('what-status-effects')) {
+    for (const t of [0, 1] as const) {
+      if (hasAnyTransferable(state.players[t])) options.push({ kind: 'removeAllTokens', cardId: 'what-status-effects', targetIdx: t })
+    }
+  }
+}
+
+// So Wild! (set 1 die to any value) / Twice As Wild! (set 2 dice) — either player may set the
+// roller's in-progress dice to any value (user-confirmed "any die" includes the opponent's). Each
+// card is one WindowAction carrying its full set of (dieIndex, value) assignments.
+function pushSetDieOptions(dice: number[], canAfford: (id: string) => boolean, options: WindowAction[]): void {
+  const values = [1, 2, 3, 4, 5, 6]
+  if (canAfford('so-wild')) {
+    dice.forEach((_, i) => { for (const v of values) options.push({ kind: 'setDie', cardId: 'so-wild', sets: [{ dieIndex: i, value: v }] }) })
+  }
+  if (canAfford('twice-as-wild')) {
+    for (let i = 0; i < dice.length; i++) {
+      for (let j = i + 1; j < dice.length; j++) {
+        for (const vi of values) for (const vj of values) {
+          options.push({ kind: 'setDie', cardId: 'twice-as-wild', sets: [{ dieIndex: i, value: vi }, { dieIndex: j, value: vj }] })
+        }
+      }
+    }
+  }
+}
+
+// Legal actions offered in a response window. Always includes 'pass'. Instant self-buffs and Rolling
+// Pumpkin! (head move) are offered in EVERY window to EVERY participant (Golden Rule: Instants
+// interrupt anything). Main Phase adds the active player's Hero Upgrades + Main-Phase Actions +
+// cross-player status cards. The roll windows add dice alteration (Tip It!/Helping Hand!/Better D!/
+// So Wild!/Twice As Wild!). The defense window adds the defender's "after being Attacked" cards.
+export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: WindowContext): WindowAction[] {
+  const options: WindowAction[] = [{ kind: 'pass' }]
+  const player = state.players[playerIdx]
+  const hero = heroTemplateFor(player.heroId)
+  const canAfford = (id: string): boolean =>
+    player.hand.includes(id) && player.cp >= (cardById(hero, id)?.cpCost ?? 0)
+
+  // Instant self-buffs — any window, any participant.
+  for (const id of INSTANT_SELFBUFF_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
+  // Rolling Pumpkin! — move the Haunted Head to a chosen player (only meaningful if a head exists).
+  if (canAfford('rolling-pumpkin') && anyoneHasHead(state)) {
+    for (const to of [0, 1] as const) options.push({ kind: 'moveHead', cardId: 'rolling-pumpkin', toIdx: to })
+  }
+
+  if (ctx.windowType === 'mainPhase') {
+    // Hero Upgrades + Main-Phase Actions + cross-player status cards are your-turn-only (the active
+    // player). The opponent, present in this window purely to interrupt with Instants, gets neither.
+    if (playerIdx === state.activePlayerIdx) {
+      for (const cardId of player.hand) {
+        const card = cardById(hero, cardId)
+        if (!card || card.kind !== 'upgrade' || card.cpCost == null) continue
+        const existingId = player.upgradesInPlay.find(id => cardById(hero, id)?.upgradeSlot === card.upgradeSlot)
+        const existingCost = existingId ? (cardById(hero, existingId)?.cpCost ?? 0) : 0
+        const cost = Math.max(0, card.cpCost - existingCost)
+        if (cost <= player.cp) options.push({ kind: 'playCard', cardId })
+      }
+      for (const id of MAIN_PHASE_SELFBUFF_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
+      pushCrossPlayerOptions(state, canAfford, options)
+    }
+  } else if (ctx.windowType === 'defense') {
+    // DRP5: the defender's "after being Attacked" cards, while there's still damage to prevent.
+    const pa = state.pendingAttack
+    if (pa && pa.remaining > 0 && playerIdx === pa.defenderIdx) {
+      for (const cardId of eligibleDefensiveCardIds(player, ctx.eludeEligible ?? false)) {
+        options.push({ kind: 'playCard', cardId })
+      }
+    }
+  } else if (ctx.windowType === 'offensiveRoll' || ctx.windowType === 'defenseRoll') {
+    // ORP2 / DRP3: alter the roller's just-rolled dice (offense = attacker's dice, defense = the
+    // defender's dice). Golden Rule: dice are always alterable by the opponent.
+    const pr = state.pendingRoll
+    if (pr) {
+      // Tip It! — either player may nudge any of the roller's dice ±1.
+      if (canAfford('tip-it')) {
+        pr.dice.forEach((v, i) => {
+          if (v < 6) options.push({ kind: 'alterDie', cardId: 'tip-it', dieIndex: i, delta: 1 })
+          if (v > 1) options.push({ kind: 'alterDie', cardId: 'tip-it', dieIndex: i, delta: -1 })
+        })
+      }
+      // Helping Hand! — only the roller's OPPONENT may force a reroll of one of the roller's dice.
+      if (playerIdx !== pr.rollerIdx && canAfford('helping-hand')) {
+        pr.dice.forEach((_, i) => options.push({ kind: 'rerollDie', cardId: 'helping-hand', dieIndex: i }))
+      }
+      // Better D! — defense roll only; the roller (defender) may reroll all their defense dice.
+      if (ctx.windowType === 'defenseRoll' && playerIdx === pr.rollerIdx && canAfford('better-d')) {
+        options.push({ kind: 'rerollAll', cardId: 'better-d' })
+      }
+      // So Wild! / Twice As Wild! — either player sets the roller's dice to chosen values.
+      pushSetDieOptions(pr.dice, canAfford, options)
+    }
+  }
+  return options
+}
+
+// Applies one chosen WindowAction. Shared by resolveResponseWindow (real play) and the RL policy's
+// lookahead (replay-to-score in valueGreedyPolicy.decide) — one apply path, no drift. Both the
+// card play (affordability re-checked by playCard/applyDefensiveCard) and the defense-window
+// damage reduction (onto state.pendingAttack) route through here, so real play and scoring stay
+// identical.
+export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: WindowAction, ctx: WindowContext, rng: RNG): void {
+  if (action.kind === 'pass') return
+  if (action.kind === 'playCard') {
+    if (ctx.windowType === 'defense') {
+      const pa = state.pendingAttack
+      if (pa) pa.remaining = applyDefensiveCard(state, pa.defenderIdx, action.cardId, pa.remaining, rng)
+      return
+    }
+    playCard(state, playerIdx, ctx.phase ?? 'main1', action.cardId, rng)
+    return
+  }
+  // Instant / Main-Phase self-buff (Getting Paid!, Double/Triple Up!, Dark Surprise!, Assemble!,
+  // Dancing Pumpkin!, Vegas Baby!): resolve its structured effect for the player who played it.
+  if (action.kind === 'playInstant') {
+    const card = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId)
+    if (card) playActionCard(state, playerIdx, ctx.phase ?? 'main2', card, rng)
+    return
+  }
+  // Cross-player status-effect cards (mutate the generic bag / positional Time Bombs / Haunted Head).
+  if (action.kind === 'transferToken') { applyTransferToken(state, playerIdx, action, rng); return }
+  if (action.kind === 'removeToken') { applyRemoveToken(state, playerIdx, action); return }
+  if (action.kind === 'removeAllTokens') { applyRemoveAllTokens(state, playerIdx, action); return }
+  if (action.kind === 'moveHead') { applyMoveHead(state, playerIdx, action); return }
+  if (action.kind === 'spendGrimPursuitBonus') return // handled in applyAttackModifiers, not a window
+
+  // Dice-alteration actions mutate the in-progress roll on state.pendingRoll (ORP2 / DRP3).
+  const pr = state.pendingRoll
+  if (!pr || !spendActionCard(state, playerIdx, action.cardId)) return
+  if (action.kind === 'setDie') {
+    const before = pr.dice.join(',')
+    for (const s of action.sets) pr.dice[s.dieIndex] = s.value
+    log(state, playerIdx, 'roll', `${action.cardId === 'so-wild' ? 'So Wild!' : 'Twice As Wild!'}: set dice ${before}->${pr.dice.join(',')}`)
+    return
+  }
+  if (action.kind === 'rerollAll') {
+    const before = pr.dice.join(',')
+    for (let i = 0; i < pr.dice.length; i++) pr.dice[i] = 1 + Math.floor(rng() * 6)
+    log(state, playerIdx, 'roll', `Better D!: rerolled all dice ${before}->${pr.dice.join(',')}`)
+    return
+  }
+  const old = pr.dice[action.dieIndex]
+  if (action.kind === 'alterDie') {
+    pr.dice[action.dieIndex] = Math.max(1, Math.min(6, old + action.delta))
+    log(state, playerIdx, 'roll', `Tip It!: die ${action.dieIndex + 1} ${old}->${pr.dice[action.dieIndex]}`)
+  } else if (action.kind === 'rerollDie') {
+    pr.dice[action.dieIndex] = 1 + Math.floor(rng() * 6)
+    log(state, playerIdx, 'roll', `Helping Hand!: rerolled die ${action.dieIndex + 1} ${old}->${pr.dice[action.dieIndex]}`)
+  }
+}
+
+// --- Cross-player status-effect helpers (Transference! / GTOH / What Status Effects? / Rolling
+// Pumpkin!). Time Bomb is positional (moves/removes a TimeBombPosition); the rest are bag counts,
+// granted via the hero cap helpers so stack caps are respected on the receiving side. ---------------
+function grantTransferable(to: PlayerState, kind: TransferableToken, pos: TimeBombPosition | undefined): void {
+  if (kind === 'timeBomb') { if (to.timeBombs.length < bw.TIME_BOMB_STACK_CAP) to.timeBombs.push(pos ?? '0:02') }
+  else if (kind === 'dreadful') hh.grantDreadful(to, 1)
+  else if (kind === 'grimPursuit') hh.grantGrimPursuit(to, 1)
+  else bw.grantAgility(to, 1)
+}
+function removeTransferable(from: PlayerState, kind: TransferableToken): TimeBombPosition | undefined {
+  if (kind === 'timeBomb') return from.timeBombs.pop()
+  from.tokens[kind] = Math.max(0, from.tokens[kind] - 1)
+  return undefined
+}
+function applyTransferToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1 }, _rng: RNG): void {
+  const from = state.players[action.fromIdx]
+  if (countToken(from, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return
+  const pos = removeTransferable(from, action.tokenKind)
+  grantTransferable(state.players[action.toIdx], action.tokenKind, pos)
+  log(state, playerIdx, ctxPhaseless, `Transference!: moved ${action.tokenKind} from p${action.fromIdx} to p${action.toIdx}`)
+}
+function applyRemoveToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1 }): void {
+  const target = state.players[action.targetIdx]
+  if (countToken(target, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return
+  removeTransferable(target, action.tokenKind)
+  log(state, playerIdx, ctxPhaseless, `Get That Outta Here!: removed ${action.tokenKind} from p${action.targetIdx}`)
+}
+function applyRemoveAllTokens(state: GameState, playerIdx: 0 | 1, action: { cardId: string; targetIdx: 0 | 1 }): void {
+  if (!spendActionCard(state, playerIdx, action.cardId)) return
+  const target = state.players[action.targetIdx]
+  // covertOps and the Haunted Head are NOT status effects removable this way (verified token defs).
+  target.tokens.dreadful = 0
+  target.tokens.grimPursuit = 0
+  target.tokens.agility = 0
+  target.timeBombs = []
+  log(state, playerIdx, ctxPhaseless, `What Status Effects?: removed all status tokens from p${action.targetIdx}`)
+}
+function applyMoveHead(state: GameState, playerIdx: 0 | 1, action: { cardId: string; toIdx: 0 | 1 }): void {
+  if (!(state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0) || !spendActionCard(state, playerIdx, action.cardId)) return
+  state.players[0].tokens.head = 0
+  state.players[1].tokens.head = 0
+  state.players[action.toIdx].tokens.head = 1
+  log(state, playerIdx, ctxPhaseless, `Rolling Pumpkin!: moved the Haunted Head to p${action.toIdx}`)
+}
+// These cross-player cards can be played in any window; the log phase isn't meaningful, so use a
+// stable placeholder (the log entry's `phase` field is only used for grouping in replay output).
+const ctxPhaseless: Phase = 'main2'
+
+// Validate/pay for an Instant/Roll-Phase action card the player holds, moving it to discard.
+// Returns false (no-op) if not held or unaffordable — same guard pattern as playCard.
+function spendActionCard(state: GameState, playerIdx: 0 | 1, cardId: string): boolean {
+  const player = state.players[playerIdx]
+  const card = cardById(heroTemplateFor(player.heroId), cardId)
+  if (!card || !player.hand.includes(cardId) || player.cp < (card.cpCost ?? 0)) return false
+  player.cp -= card.cpCost ?? 0
+  player.hand.splice(player.hand.indexOf(cardId), 1)
+  player.discard.push(cardId)
+  return true
+}
+
+export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDamage: number, rng: RNG, policies: [Policy, Policy]): void {
+  const attacker = state.players[attackerIdx]
+  const defenderIdx = (1 - attackerIdx) as 0 | 1
+  const defender = state.players[defenderIdx]
+  // Every decision below (Sabotage reroll, defensive card plays) belongs to the DEFENDER —
+  // use their own Policy, not the attacker's (a prior version passed a single shared `policy`
+  // down the whole call chain, which was actually always the ACTIVE/attacking player's policy;
+  // harmless in self-play with identical scripted policies on both sides, but wrong the moment
+  // two different policies face off, e.g. an RL agent defending against a scripted attacker).
+  const policy = policies[defenderIdx]
+
+  // DRP3: roll the defense dice, then open the alter window (Golden Rule: the ATTACKER may Tip It!/
+  // Helping Hand! the defender's dice; the defender may Better D! to reroll all of them), THEN
+  // count on the final dice. The roll's effects (prevention, counter-damage, Dreadful/Grim Pursuit
+  // grants, Time Bomb) must reflect the ALTERED dice, so they're resolved after the window (DRP4),
+  // not baked into the roll. Active player (the attacker) has priority.
+  let hallowedUpgraded = false
+  let defenseDice: number[]
+  if (defender.heroId === 'bw') {
+    defenseDice = bw.rollSabotageDice(defender, rng, policy, state, defenderIdx, defender.upgradesInPlay.includes('sabotage-ii'))
+  } else {
+    hallowedUpgraded = defender.upgradesInPlay.includes('hallowed-reckoning-ii')
+    defenseDice = hh.rollHallowedDice(defender, rng, hallowedUpgraded)
+  }
+  state.pendingRoll = { rollerIdx: defenderIdx, dice: defenseDice }
+  resolveResponseWindow(state, [attackerIdx, defenderIdx], { windowType: 'defenseRoll' }, rng, policies, enumerateWindowActions, applyWindowAction)
+  const finalDefenseDice = state.pendingRoll.dice
+  state.pendingRoll = null
+
+  // DRP4: resolve the defense roll's effects on the final dice.
+  let damagePrevented = 0
+  if (defender.heroId === 'bw') {
+    const r = bw.countSabotage(finalDefenseDice)
+    damagePrevented = r.damagePrevented
+    if (r.damageToAttacker > 0) queueDamage(state, attackerIdx, r.damageToAttacker)
+    if (r.tbInflictedOnAttacker > 0) bw.inflictTimeBomb(attacker, defender.upgradesInPlay.length, r.tbInflictedOnAttacker)
+    log(state, defenderIdx, 'defense', `Sabotage: prevented ${r.damagePrevented}, ${r.damageToAttacker} dmg back, ${r.tbInflictedOnAttacker} TB inflicted`)
+  } else {
+    const r = hh.hallowedEffects(defender, finalDefenseDice, hallowedUpgraded)
+    damagePrevented = r.damagePrevented
+    if (r.counterDamageToAttacker > 0) queueDamage(state, attackerIdx, r.counterDamageToAttacker)
+    log(state, defenderIdx, 'defense', `Hallowed Reckoning${hallowedUpgraded ? ' II' : ''}: prevented ${r.damagePrevented}, ${r.counterDamageToAttacker} dmg back, +${r.dreadfulGained} Dreadful, +${r.grimPursuitGained} Grim Pursuit`)
+  }
+
+  let remaining = Math.max(0, incomingDamage - damagePrevented)
+  let eludeEligible = false
+  if (defender.heroId === 'bw' && defender.tokens.agility > 0 && remaining > 0) {
+    // TODO(user): MVP auto-spends Agility whenever available; make this an explicit Policy
+    // decision once card/Agility timing rules (guide: "peut être dépensée à tout moment") are settled.
+    const r = bw.spendAgilityToHalveDamage(defender, remaining, rng)
+    remaining = r.remainingDamage
+    log(state, defenderIdx, 'defense', `Agility spent: rolled ${r.roll}, ${r.succeeded ? 'halved damage' : 'no effect'}`)
+    // Elude! (verified card text): only playable when the Agility roll landed on 5-6 — a
+    // subset of the "fail" range (4-6) that would otherwise waste the token for nothing.
+    eludeEligible = !r.succeeded && r.roll >= 5
+  }
+
+  // DRP5: response window (Advanced Rules) — both players have priority in turn, active player
+  // (the attacker) first, looping until pass-pass. Today the defender plays "after being Attacked"
+  // cards (Not This Time!, Recoil!, Elude!, Spirited Reprisal!) to whittle `remaining`; the
+  // attacker has no legal action yet (Instants arrive in a later stage) so auto-passes. The state
+  // the window mutates lives on state.pendingAttack, so applyWindowAction('defense') — shared with
+  // the RL lookahead — can reach `remaining` without a closure.
+  state.pendingAttack = { attackerIdx, defenderIdx, remaining }
+  resolveResponseWindow(
+    state, [attackerIdx, defenderIdx], { windowType: 'defense', eludeEligible },
+    rng, policies, enumerateWindowActions, applyWindowAction,
+  )
+  // DRP6: the defender's surviving damage and the attacker's counter-damage land simultaneously.
+  finalizePendingAttackDamage(state)
+}
+
+// "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil']
+
+function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
+  const hero = heroTemplateFor(defender.heroId)
+  const ids = DEFENSIVE_CARD_IDS.filter(id => defender.hand.includes(id))
+  if (eludeEligible && defender.hand.includes('elude')) ids.push('elude')
+  return ids.filter(id => defender.cp >= (cardById(hero, id)?.cpCost ?? 0))
+}
+
+// Applies one defensive card's effect and returns the new `remaining` damage. Assumes the
+// card is in `defender.hand` and affordable (guaranteed by eligibleDefensiveCardIds — but that
+// only checks each card in ISOLATION; a Policy playing several cards in one resolveDefense call
+// could still exceed the CP it had left after an earlier one in the same batch, so this
+// re-checks affordability immediately before debiting, same pattern as playCard's own guard).
+function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string, remaining: number, rng: RNG): number {
+  const defender = state.players[defenderIdx]
+  const hero = heroTemplateFor(defender.heroId)
+  const card = cardById(hero, cardId)
+  if (!card || !defender.hand.includes(cardId) || defender.cp < (card.cpCost ?? 0)) return remaining
+  defender.cp -= card.cpCost ?? 0
+  defender.hand.splice(defender.hand.indexOf(cardId), 1)
+  defender.discard.push(cardId)
+
+  if (cardId === 'not-this-time') {
+    const prevented = Math.min(remaining, 6)
+    log(state, defenderIdx, 'defense', `Not This Time!: prevented ${prevented} dmg`)
+    return remaining - prevented
+  }
+  if (cardId === 'spirited-reprisal') {
+    if (!hasHead(defender)) {
+      log(state, defenderIdx, 'defense', 'Spirited Reprisal!: no effect (no Haunted Head)')
+      return remaining
+    }
+    const prevented = Math.min(remaining, 3)
+    log(state, defenderIdx, 'defense', `Spirited Reprisal!: prevented ${prevented} dmg (Haunted Head)`)
+    return remaining - prevented
+  }
+  if (cardId === 'recoil') {
+    const r = bw.resolveRecoil(remaining, rng)
+    if (r.cpGained > 0) grantCp(defender, r.cpGained)
+    log(state, defenderIdx, 'defense', `Recoil!: prevented ${r.damagePrevented} dmg, +${r.cpGained} CP`)
+    return remaining - r.damagePrevented
+  }
+  if (cardId === 'elude') {
+    log(state, defenderIdx, 'defense', `Elude!: ignored all ${remaining} incoming dmg`)
+    return 0
+  }
+  return remaining
+}
+
+// "Attack Modifier" Roll Phase Action cards played by the ATTACKER for their own current
+// attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
+// conversion) but is timed the same way, so it shares this hook rather than inventing a
+// separate one.
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves']
+
+function eligibleAttackModifierCardIds(self: PlayerState): string[] {
+  const hero = heroTemplateFor(self.heroId)
+  return ATTACK_MODIFIER_CARD_IDS.filter(id => {
+    if (!self.hand.includes(id)) return false
+    const card = cardById(hero, id)
+    if (!card || self.cp < (card.cpCost ?? 0)) return false
+    if (id === 'unescapable' && self.tokens.grimPursuit < 1) return false
+    return true
+  })
+}
+
+// Exported for sim/rl/valueGreedyPolicy.ts: chooseAttackModifierCards's own signature doesn't
+// carry the dice needed to replay resolveAbilityPhase, so its lookahead scores candidates by
+// applying this function directly (dice-independent) instead of re-entering a higher-level phase.
+export interface AttackModifierResult {
+  dmg: number
+  undefendable: boolean
+}
+
+// Applies one attack-modifier card's effect and returns the updated dmg/undefendable state.
+// Assumes the card is in `self.hand` and eligible (guaranteed by eligibleAttackModifierCardIds —
+// but, same caveat as applyDefensiveCard, that only checks each card in ISOLATION; re-checks
+// affordability immediately before debiting so a multi-card Policy choice can't overspend).
+export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, cardId: string, current: AttackModifierResult): AttackModifierResult {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const hero = heroTemplateFor(self.heroId)
+  const card = cardById(hero, cardId)
+  if (!card || !self.hand.includes(cardId) || self.cp < (card.cpCost ?? 0)) return current
+  self.cp -= card.cpCost ?? 0
+  self.hand.splice(self.hand.indexOf(cardId), 1)
+  self.discard.push(cardId)
+
+  if (cardId === 'unescapable') {
+    hh.spendGrimPursuit(self, 1)
+    log(state, playerIdx, 'resolveAttack', 'Unescapable!: spent 1 Grim Pursuit, attack is now undefendable')
+    return { ...current, undefendable: true }
+  }
+  if (cardId === 'cranial-assist') {
+    // Cranial Assist! rewards attacking whoever holds the Haunted Head. The head is a bag token now,
+    // so read it hero-agnostically (only HH holds one today — until giveHead's transfer is wired —
+    // so this is equivalent to the old `opp.heroId === 'hh' && hasHead` guard).
+    const oppHasHead = hasHead(opp)
+    log(state, playerIdx, 'resolveAttack', oppHasHead ? 'Cranial Assist!: +3 dmg (opponent holds the Head)' : 'Cranial Assist!: no effect (opponent lacks the Head)')
+    return { ...current, dmg: current.dmg + (oppHasHead ? 3 : 0) }
+  }
+  if (cardId === 'subversion') {
+    const bonus = 2 + self.upgradesPlayedThisTurn
+    log(state, playerIdx, 'resolveAttack', `Subversion!: +${bonus} dmg (${self.upgradesPlayedThisTurn} Ability Upgrade(s) played this turn)`)
+    return { ...current, dmg: current.dmg + bonus }
+  }
+  if (cardId === 'thundering-hooves') {
+    const spend = Math.min(3, self.cp)
+    self.cp -= spend
+    hh.grantGrimPursuit(self, spend)
+    log(state, playerIdx, 'resolveAttack', `Thundering Hooves!: spent ${spend} CP for +${spend} Grim Pursuit`)
+    return current
+  }
+  return current
+}
+
+// Offers eligible attack-modifier cards to the Policy and folds the chosen ones' effects into
+// the running dmg/undefendable state. Shared by applyHHAbility/applyBWAbility.
+function applyAttackModifiers(state: GameState, playerIdx: 0 | 1, policy: Policy, initial: AttackModifierResult, rng: RNG): AttackModifierResult {
+  const self = state.players[playerIdx]
+  let result = initial
+  const eligible = eligibleAttackModifierCardIds(self)
+  if (eligible.length > 0) {
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligible)
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result)
+  }
+  // Grim Pursuit spend mode (b) — a STRATEGIC DECISION, not automatic (auto-spending nuked the
+  // economy: it consumed tokens the instant an ability granted them). The attacker may spend 1 Grim
+  // Pursuit to roll 1 die and add it as bonus dmg, once per turn. Mode (a) (extra Roll Attempt)
+  // needs a resumable roll (deferred, Stage 6).
+  if (self.heroId === 'hh' && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
+    if (policy.chooseGrimPursuitSpend?.(state, playerIdx, result.dmg)) {
+      const bonus = hh.spendGrimPursuitForBonusDamage(self, rng)
+      if (bonus > 0) {
+        self.grimPursuitBonusUsedThisTurn = true
+        result = { ...result, dmg: result.dmg + bonus }
+        log(state, playerIdx, 'resolveAttack', `Grim Pursuit spend (b): rolled ${bonus}, +${bonus} dmg`)
+      }
+    }
+  }
+  return result
+}
+
+function applyWhiffPassive(state: GameState, playerIdx: 0 | 1): void {
+  const self = state.players[playerIdx]
+  if (self.heroId === 'hh') {
+    hh.grantGrimPursuit(self, 1) // guide: "Si tu ne fais aucun dégât -> +1 Grim Pursuit"
+    log(state, playerIdx, 'resolveAttack', 'Whiff: +1 Grim Pursuit')
+  }
+}
+
+function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const policy = policies[playerIdx]
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const data = resolvedAbilityByBoardName(heroTemplateFor('hh'), name, self.upgradesInPlay)
+  if (!data) { log(state, playerIdx, 'resolveAttack', `Unknown ability "${name}" — no data, skipped`); return }
+  const tokens = self.tokens
+
+  let dmg = data.baseDamage ?? 0
+  if (data.baseDamage == null) log(state, playerIdx, 'resolveAttack', `${name}: baseDamage TODO(user) — 0 dmg applied`)
+
+  // Horrify (verified card text): with the Haunted Head OR with Horrify II in play, gain BOTH
+  // bonuses automatically (Horrify II's own text drops the choice entirely: "Gain 3 Dreadful
+  // and 2 Grim Pursuit"); without either, it's a Policy choice between the two (an earlier
+  // version of this engine always granted Dreadful regardless of Head status — wrong for the
+  // no-Head, non-upgraded case).
+  const horrifyUpgraded = self.upgradesInPlay.includes('horrify-ii')
+  if (name.startsWith('Horrify')) {
+    if (tokens.head > 0 || horrifyUpgraded) {
+      if (data.tokensGrantedToSelf?.dreadful) hh.grantDreadful(self, data.tokensGrantedToSelf.dreadful)
+      const grimPursuit = horrifyUpgraded ? data.tokensGrantedToSelf?.grimPursuit : data.tokensGrantedIfHasHead?.grimPursuit
+      if (grimPursuit) hh.grantGrimPursuit(self, grimPursuit)
+    } else {
+      const choice = policy.chooseHorrifyBonus(state, playerIdx)
+      if (choice === 'dreadful' && data.tokensGrantedToSelf?.dreadful) hh.grantDreadful(self, data.tokensGrantedToSelf.dreadful)
+      else if (data.tokensGrantedIfHasHead?.grimPursuit) hh.grantGrimPursuit(self, data.tokensGrantedIfHasHead.grimPursuit)
+      log(state, playerIdx, 'resolveAttack', `Horrify: chose ${choice} (no Haunted Head)`)
+    }
+  } else {
+    // Granted here, BEFORE the bonusRoll block below — matters for Spectral Assault, whose
+    // bonus roll dice count depends on the post-gain Dreadful total (verified: "Gain
+    // Dreadful. Then deal X dmg and roll 1 die per Dreadful...").
+    if (data.tokensGrantedToSelf?.dreadful) hh.grantDreadful(self, data.tokensGrantedToSelf.dreadful)
+    if (data.tokensGrantedToSelf?.grimPursuit) hh.grantGrimPursuit(self, data.tokensGrantedToSelf.grimPursuit)
+  }
+
+  let undefendableOverride = false
+  if (data.bonusRoll) {
+    const r = hh.resolveSpectralAssaultBonusRoll(self, rng)
+    dmg += r.bonusDamage
+    if (r.undefendable) undefendableOverride = true
+    if (r.grimPursuitGained > 0) hh.grantGrimPursuit(self, r.grimPursuitGained)
+    log(state, playerIdx, 'resolveAttack', `${name} bonus roll: +${r.bonusDamage} dmg, undefendable=${r.undefendable}, +${r.grimPursuitGained} Grim Pursuit`)
+  }
+
+  if (data.numberMatchBonus) {
+    const ofAKind = self.upgradesInPlay.includes('cleave-ii') ? 3 : data.numberMatchBonus.ofAKind
+    if (hh.hasNumberMatch(dice, ofAKind)) {
+      if (data.numberMatchBonus.tokensGranted.dreadful) hh.grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful)
+      log(state, playerIdx, 'resolveAttack', `${name}: ${ofAKind}-of-a-kind bonus triggered`)
+    }
+  }
+
+  const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: undefendableOverride }, rng)
+  dmg = modified.dmg
+  undefendableOverride = modified.undefendable
+
+  if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies)
+  else { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
+
+  if (tokens.head > 0 && data.cardDrawIfHasHead) {
+    drawCards(self, 1, rng)
+    log(state, playerIdx, 'resolveAttack', `${name}: drew 1 card (Haunted Head)`)
+  }
+  if (data.cardDraw) {
+    drawCards(self, data.cardDraw, rng)
+    log(state, playerIdx, 'resolveAttack', `${name}: drew ${data.cardDraw} card(s)`)
+  }
+}
+
+function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: RNG, policies: [Policy, Policy]): void {
+  const policy = policies[playerIdx]
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const data = resolvedAbilityByBoardName(heroTemplateFor('bw'), name, self.upgradesInPlay)
+  if (!data) { log(state, playerIdx, 'resolveAttack', `Unknown ability "${name}" — no data, skipped`); return }
+
+  let dmg = data.baseDamage ?? 0
+  if (data.bonusDamagePerUpgrade) dmg += data.bonusDamagePerUpgrade * self.upgradesInPlay.length
+  if (data.thresholdBonus && self.upgradesInPlay.length >= data.thresholdBonus.upgradesAtLeast) {
+    dmg += data.thresholdBonus.bonusDamage
+  }
+  dmg += bw.rrtAttackBonus(self.upgradesInPlay)
+
+  if (name.startsWith('Vengeance')) {
+    const riderDice = self.upgradesInPlay.includes('vengeance-ii') ? 5 : 4
+    const rider = bw.resolveVengeanceRider(self, opp, rng, riderDice)
+    dmg += rider.bonusDamage
+    log(state, playerIdx, 'resolveAttack', `Vengeance rider: +${rider.bonusDamage} dmg, ${rider.tbInflictedOnOpponent} TB inflicted, +${rider.covertOpsGained} Covert Ops`)
+  }
+
+  const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: !(data.defendable ?? true) }, rng)
+  dmg = modified.dmg
+
+  if (data.defendable ?? true) {
+    if (modified.undefendable) { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
+    else resolveDefense(state, playerIdx, dmg, rng, policies)
+  } else {
+    queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state)
+  }
+
+  if (data.cpGain) grantCp(self, data.cpGain)
+  if (data.cpGainIfUpgradesAtLeast && self.upgradesInPlay.length >= data.cpGainIfUpgradesAtLeast.upgradesAtLeast) {
+    grantCp(self, data.cpGainIfUpgradesAtLeast.cpGain)
+  }
+  if (data.tokensGrantedToSelf?.agility) bw.grantAgility(self, data.tokensGrantedToSelf.agility)
+
+  // Infiltrate (verified card text): base = "advance all Time Bomb tokens, THEN inflict"
+  // (the new TB is not advanced this turn); Infiltrate II reverses the order ("inflict, THEN
+  // advance", so the new TB IS advanced same turn).
+  if (data.advancesAllTimeBombsInPlay) {
+    const upgraded = self.upgradesInPlay.includes('infiltrate-ii')
+    if (!upgraded) {
+      const n = bw.advanceAllTimeBombs(opp)
+      if (n > 0) log(state, playerIdx, 'resolveAttack', `Advanced all Time Bombs: ${n} detonated`)
+    }
+    if (data.tokensInflictedOnOpponent?.timeBomb) {
+      bw.inflictTimeBomb(opp, self.upgradesInPlay.length, data.tokensInflictedOnOpponent.timeBomb)
+    }
+    if (upgraded) {
+      const n = bw.advanceAllTimeBombs(opp)
+      if (n > 0) log(state, playerIdx, 'resolveAttack', `Advanced all Time Bombs: ${n} detonated`)
+    }
+  } else if (data.tokensInflictedOnOpponent?.timeBomb) {
+    bw.inflictTimeBomb(opp, self.upgradesInPlay.length, data.tokensInflictedOnOpponent.timeBomb)
+  }
+
+  if (data.searchUpgradesIntoPlay) {
+    const found = searchDeckForUpgrades(state, playerIdx, data.searchUpgradesIntoPlay, rng)
+    log(state, playerIdx, 'resolveAttack', found.length > 0
+      ? `Searched deck: put ${found.join(', ')} into play`
+      : 'Searched deck: no Ability Upgrades found')
+  }
+}
+
+// Widow's Bite / Recon (verified): "Search your deck for up to N Ability Upgrades and put them into
+// play." Free — no CP cost, bypasses hand entirely. Without a Policy hook to CHOOSE which upgrades,
+// we pick the first matches in deck order — so we SHUFFLE THE DECK FIRST (ruling, 2026-07-03): a
+// search sees the whole deck and picks freely (order-independent for a human), but our order-based
+// approximation must not be gameable by pre-arranging the deck top via a Covert Ops peek. Shuffling
+// before the pick makes it unbiased; the leftover cards stay in that shuffled order. Respects
+// upgradeSlot replacement the same way playing a card from hand does.
+function searchDeckForUpgrades(state: GameState, playerIdx: 0 | 1, count: number, rng: RNG): string[] {
+  const self = state.players[playerIdx]
+  const hero = heroTemplateFor(self.heroId)
+  const found: string[] = []
+  const remaining: string[] = []
+  for (const cardId of shuffle(self.deck, rng)) {
+    const card = cardById(hero, cardId)
+    if (found.length < count && card?.kind === 'upgrade') found.push(cardId)
+    else remaining.push(cardId)
+  }
+  for (const cardId of found) {
+    const slot = cardById(hero, cardId)?.upgradeSlot
+    const existingId = self.upgradesInPlay.find(id => cardById(hero, id)?.upgradeSlot === slot)
+    if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter(id => id !== existingId)
+    self.upgradesInPlay.push(cardId)
+  }
+  self.deck = remaining
+  return found
+}
+
+export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const policy = policies[playerIdx]
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const oState = oracleStateFor(self, opp)
+
+  const candidates = resolveMatchedAbilities(self.heroId, dice, oState)
+  if (candidates.length === 0) {
+    log(state, playerIdx, 'resolveAttack', 'No ability matched (Whiff)')
+    applyWhiffPassive(state, playerIdx)
+    return
+  }
+
+  const chosenName = candidates.length === 1 ? candidates[0].name : policy.chooseAbility(state, playerIdx, candidates)
+  log(state, playerIdx, 'resolveAttack', `Chose ability: ${chosenName}`)
+
+  if (self.heroId === 'hh') applyHHAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else applyBWAbility(state, playerIdx, chosenName, rng, policies)
+}
+
+export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  if (self.heroId === 'hh' && hh.endOfTurnHeadCheck(self)) {
+    log(state, playerIdx, 'endOfTurn', 'Opponent holds the Head: +1 Dreadful')
+  }
+  log(state, playerIdx, 'endOfTurn', `HP: self=${self.hp}, opp=${opp.hp}`)
+}
+
+// Verified order (official rulebook, characters/rules/Turn Phases.png): Upkeep -> Income ->
+// Main Phase (1) -> Offensive Roll -> Defensive Roll -> Main Phase (2) -> Discard. An earlier
+// version of this engine rolled dice BEFORE Main Phase (1) — backwards; Main Phase (1) is
+// where upgrades/actions get played using CP on hand BEFORE committing to an attack roll.
+export function playTurn(state: GameState, playerIdx: 0 | 1, rng: RNG, policies: [Policy, Policy]): void {
+  const policy = policies[playerIdx]
+  playUpkeepPhase(state, playerIdx, rng, policy)
+  if (checkGameOver(state)) return
+
+  playIncomePhase(state, playerIdx, rng)
+  playMainPhase(state, playerIdx, 'main1', policies, rng)
+
+  const dice = playOffensiveRollPhase(state, playerIdx, rng, policy)
+  const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies)
+  resolveAbilityPhase(state, playerIdx, finalDice, rng, policies)
+  if (checkGameOver(state)) return
+
+  playMainPhase(state, playerIdx, 'main2', policies, rng)
+  playDiscardPhase(state, playerIdx, policy)
+  playEndOfTurn(state, playerIdx)
+}
