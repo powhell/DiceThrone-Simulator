@@ -121,13 +121,16 @@
     // previously invisible, you were offered "set die 3 to 6" on dice you couldn't see.
     // Dice are CLICKABLE to select which ones Better D! rerolls (a Roll Attempt = up to 5 dice).
     if (phase==='defense' && pendingDefense && pendingDefense.defenseDice) {
-      const hasBetterD = pendingDefense.options.some(o=>o.kind==='rerollAll');
+      // Defense dice are ALWAYS clickable (select which to modify/reroll) — before, only
+      // Better D! unlocked the click, so So Wild!/Tip It! on defense felt unusable (reported).
       $('tray').innerHTML =
-        `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE${hasBetterD?' — clique les dés à relancer avec Better D!':' — tu peux le modifier :'}</div>` +
-        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, hasBetterD)).join('') +
+        `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE — clique 1-2 dés pour les modifier :</div>` +
+        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, true)).join('') +
         `<div class="empty" style="width:100%">${defenseExplain(HUMAN, pendingDefense.defenseDice)}</div>`;
-      if (hasBetterD) $('tray').querySelectorAll('.die').forEach(el=>{
-        el.onclick = () => { const i=+el.dataset.i; defSel.has(i)?defSel.delete(i):defSel.add(i); renderDice(false); renderControls(); };
+      $('tray').querySelectorAll('.die').forEach(el=>{
+        el.onclick = () => { const i=+el.dataset.i;
+          if (defSel.has(i)) defSel.delete(i); else { if (defSel.size>=2) defSel.delete([...defSel][0]); defSel.add(i); }
+          renderDice(false); renderControls(); };
       });
       return;
     }
@@ -238,33 +241,59 @@
           const alt = card.altAbility;
           const short = alt.boardName.replace(/\s*\([^)]*\)$/, '');
           const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
-          rows.push({ name: `↳ ${short}`, matchName: short, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—', on: isOn(short) });
-        }
-      }
-      // The opponent's board was invisible (reported) — same data-driven list for the AI, below
-      // yours: its base abilities (II-marked) + unlocked sub-abilities + its defense.
-      const ai = g.state.players[g.aiIdx];
-      const aiHeroT = G.heroTemplateFor(AI_HERO);
-      const aiRows = [];
-      for (const a of REFERENCE[AI_HERO]) {
-        const upId = REF_UPGRADE[a.name];
-        const upgraded = upId && ai.upgradesInPlay.includes(upId);
-        aiRows.push({ name: a.name + (upgraded ? ' II' : ''), req: a.req,
-          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg });
-      }
-      for (const card of aiHeroT.cards) {
-        if (card.altAbility && ai.upgradesInPlay.includes(card.id)) {
-          const alt = card.altAbility;
-          const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
-          aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—' });
+          // Show the riders too (Cursed Gallop's +1 Grim Pursuit was invisible — reported).
+          const eff = abilityEffects(alt.boardName);
+          rows.push({ name: `↳ ${short}`, matchName: short, req,
+            dmg: `${alt.baseDamage != null ? alt.baseDamage : '—'}${eff?` · ${eff}`:''}`, on: isOn(short) });
         }
       }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
         <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('')
-        + `<div class="lead" style="margin-top:12px;opacity:.8">BOARD IA — ${aiHero.name}</div>`
-        + aiRows.map(a=>`<div class="abil" style="opacity:.85">
-        <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('');
+        + defBoxHTML(HUMAN, self);
     }
+    renderAiBoard();
+  }
+
+  // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
+  // II-aware ("je ne vois toujours pas sur le board la défense", reported).
+  function defBoxHTML(heroKey, p){
+    if (heroKey==='hh'){
+      const up = p.upgradesInPlay.includes('hallowed-reckoning-ii');
+      return `<div class="defbox"><b>🛡️ Hallowed Reckoning${up?' II':''}</b><br>
+        Lance ${up?'2':'1'}+Dreadful dés (max 5) :<br>
+        Hache = 1 contre-dégât · 2 Fers = 1 prévenu · Frayeur = +1 Dreadful${up?'<br>2 Frayeurs = +1 Grim Pursuit':''}</div>`;
+    }
+    const up = p.upgradesInPlay.includes('sabotage-ii');
+    return `<div class="defbox"><b>🛡️ Sabotage${up?' II':''}</b><br>
+      Lance ${up?'4':'3'} dés :<br>
+      Bâton = 1 contre-dégât · Espionnage = 1 prévenu · paire de Veuves = Time Bomb<br>
+      ≥4 upgrades en jeu : peut tout relancer</div>`;
+  }
+
+  // The AI's board in its own LEFT panel (was crammed under yours — bad layout, reported).
+  function renderAiBoard(){
+    const box = document.getElementById('ai-abils');
+    if (!box) return;
+    document.getElementById('ai-board-title').textContent = 'Board IA — ' + aiHero.name;
+    const ai = g.state.players[g.aiIdx];
+    const aiHeroT = G.heroTemplateFor(AI_HERO);
+    const aiRows = [];
+    for (const a of REFERENCE[AI_HERO]) {
+      const upId = REF_UPGRADE[a.name];
+      const upgraded = upId && ai.upgradesInPlay.includes(upId);
+      aiRows.push({ name: a.name + (upgraded ? ' II' : ''), req: a.req,
+        dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg });
+    }
+    for (const card of aiHeroT.cards) {
+      if (card.altAbility && ai.upgradesInPlay.includes(card.id)) {
+        const alt = card.altAbility;
+        const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
+        aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—' });
+      }
+    }
+    box.innerHTML = aiRows.map(a=>`<div class="abil" style="opacity:.85">
+      <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('')
+      + defBoxHTML(AI_HERO, ai);
   }
 
   function renderHand() {
@@ -403,16 +432,27 @@
         ? `${a&&a.abilityName?formatAbility(aiHero,a.abilityName).name+' — ':''}ton jet de défense est lancé (ci-dessus). Le modifier ?`
         : `${a&&a.abilityName?formatAbility(aiHero,a.abilityName).name+' — ':''}${rem}. Défense :`;
       c.appendChild(s);
-      pendingDefense.options.filter(o=>o.kind!=='pass').slice(0,8)
-        .forEach(o=>{
-          if (o.kind==='rerollAll') {
-            // Better D!: reroll the SELECTED dice (click them above), or all if none selected.
-            const n = defSel.size;
-            const label = n>0 ? `Better D! : relance les ${n} dé(s) sélectionné(s)` : 'Better D! : relance TOUS tes dés';
-            c.appendChild(btn(label,'primary', ()=>onDefenseChoice(n>0 ? {...o, dieIndices:[...defSel]} : o)));
-          }
-          else c.appendChild(btn(defenseLabel(o),'primary', ()=>onDefenseChoice(o)));
-        });
+      // In the roll window, dice-targeting options are FILTERED by the selected dice (same
+      // die-first interaction as the offensive alter phase); cards/instants always show.
+      const sel = [...defSel].sort((x,y)=>x-y);
+      const show = pendingDefense.options.filter(o=>{
+        if (o.kind==='pass') return false;
+        if (o.kind==='rerollAll') return true;
+        if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
+        if (o.kind==='setDie') {
+          if (o.sets.length===1) return sel.length===1 && o.sets[0].dieIndex===sel[0];
+          return sel.length===2 && o.sets.every(s2=>sel.includes(s2.dieIndex)) && o.sets[0].value===o.sets[1].value;
+        }
+        return true; // cards, instants, token moves — always visible
+      });
+      show.slice(0,10).forEach(o=>{
+        if (o.kind==='rerollAll') {
+          const n = defSel.size;
+          const label = n>0 ? `Better D! : relance les ${n} dé(s) sélectionné(s)` : 'Better D! : relance TOUS tes dés';
+          c.appendChild(btn(label,'primary', ()=>onDefenseChoice(n>0 ? {...o, dieIndices:[...defSel]} : o)));
+        }
+        else c.appendChild(btn(defenseLabel(o),'primary', ()=>onDefenseChoice(o)));
+      });
       c.appendChild(btn(isRollWindow?'Garder ce jet →':'Encaisser (ne rien jouer) →','gold', ()=>onDefenseChoice({kind:'pass'})));
     }
   }

@@ -2089,8 +2089,16 @@ var Game = (() => {
         log(state, playerIdx, "resolveAttack", `Horrify: chose ${choice} (no Haunted Head)`);
       }
     } else {
-      if (data.tokensGrantedToSelf?.dreadful) grantDreadful(self, data.tokensGrantedToSelf.dreadful);
-      if (data.tokensGrantedToSelf?.grimPursuit) grantGrimPursuit(self, data.tokensGrantedToSelf.grimPursuit);
+      const gains = [];
+      if (data.tokensGrantedToSelf?.dreadful) {
+        grantDreadful(self, data.tokensGrantedToSelf.dreadful);
+        gains.push(`+${data.tokensGrantedToSelf.dreadful} Dreadful`);
+      }
+      if (data.tokensGrantedToSelf?.grimPursuit) {
+        grantGrimPursuit(self, data.tokensGrantedToSelf.grimPursuit);
+        gains.push(`+${data.tokensGrantedToSelf.grimPursuit} Grim Pursuit`);
+      }
+      if (gains.length) log(state, playerIdx, "resolveAttack", `${name}: ${gains.join(", ")}`);
     }
     let undefendableOverride = false;
     if (data.bonusRoll) {
@@ -2156,11 +2164,24 @@ var Game = (() => {
       queueDamage(state, 1 - playerIdx, dmg);
       flushDamage(state);
     }
-    if (data.cpGain) grantCp(self, data.cpGain);
+    const bwGains = [];
+    if (data.cpGain) {
+      grantCp(self, data.cpGain);
+      bwGains.push(`+${data.cpGain} CP`);
+    }
     if (data.cpGainIfUpgradesAtLeast && self.upgradesInPlay.length >= data.cpGainIfUpgradesAtLeast.upgradesAtLeast) {
       grantCp(self, data.cpGainIfUpgradesAtLeast.cpGain);
+      bwGains.push(`+${data.cpGainIfUpgradesAtLeast.cpGain} CP (\u2265${data.cpGainIfUpgradesAtLeast.upgradesAtLeast} upgrades)`);
     }
-    if (data.tokensGrantedToSelf?.agility) grantAgility(self, data.tokensGrantedToSelf.agility);
+    if (data.tokensGrantedToSelf?.agility) {
+      grantAgility(self, data.tokensGrantedToSelf.agility);
+      bwGains.push(`+${data.tokensGrantedToSelf.agility} Agility`);
+    }
+    if (data.tokensGrantedToSelf?.covertOps) {
+      grantCovertOps(self, data.tokensGrantedToSelf.covertOps);
+      bwGains.push(`+${data.tokensGrantedToSelf.covertOps} Covert Ops`);
+    }
+    if (bwGains.length) log(state, playerIdx, "resolveAttack", `${name}: ${bwGains.join(", ")}`);
     if (data.advancesAllTimeBombsInPlay) {
       const upgraded = self.upgradesInPlay.includes("infiltrate-ii");
       if (!upgraded) {

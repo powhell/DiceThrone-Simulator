@@ -1013,8 +1013,11 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     // Granted here, BEFORE the bonusRoll block below — matters for Spectral Assault, whose
     // bonus roll dice count depends on the post-gain Dreadful total (verified: "Gain
     // Dreadful. Then deal X dmg and roll 1 die per Dreadful...").
-    if (data.tokensGrantedToSelf?.dreadful) hh.grantDreadful(self, data.tokensGrantedToSelf.dreadful)
-    if (data.tokensGrantedToSelf?.grimPursuit) hh.grantGrimPursuit(self, data.tokensGrantedToSelf.grimPursuit)
+    // Logged (was silent — "je ne vois pas le token que je gagne", user-reported on Cursed Gallop).
+    const gains: string[] = []
+    if (data.tokensGrantedToSelf?.dreadful) { hh.grantDreadful(self, data.tokensGrantedToSelf.dreadful); gains.push(`+${data.tokensGrantedToSelf.dreadful} Dreadful`) }
+    if (data.tokensGrantedToSelf?.grimPursuit) { hh.grantGrimPursuit(self, data.tokensGrantedToSelf.grimPursuit); gains.push(`+${data.tokensGrantedToSelf.grimPursuit} Grim Pursuit`) }
+    if (gains.length) log(state, playerIdx, 'resolveAttack', `${name}: ${gains.join(', ')}`)
   }
 
   let undefendableOverride = false
@@ -1082,11 +1085,18 @@ function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: R
     queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state)
   }
 
-  if (data.cpGain) grantCp(self, data.cpGain)
+  // Logged (was silent — same visibility complaint as HH's token gains).
+  const bwGains: string[] = []
+  if (data.cpGain) { grantCp(self, data.cpGain); bwGains.push(`+${data.cpGain} CP`) }
   if (data.cpGainIfUpgradesAtLeast && self.upgradesInPlay.length >= data.cpGainIfUpgradesAtLeast.upgradesAtLeast) {
     grantCp(self, data.cpGainIfUpgradesAtLeast.cpGain)
+    bwGains.push(`+${data.cpGainIfUpgradesAtLeast.cpGain} CP (≥${data.cpGainIfUpgradesAtLeast.upgradesAtLeast} upgrades)`)
   }
-  if (data.tokensGrantedToSelf?.agility) bw.grantAgility(self, data.tokensGrantedToSelf.agility)
+  if (data.tokensGrantedToSelf?.agility) { bw.grantAgility(self, data.tokensGrantedToSelf.agility); bwGains.push(`+${data.tokensGrantedToSelf.agility} Agility`) }
+  // covertOps grants (Spy Game, Subvert) were silently DROPPED — only agility was handled.
+  // Caught by the ability-effects audit (declared-vs-applied), 2026-07-04.
+  if (data.tokensGrantedToSelf?.covertOps) { bw.grantCovertOps(self, data.tokensGrantedToSelf.covertOps); bwGains.push(`+${data.tokensGrantedToSelf.covertOps} Covert Ops`) }
+  if (bwGains.length) log(state, playerIdx, 'resolveAttack', `${name}: ${bwGains.join(', ')}`)
 
   // Infiltrate (verified card text): base = "advance all Time Bomb tokens, THEN inflict"
   // (the new TB is not advanced this turn); Infiltrate II reverses the order ("inflict, THEN
