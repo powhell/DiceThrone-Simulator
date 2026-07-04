@@ -113,7 +113,9 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   // a bomb (e.g. HH vs HH) are unaffected. tickTimeBombsUpkeep applies its own undefendable
   // self-damage; playTurn's checkGameOver right after this catches a lethal detonation.
   const tb = bw.tickTimeBombsUpkeep(self, rng)
-  if (tb.selfDamage > 0 || tb.defused > 0) {
+  // Logged whenever ANY bomb rolled — the old guard (only damage/defuse) silenced the most
+  // common outcome, a plain ADVANCE: the player never saw his bomb roll (reported 3 times).
+  if (tb.rolls.length > 0) {
     log(state, playerIdx, 'upkeep', `Time Bomb upkeep: rolls [${tb.rolls.join(',')}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
   }
 }

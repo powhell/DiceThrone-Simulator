@@ -1399,7 +1399,7 @@ var Game = (() => {
       }
     }
     const tb = tickTimeBombsUpkeep(self, rng);
-    if (tb.selfDamage > 0 || tb.defused > 0) {
+    if (tb.rolls.length > 0) {
       log(state, playerIdx, "upkeep", `Time Bomb upkeep: rolls [${tb.rolls.join(",")}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`);
     }
   }

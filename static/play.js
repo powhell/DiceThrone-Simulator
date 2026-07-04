@@ -187,6 +187,11 @@
       });
       return;
     }
+    if (phase==='tbroll') {
+      const n = g.state.players[g.humanIdx].timeBombs.length;
+      $('tray').innerHTML = `<div class="empty" style="width:100%">💣 Tu portes ${n} Time Bomb — clique « Lancer le dé » à gauche pour voir ton jet.</div>`;
+      return;
+    }
     // Time Bomb roll: show the actual die/dice until you start your own roll.
     if (tbShow && !dice.length) {
       const verdict = tbShow.dmg>0 ? `💥 EXPLOSE — ${tbShow.dmg} dégâts !` : tbShow.defused>0 ? '✅ désamorcée (6) !' : '⏱️ elle avance d\'un cran…';
@@ -799,6 +804,10 @@
   function defenseLabel(a){ return actionLabel(a); }
   function startHumanTurn(){
     lastDefDice = null;
+    // Ton attaque du tour PRÉCÉDENT est finie : ses dés n'ont plus rien à faire à l'écran.
+    // (Ils restaient affichés pendant le prompt Time Bomb/upkeep et masquaient le jet de
+    // bombe — la cause du 'je ne vois pas le fking roll', reproduite au screenshot.)
+    dice = []; attempts = 0;
     const you = g.state.players[g.humanIdx];
     // Click-to-roll pacing: if you carry Time Bombs, YOU press the button that rolls them
     // (they resolve inside beginHumanTurn) instead of it happening invisibly.
