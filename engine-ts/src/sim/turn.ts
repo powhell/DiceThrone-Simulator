@@ -262,6 +262,20 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     log(state, playerIdx, phase, `Undercover Mission!: ${n} Time Bomb inflicted${gotAgility ? ', +1 Agility (>=4 upgrades)' : ''}`)
     return
   }
+  if (card.id === 'cunning') {
+    // "Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and add
+    // them to your hand. Put all remaining cards back in any order." No decision (takes ALL
+    // upgrades); "reveal to opponent" has no mechanical effect in this 1v1 (no hidden info modeled).
+    // The remaining non-upgrades go back on top (any order is legal — we keep their relative order).
+    const heroT = heroTemplateFor(self.heroId)
+    const top = self.deck.slice(0, 5)
+    const upgrades = top.filter(id => cardById(heroT, id)?.kind === 'upgrade')
+    const rest = top.filter(id => cardById(heroT, id)?.kind !== 'upgrade')
+    self.hand.push(...upgrades)
+    self.deck = [...rest, ...self.deck.slice(5)]
+    log(state, playerIdx, phase, `Cunning!: took ${upgrades.length} Ability Upgrade(s) to hand from the top 5`)
+    return
+  }
 
   const eff = card.effect
   if (!eff) {
@@ -398,10 +412,8 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble']
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
-// Baby!, Undercover Mission! (BW). All resolve via playActionCard. Cunning! (BW deck-peek) is
-// intentionally omitted — its effect is not wired (effect:null), so offering it would just burn a
-// card for nothing; it stays unplayable until the deck-look mechanic is implemented (TODO(user)).
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission']
+// Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).

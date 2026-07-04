@@ -216,3 +216,26 @@ describe('5d — Grim Pursuit spend mode (b) as a decision', () => {
     expect(self.tokens.grimPursuit).toBe(2) // guard blocks a second spend
   })
 })
+
+// ------------------------------------------------------------------ Cunning! (deck tutor, was unwired)
+describe('Cunning! — pull Ability Upgrades from the top 5 of the deck into hand', () => {
+  it('adds every upgrade among the top 5 to hand, puts the rest back on top, costs 2 CP', () => {
+    const state = createInitialGameState('bw', 'hh')
+    const self = state.players[0]
+    self.hand = ['cunning']; self.cp = 5
+    self.deck = ['six-it', 'baton-strike-ii', 'double-up', 'grapple-ii', 'tip-it', 'recoil', 'assemble']
+    applyWindowAction(state, 0, { kind: 'playInstant', cardId: 'cunning' }, MAIN, mulberry32(1))
+    expect(self.hand).toContain('baton-strike-ii')
+    expect(self.hand).toContain('grapple-ii') // both upgrades from the top 5 pulled to hand
+    expect(self.hand).not.toContain('cunning')
+    expect(self.deck).toEqual(['six-it', 'double-up', 'tip-it', 'recoil', 'assemble']) // non-upgrades back on top, rest untouched
+    expect(self.cp).toBe(3)
+  })
+
+  it('is offered in the Main Phase window (active player)', () => {
+    const state = createInitialGameState('bw', 'hh') // active 0 = BW
+    state.players[0].hand = ['cunning']; state.players[0].cp = 5
+    const opts = enumerateWindowActions(state, 0, MAIN)
+    expect(opts.some(o => o.kind === 'playInstant' && o.cardId === 'cunning')).toBe(true)
+  })
+})
