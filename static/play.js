@@ -452,7 +452,7 @@
       // Down...) grant tokens BEFORE the attack modifiers fire, so pre-arming at 0 is legal —
       // the engine re-checks you hold >=1 at spend time (user-caught on Ride Down).
       if (cands.length && !you.grimPursuitBonusUsedThisTurn) {
-        const hint = you.tokens.grimPursuit>0 ? '' : ' — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)';
+        const hint = you.tokens.grimPursuit>0 ? '' : " — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)";
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
@@ -528,7 +528,7 @@
     // Head-conditional riders show YOUR current status, not just the condition (user hit Reap
     // expecting the draw without holding the Head).
     const hasHead = self.tokens.head > 0;
-    if (a.cardDrawIfHasHead) out.push(hasHead ? 'pioche 1 (Tête ✔)' : '✘ pas de pioche (exige la Tête — tu ne l'as pas)');
+    if (a.cardDrawIfHasHead) out.push(hasHead ? 'pioche 1 (Tête ✔)' : "✘ pas de pioche (exige la Tête — tu ne l'as pas)");
     if (a.tokensGrantedIfHasHead) for (const [k,n] of Object.entries(a.tokensGrantedIfHasHead)) if (n)
       out.push(hasHead ? `+${n} ${tokenFr[k]||k} (Tête ✔)` : `✘ +${n} ${tokenFr[k]||k} seulement avec la Tête`);
     if (a.bonusRoll) out.push('jet bonus');
