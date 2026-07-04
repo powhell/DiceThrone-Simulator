@@ -80,6 +80,19 @@
   // human decision we silently ask "what would the network do here?" and record it. The
   // post-game analysis lists the disagreements — "pourquoi j'ai perdu / qu'aurait joué l'IA".
   const coach = ai;
+  // Coach LIVE (toggle 🎓, persisté) : montre le conseil du DP pendant que tu joues, pas
+  // seulement en fin de partie. Cache par (dés, relances) pour ne pas recalculer à chaque rendu.
+  let coachLive = (localStorage.getItem('dt_coach_live') ?? '1') !== '0';
+  const adviceCache = new Map();
+  function liveAdvice(){
+    if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
+    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft;
+    if (!adviceCache.has(key)) {
+      try { adviceCache.set(key, G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft)); }
+      catch(e){ adviceCache.set(key, null); }
+    }
+    return adviceCache.get(key);
+  }
   const replayLog = [];        // {t, kind, you, coach, agree}
   function coachNote(kind, you, coachPick){
     replayLog.push({ t: g.state.turnNumber, kind, you, coach: coachPick, agree: you === coachPick });
@@ -232,6 +245,14 @@
     return cands.reduce((a,b)=>((b.baseDamage||0)>(a.baseDamage||0)?b:a));
   }
   function renderMatch() {
+    const adv = liveAdvice();
+    if (adv) {
+      const stop = adv.kept.length===5 || adv.ev <= adv.keepAllEv + 0.05;
+      $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
+        stop ? `S'ARRÊTER — tout garder vaut ${adv.keepAllEv.toFixed(1)}`
+             : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · tout garder = ${adv.keepAllEv.toFixed(1)}`}</div>`;
+      return;
+    }
     const show = (phase==='roll' && attempts>0) || phase==='alter';
     if (!show) { $('match').innerHTML=''; return; }
     const best = bestAbility(dice.map(d=>d.v));
@@ -610,10 +631,14 @@
     else {
       if(rollsLeft<=0) return;
       try { // coach: compare your keep against the EXACT DP optimum before rerolling
-        const adv = G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
+        const adv = liveAdvice() || G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
         const mine = dice.filter(d=>d.kept).map(d=>d.v).sort().join(',');
         const dp = adv.kept.slice().sort().join(',');
         if (mine !== dp) coachNote('relance', `gardé [${mine||'rien'}]`, `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)})`);
+        // full-hand record (agree or not) so post-game docs can replay every keep decision
+        replayLog.push({ t: g.state.turnNumber, kind: 'roll-data', agree: mine===dp,
+          you: `main [${dice.map(d=>d.v).join(',')}] gardé [${mine||'rien'}]`,
+          coach: `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)}, tout-garder ${adv.keepAllEv.toFixed(1)}, relances ${rollsLeft})` });
       } catch (e) {}
       const keptValues = dice.filter(d=>d.kept).map(d=>d.v);
       const vals=G.rollOffense(g, dice.map(d=>d.v), dice.map(d=>d.kept));
@@ -814,7 +839,7 @@
     renderFighters();
 
     // ---- post-game coach analysis + persistence ----
-    const disagreements = replayLog.filter(r=>!r.agree);
+    const disagreements = replayLog.filter(r=>!r.agree && r.kind!=='roll-data');
     log(`<b style="font-size:1.08em">📋 ANALYSE DE PARTIE — ${replayLog.length} décision(s) évaluée(s) par l'IA, `+
         `${disagreements.length} désaccord(s)${disagreements.length?' (du plus récent au plus ancien) :':'. Vos lignes concordent.'}</b>`);
     for (const r of disagreements)
@@ -950,6 +975,15 @@
 
   // ---------- boot ----------
   $('title').innerHTML = `${humanHero.name} <span class="vs">contre</span> ${aiHero.name}`;
+  (function(){
+    const tag = $('turntag');
+    const tg = document.createElement('button');
+    tg.className='btn'; tg.style.cssText='margin-left:10px;font-size:.72rem;padding:3px 10px';
+    const paint = ()=>{ tg.textContent = coachLive ? '🎓 Coach live : ON' : '🎓 Coach live : OFF'; tg.style.opacity = coachLive?'1':'.55'; };
+    paint();
+    tg.onclick = ()=>{ coachLive=!coachLive; localStorage.setItem('dt_coach_live', coachLive?'1':'0'); paint(); renderMatch(); };
+    tag.parentNode.insertBefore(tg, tag);
+  })();
   // Tell the truth about which opponent is driving (learned net vs scripted fallback).
   const usingNet = !!window.AI_WEIGHTS && ai !== G.greedyHighestDamagePolicy;
   const aiNote = document.getElementById('ai-note');
