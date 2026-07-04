@@ -71,15 +71,18 @@ export function spendGrimPursuit(self: PlayerState, amount: number): void {
   tokens.grimPursuit = Math.max(0, tokens.grimPursuit - amount)
 }
 
-// Grim Pursuit spend mode (b) (token text): "after attacking, roll 1 die and add that many dmg as
-// an Attack Modifier." Spends 1 Grim Pursuit and returns the rolled value (1-6) to add to the
-// attack's damage, or 0 if the player has no Grim Pursuit to spend. (Mode (a), an extra Offensive
-// Roll Attempt, needs a resumable roll and is not wired yet.)
-export function spendGrimPursuitForBonusDamage(self: PlayerState, rng: RNG): number {
+// Grim Pursuit spend mode (b), verified against the leaflet photo (20260701_144059.jpg):
+// "After Attacking, roll 5 dice: add 1 × Horseshoe dmg. Attack Modifier." — +1 dmg per
+// Horseshoe (faces 4-5) rolled, so 0..5, average ~1.67 (matches the solver's long-standing
+// GRIM_PURSUIT_AVG_DMG = 1.66). The previous "roll 1 die, add its value" was a transcription
+// error that DOUBLED the average payout — user-caught 2026-07-04.
+export function spendGrimPursuitForBonusDamage(self: PlayerState, rng: RNG): { dice: number[]; bonus: number } {
   const tokens = self.tokens
-  if (tokens.grimPursuit <= 0) return 0
+  if (tokens.grimPursuit <= 0) return { dice: [], bonus: 0 }
   tokens.grimPursuit -= 1
-  return rollDie(rng)
+  const dice = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)]
+  const bonus = dice.filter(v => v === 4 || v === 5).length
+  return { dice, bonus }
 }
 
 export function canTerrorize(self: PlayerState): boolean {

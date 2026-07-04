@@ -9,21 +9,32 @@ import {
 import { createInitialPlayer } from '../../src/sim/match.js'
 import { mulberry32 } from '../../src/sim/rng.js'
 
-describe('HH Grim Pursuit spend mode (b): bonus attack damage', () => {
-  it('spends 1 Grim Pursuit and returns a die roll to add as damage', () => {
+describe('HH Grim Pursuit spend mode (b): roll 5 dice, +1 dmg per Horseshoe (verified leaflet)', () => {
+  it('spends 1 Grim Pursuit; all-Axe roll (faces 1-3) gives +0 but the token is still spent', () => {
     const p = createInitialPlayer('hh')
     p.tokens = createInitialHHTokens(true)
     grantGrimPursuit(p, 2)
-    const bonus = spendGrimPursuitForBonusDamage(p, () => 0) // rollDie(()=>0) = 1
-    expect(bonus).toBe(1)
+    const r = spendGrimPursuitForBonusDamage(p, () => 0) // rollDie(()=>0) = 1 → AAAAA, 0 Horseshoes
+    expect(r.dice).toEqual([1, 1, 1, 1, 1])
+    expect(r.bonus).toBe(0)
     expect((p.tokens as any).grimPursuit).toBe(1)
+  })
+
+  it('all-Horseshoe roll gives the +5 maximum (never more — user-verified rule)', () => {
+    const p = createInitialPlayer('hh')
+    p.tokens = createInitialHHTokens(true)
+    grantGrimPursuit(p, 1)
+    const r = spendGrimPursuitForBonusDamage(p, () => 0.6) // rollDie(()=>0.6) = 4 → BBBBB
+    expect(r.dice).toEqual([4, 4, 4, 4, 4])
+    expect(r.bonus).toBe(5)
   })
 
   it('returns 0 and spends nothing when there is no Grim Pursuit', () => {
     const p = createInitialPlayer('hh')
     p.tokens = createInitialHHTokens(true) // grimPursuit starts at 0
-    const bonus = spendGrimPursuitForBonusDamage(p, () => 0.99)
-    expect(bonus).toBe(0)
+    const r = spendGrimPursuitForBonusDamage(p, () => 0.99)
+    expect(r.bonus).toBe(0)
+    expect(r.dice).toEqual([])
     expect((p.tokens as any).grimPursuit).toBe(0)
   })
 })

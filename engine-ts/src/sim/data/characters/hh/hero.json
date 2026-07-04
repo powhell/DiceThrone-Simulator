@@ -8,7 +8,7 @@
   "source": "VERIFIED against photos in characters/headless_horseman/{board,leaflet,cards}/ (deposited 2026-07-01). Read directly by Claude via the Read tool. 7 upgrade cards + 7 standalone unique-action cards = 14 hero cards total. 5 of the upgrades also unlock a second dice-triggered ability once in play (altAbility field) — these share the parent upgrade's CP cost, they are NOT separate cards.",
   "tokens": [
     { "id": "dreadful", "name": "Dreadful", "startingCount": 0, "stackCap": 5, "description": "Positive Status Effect. Boosts various abilities, including when you can Terrorize an opponent (need >=4)." },
-    { "id": "grimPursuit", "name": "Grim Pursuit", "startingCount": 0, "stackCap": 3, "description": "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) after attacking, roll 1 die and add that many dmg as an Attack Modifier. Each effect usable once per turn." }
+    { "id": "grimPursuit", "name": "Grim Pursuit", "startingCount": 0, "stackCap": 3, "description": "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) After Attacking, roll 5 dice: add 1 dmg per Horseshoe rolled (Attack Modifier). Each effect usable once per turn." }
   ],
   "flags": [
     { "id": "hauntedHead", "name": "Haunted Head", "startingValue": true, "description": "Companion token. At the conclusion of your turn, if an opponent has it, gain 1 Dreadful. Move it via Terrorize, Rolling Pumpkin, or when Terrorized." }

@@ -218,7 +218,7 @@ export function createValueGreedyPolicy(network: Network): Policy {
         network, playerIdx, state, seedFor(state, 9), options,
         (clone, spend: boolean, rng) => {
           let d = dmg
-          if (spend) d += hh.spendGrimPursuitForBonusDamage(clone.players[playerIdx], rng)
+          if (spend) d += hh.spendGrimPursuitForBonusDamage(clone.players[playerIdx], rng).bonus
           resolveDefense(clone, playerIdx, d, rng, [policy, policy])
         },
       )

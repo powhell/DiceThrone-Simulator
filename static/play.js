@@ -153,7 +153,7 @@
     for (let i=fromIdx; i<g.state.log.length; i++){
       const msg = g.state.log[i].message; let x;
       if ((x = msg.match(/ rider: \+(\d+) dmg/))) out.rider += +x[1];
-      if ((x = msg.match(/^Grim Pursuit spend \(b\): rolled \d+, \+(\d+)/))) out.gp += +x[1];
+      if ((x = msg.match(/^Grim Pursuit spend \(b\): rolled \[[\d,]+\], \d+ Horseshoe\(s\) -> \+(\d+)/))) out.gp += +x[1];
       if ((x = msg.match(/bonus roll: \+(\d+) dmg/))) out.bonus += +x[1];
       if ((x = msg.match(/(?:Hallowed Reckoning|Sabotage): prevented (\d+), (\d+) dmg back/))) { out.prevented += +x[1]; out.counter += +x[2]; }
     }
@@ -350,7 +350,7 @@
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
       if (cands.length && you.tokens.grimPursuit>0 && !you.grimPursuitBonusUsedThisTurn) {
-        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 1 dé, + sa valeur en dégâts (+1 à +6) (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
+        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (max +5) (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
@@ -579,7 +579,7 @@
       case 'rerollDie':return `${cn(a.cardId)} : relance le dé ${a.dieIndex+1}${cp(a.cardId)}`;
       case 'rerollAll':return `${cn(a.cardId)} : relance TOUS tes dés de défense${cp(a.cardId)}`;
       case 'moveHead': return `Rolling Pumpkin! : Tête Hantée ${a.toIdx===g.humanIdx?'vers TOI':'vers l\'IA'}`;
-      case 'spendGrimPursuitBonus': return 'Grim Pursuit : lance 1 dé, + sa valeur en dégâts';
+      case 'spendGrimPursuitBonus': return 'Grim Pursuit : lance 5 dés, +1 dégât par Fer';
       // Token-manipulation cards enumerate one option PER TARGET — without saying who, they
       // look like duplicates and you can nuke YOUR OWN tokens by accident (reported bug).
       case 'transferToken': return `Transference! : ${a.tokenKind} ${a.fromIdx===g.humanIdx?'⚠️ de TOI vers l\'IA':'de l\'IA vers TOI'}`;
@@ -677,8 +677,8 @@
     if ((m = msg.match(/^(.+?): rerolled (\d+) dice$/))) return `<b>${m[1]}</b> : relance ${m[2]} dé(s)`;
     if (/^One More Time!/.test(msg)) return `<b>One More Time!</b> : +1 tentative de jet`;
     if (/^Grim Pursuit \(mode a\)/.test(msg)) return `<b>Grim Pursuit</b> : +1 tentative de jet`;
-    if ((m = msg.match(/^Grim Pursuit spend \(b\): rolled (\d+), \+(\d+)/)))
-      return `💜 <b>Grim Pursuit</b> : jet ${m[1]} → <b>+${m[2]} dégâts</b> sur l'attaque`;
+    if ((m = msg.match(/^Grim Pursuit spend \(b\): rolled \[([\d,]+)\], (\d+) Horseshoe/)))
+      return `💜 <b>Grim Pursuit</b> : lance ${diceWords(humanHero, m[1])} → ${m[2]} Fer(s) = <b>+${m[2]} dégâts</b>`;
     if ((m = msg.match(/^(.+?) rider: \+(\d+) (?:dmg|dégâts)(?:, (\d+) TB inflicted)?(?:, \+(\d+) Covert Ops)?/)))
       return `<b>Rider ${m[1]}</b> : +${m[2]} dégâts${m[3]&&+m[3]?` · ${m[3]} Time Bomb posée(s)`:''}${m[4]&&+m[4]?` · +${m[4]} Covert Ops`:''}`;
     if ((m = msg.match(/^Dice after alteration: ([\d,\s]+)$/)))

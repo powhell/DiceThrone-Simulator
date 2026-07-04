@@ -885,7 +885,7 @@ var Game = (() => {
     source: "VERIFIED against photos in characters/headless_horseman/{board,leaflet,cards}/ (deposited 2026-07-01). Read directly by Claude via the Read tool. 7 upgrade cards + 7 standalone unique-action cards = 14 hero cards total. 5 of the upgrades also unlock a second dice-triggered ability once in play (altAbility field) \u2014 these share the parent upgrade's CP cost, they are NOT separate cards.",
     tokens: [
       { id: "dreadful", name: "Dreadful", startingCount: 0, stackCap: 5, description: "Positive Status Effect. Boosts various abilities, including when you can Terrorize an opponent (need >=4)." },
-      { id: "grimPursuit", name: "Grim Pursuit", startingCount: 0, stackCap: 3, description: "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) after attacking, roll 1 die and add that many dmg as an Attack Modifier. Each effect usable once per turn." }
+      { id: "grimPursuit", name: "Grim Pursuit", startingCount: 0, stackCap: 3, description: "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) After Attacking, roll 5 dice: add 1 dmg per Horseshoe rolled (Attack Modifier). Each effect usable once per turn." }
     ],
     flags: [
       { id: "hauntedHead", name: "Haunted Head", startingValue: true, description: "Companion token. At the conclusion of your turn, if an opponent has it, gain 1 Dreadful. Move it via Terrorize, Rolling Pumpkin, or when Terrorized." }
@@ -1161,9 +1161,11 @@ var Game = (() => {
   }
   function spendGrimPursuitForBonusDamage(self, rng) {
     const tokens = self.tokens;
-    if (tokens.grimPursuit <= 0) return 0;
+    if (tokens.grimPursuit <= 0) return { dice: [], bonus: 0 };
     tokens.grimPursuit -= 1;
-    return rollDie(rng);
+    const dice = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)];
+    const bonus = dice.filter((v) => v === 4 || v === 5).length;
+    return { dice, bonus };
   }
   function canTerrorize(self) {
     return self.tokens.dreadful >= TERRORIZE_DREADFUL_COST;
@@ -2046,12 +2048,10 @@ var Game = (() => {
     }
     if (self.heroId === "hh" && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
       if (policy.chooseGrimPursuitSpend?.(state, playerIdx, result.dmg)) {
-        const bonus = spendGrimPursuitForBonusDamage(self, rng);
-        if (bonus > 0) {
-          self.grimPursuitBonusUsedThisTurn = true;
-          result = { ...result, dmg: result.dmg + bonus };
-          log(state, playerIdx, "resolveAttack", `Grim Pursuit spend (b): rolled ${bonus}, +${bonus} dmg`);
-        }
+        const r = spendGrimPursuitForBonusDamage(self, rng);
+        self.grimPursuitBonusUsedThisTurn = true;
+        result = { ...result, dmg: result.dmg + r.bonus };
+        log(state, playerIdx, "resolveAttack", `Grim Pursuit spend (b): rolled [${r.dice.join(",")}], ${r.bonus} Horseshoe(s) -> +${r.bonus} dmg`);
       }
     }
     return result;
@@ -2929,7 +2929,7 @@ var Game = (() => {
           options,
           (clone, spend, rng) => {
             let d = dmg;
-            if (spend) d += spendGrimPursuitForBonusDamage(clone.players[playerIdx], rng);
+            if (spend) d += spendGrimPursuitForBonusDamage(clone.players[playerIdx], rng).bonus;
             resolveDefense(clone, playerIdx, d, rng, [policy, policy]);
           }
         );

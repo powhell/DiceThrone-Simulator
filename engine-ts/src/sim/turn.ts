@@ -954,17 +954,16 @@ function applyAttackModifiers(state: GameState, playerIdx: 0 | 1, policy: Policy
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result)
   }
   // Grim Pursuit spend mode (b) — a STRATEGIC DECISION, not automatic (auto-spending nuked the
-  // economy: it consumed tokens the instant an ability granted them). The attacker may spend 1 Grim
-  // Pursuit to roll 1 die and add it as bonus dmg, once per turn. Mode (a) (extra Roll Attempt)
-  // needs a resumable roll (deferred, Stage 6).
+  // economy: it consumed tokens the instant an ability granted them). Verified token text:
+  // "After Attacking, roll 5 dice: add 1 dmg per Horseshoe." Once per turn — and the token/
+  // once-per-turn are consumed even on a 0-Horseshoe roll (spending is the decision, the dice
+  // are just the payout).
   if (self.heroId === 'hh' && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
     if (policy.chooseGrimPursuitSpend?.(state, playerIdx, result.dmg)) {
-      const bonus = hh.spendGrimPursuitForBonusDamage(self, rng)
-      if (bonus > 0) {
-        self.grimPursuitBonusUsedThisTurn = true
-        result = { ...result, dmg: result.dmg + bonus }
-        log(state, playerIdx, 'resolveAttack', `Grim Pursuit spend (b): rolled ${bonus}, +${bonus} dmg`)
-      }
+      const r = hh.spendGrimPursuitForBonusDamage(self, rng)
+      self.grimPursuitBonusUsedThisTurn = true
+      result = { ...result, dmg: result.dmg + r.bonus }
+      log(state, playerIdx, 'resolveAttack', `Grim Pursuit spend (b): rolled [${r.dice.join(',')}], ${r.bonus} Horseshoe(s) -> +${r.bonus} dmg`)
     }
   }
   return result
