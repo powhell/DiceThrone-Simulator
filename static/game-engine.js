@@ -1246,9 +1246,11 @@ var Game = (() => {
   function tickTimeBombsUpkeep(self, rng) {
     let selfDamage = 0;
     let defused = 0;
+    const rolls = [];
     const survivors = [];
     for (const pos of self.timeBombs) {
       const roll = rollDie(rng);
+      rolls.push(roll);
       if (roll === 6) {
         defused += 1;
         continue;
@@ -1261,7 +1263,7 @@ var Game = (() => {
     }
     self.timeBombs = survivors;
     self.hp -= selfDamage;
-    return { selfDamage, defused };
+    return { rolls, selfDamage, defused };
   }
   function spendAgilityToHalveDamage(self, incomingDamage, rng) {
     const tokens = self.tokens;
@@ -1396,7 +1398,7 @@ var Game = (() => {
     }
     const tb = tickTimeBombsUpkeep(self, rng);
     if (tb.selfDamage > 0 || tb.defused > 0) {
-      log(state, playerIdx, "upkeep", `Time Bomb upkeep: ${tb.selfDamage} self-dmg, ${tb.defused} defused`);
+      log(state, playerIdx, "upkeep", `Time Bomb upkeep: rolls [${tb.rolls.join(",")}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`);
     }
   }
   function playIncomePhase(state, playerIdx, rng) {
@@ -1914,6 +1916,7 @@ var Game = (() => {
     const finalDefenseDice = state.pendingRoll.dice;
     state.pendingRoll = null;
     state.pendingDefenseRoll = null;
+    log(state, defenderIdx, "defense", `Defense dice: ${finalDefenseDice.join(",")}`);
     finalizeDefenseRoll(state, attackerIdx, incomingDamage, finalDefenseDice, rng, policies);
   }
   function finalizeDefenseRoll(state, attackerIdx, incomingDamage, finalDefenseDice, rng, policies) {

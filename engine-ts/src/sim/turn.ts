@@ -114,7 +114,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   // self-damage; playTurn's checkGameOver right after this catches a lethal detonation.
   const tb = bw.tickTimeBombsUpkeep(self, rng)
   if (tb.selfDamage > 0 || tb.defused > 0) {
-    log(state, playerIdx, 'upkeep', `Time Bomb upkeep: ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
+    log(state, playerIdx, 'upkeep', `Time Bomb upkeep: rolls [${tb.rolls.join(',')}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
   }
 }
 
@@ -771,6 +771,9 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   const finalDefenseDice = state.pendingRoll.dice
   state.pendingRoll = null
   state.pendingDefenseRoll = null
+  // The dice themselves were never logged — only the aggregate outcome — leaving the UI unable
+  // to SHOW the defense roll (user-reported). Logged on the DEFENDER's line.
+  log(state, defenderIdx, 'defense', `Defense dice: ${finalDefenseDice.join(',')}`)
   finalizeDefenseRoll(state, attackerIdx, incomingDamage, finalDefenseDice, rng, policies)
 }
 

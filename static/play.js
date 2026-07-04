@@ -68,6 +68,7 @@
   let pendingDefense = null;   // current DefensePrompt while defending against the AI (else null)
   let pendingAttackInfo = null;// AiAttackInfo for the incoming attack being defended
   let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
+  let lastDefDice = null;      // your resolved defense dice, shown in the tray after the attack lands
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
@@ -132,6 +133,15 @@
           if (defSel.has(i)) defSel.delete(i); else { if (defSel.size>=2) defSel.delete([...defSel][0]); defSel.add(i); }
           renderDice(false); renderControls(); };
       });
+      return;
+    }
+    // After the AI's attack resolved: show YOUR defense dice (they only lived in the journal
+    // before — "je peux pas voir mes dés quand je roule ma défense", reported).
+    if (lastDefDice && g.state.activePlayerIdx !== g.humanIdx) {
+      $('tray').innerHTML =
+        `<div class="empty" style="width:100%">🛡️ TA DÉFENSE — résultat :</div>` +
+        lastDefDice.map((v,i)=>dieHTML(humanHero, {v,kept:false}, i, false)).join('') +
+        `<div class="empty" style="width:100%">${defenseExplain(HUMAN, lastDefDice)}</div>`;
       return;
     }
     if (aiDice) {
@@ -615,6 +625,11 @@
     // Big readable recap with the FULL arithmetic — "l'IA annonce 7 mais ça fait 9" was the
     // Vengeance rider adding damage with no visible accounting (reported).
     const cb = parseCombat(logFrom);
+    // Grab your defense dice from the fresh log to display them in the tray.
+    for (let i=logFrom; i<g.state.log.length; i++){
+      const dm = g.state.log[i].message.match(/^Defense dice: ([\d,]+)/);
+      if (dm && g.state.log[i].playerIdx === g.humanIdx) lastDefDice = dm[1].split(',').map(Number);
+    }
     const base = pendingAttackInfo ? pendingAttackInfo.incomingDamage : 0;
     const you2 = g.state.players[g.humanIdx].hp, ai2 = g.state.players[g.aiIdx].hp;
     const taken = hpYou - you2, countered = hpAi - ai2;
@@ -671,6 +686,7 @@
   }
   function defenseLabel(a){ return actionLabel(a); }
   function startHumanTurn(){
+    lastDefDice = null;
     const you = g.state.players[g.humanIdx];
     // Click-to-roll pacing: if you carry Time Bombs, YOU press the button that rolls them
     // (they resolve inside beginHumanTurn) instead of it happening invisibly.
@@ -692,10 +708,11 @@
     // Your upkeep Time Bomb roll happens inside beginHumanTurn — surface it loudly instead of
     // letting it drown in the journal (reported: "je ne vois pas quand je roule pour la bombe").
     for (let i=logBefore; i<g.state.log.length; i++) {
-      const m = g.state.log[i].message.match(/^Time Bomb upkeep: (\d+) self-dmg(?:, (\d+) defused)?/);
+      const m = g.state.log[i].message.match(/^Time Bomb upkeep: (?:rolls \[([\d,]+)\], )?(\d+) self-dmg(?:, (\d+) defused)?/);
       if (m) {
-        const dmg = +m[1], defused = +(m[2]||0);
-        log(`<b style="font-size:1.05em">💣 TIME BOMB — ${dmg>0?`elle explose : tu prends ${dmg} dégâts !`:defused>0?`désamorcée (tu as fait 6) !`:`elle avance d'un cran…`}</b>`);
+        const jets = m[1] ? `tu lances ${m[1]} — ` : '';
+        const dmg = +m[2], defused = +(m[3]||0);
+        log(`<b style="font-size:1.05em">💣 TIME BOMB — ${jets}${dmg>0?`elle explose : tu prends ${dmg} dégâts !`:defused>0?`désamorcée (6) !`:`elle avance d'un cran…`}</b>`);
       }
     }
     if (g.state.gameOver) { renderAll(); return end(); }
@@ -767,8 +784,12 @@
       return `<b>${m[1]}</b> : change les dés ${m[2]} → <b>${m[3]}</b>`;
     if ((m = msg.match(/^(.+?) bonus roll: \+(\d+) (?:dmg|dégâts), undefendable=(\w+), \+(\d+) Grim Pursuit/)))
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> — jet bonus : +${m[2]} dégâts${m[3]==='true'?' · devient <b>indéfendable</b>':''}${+m[4]?` · +${m[4]} Grim Pursuit`:''}`;
-    if ((m = msg.match(/^Time Bomb upkeep: (\d+) self-dmg(?:, (\d+) defused)?/)))
-      return `💣 Time Bomb à l'Upkeep : ${m[1]} dégât(s)${m[2]&&+m[2]?` · ${m[2]} désamorcée(s)`:''}`;
+    if ((m = msg.match(/^Time Bomb upkeep: (?:rolls \[([\d,]+)\], )?(\d+) self-dmg(?:, (\d+) defused)?/)))
+      return `💣 Time Bomb à l'Upkeep${m[1]?` — jet ${m[1]}`:''} : ${m[2]} dégât(s)${m[3]&&+m[3]?` · ${m[3]} désamorcée(s)`:''}`;
+    if ((m = msg.match(/^Defense dice: ([\d,]+)/)))
+      return `🛡️ Dés de défense : <b>${diceWords(isHuman?humanHero:aiHero, m[1])}</b> (${m[1]})`;
+    if ((m = msg.match(/^Agility spent: rolled (\d+), (halved damage|no effect)/)))
+      return `🌀 <b>Agility</b> : jet ${m[1]} → ${m[2]==='halved damage'?'<b>dégâts divisés par 2</b> (1-3 réussit)':'raté (4-6), jeton perdu'}`;
     if ((m = msg.match(/^(.+?): removed (\w+) from p\d/))) return `<b>${m[1]}</b> : retire un jeton ${m[2]}`;
     if ((m = msg.match(/^(.+?): transferred (\w+)/))) return `<b>${m[1]}</b> : transfère un jeton ${m[2]}`;
     if ((m = msg.match(/(\d+) dmg/))) return msg.replace(/(\d+) dmg/g, '$1 dégâts');

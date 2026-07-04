@@ -55,6 +55,7 @@ export function advanceAllTimeBombs(target: PlayerState): number {
 }
 
 export interface TimeBombUpkeepResult {
+  rolls: number[]
   selfDamage: number
   defused: number
 }
@@ -67,10 +68,12 @@ export interface TimeBombUpkeepResult {
 export function tickTimeBombsUpkeep(self: PlayerState, rng: RNG): TimeBombUpkeepResult {
   let selfDamage = 0
   let defused = 0
+  const rolls: number[] = []
   const survivors: TimeBombPosition[] = []
 
   for (const pos of self.timeBombs) {
     const roll = rollDie(rng)
+    rolls.push(roll)
     if (roll === 6) {
       defused += 1
       continue
@@ -84,7 +87,7 @@ export function tickTimeBombsUpkeep(self: PlayerState, rng: RNG): TimeBombUpkeep
 
   self.timeBombs = survivors
   self.hp -= selfDamage
-  return { selfDamage, defused }
+  return { rolls, selfDamage, defused }
 }
 
 export interface AgilitySpendResult {
