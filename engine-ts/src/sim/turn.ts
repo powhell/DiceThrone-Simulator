@@ -22,6 +22,8 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
   state.log.push({ turn: state.turnNumber, playerIdx, phase, message })
 }
 
+// Exported for the interactive UI driver (interactive.ts) and the RL roll-manipulation scorer
+// (valueGreedyPolicy), which rolls a candidate's modified dice forward via completeOffensiveRoll.
 export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
   if (player.heroId === 'hh') {
     const t = player.tokens
@@ -81,16 +83,25 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.upgradesPlayedThisTurn = 0
   self.grimPursuitBonusUsedThisTurn = false
   self.covertOpsUsedThisTurn = false
+  self.grimPursuitRerollUsedThisTurn = false
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
     const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible)
     if (choice === 'terrorize' && eligible) {
+      // resolveTerrorize sets self.head = 1; the head is unique, so reclaiming it must also
+      // clear the opponent's copy (they may be holding it after a giveHead / Rolling Pumpkin!).
+      opp.tokens.head = 0
       const r = hh.resolveTerrorize(self)
       opp.hp -= r.damageToOpponent
       log(state, playerIdx, 'upkeep', `Terrorize: ${r.damageToOpponent} dmg to opponent, +${r.cpGained} CP, reclaimed Head`)
     } else if (choice === 'giveHead') {
+      // Bug fixed 2026-07-04 (user report: "the head goes to the opponent but no token shows"):
+      // this cleared self.head without ever GIVING it — the head vanished from the game, so
+      // "opponent holds the Head" effects (Cranial Assist!, the head feature the network sees)
+      // could never trigger.
       self.tokens.head = 0
+      opp.tokens.head = 1
       log(state, playerIdx, 'upkeep', 'Gave the Haunted Head to the opponent')
     }
   }
@@ -346,6 +357,20 @@ export function playOffensiveRollPhase(state: GameState, playerIdx: 0 | 1, rng: 
       }
     }
 
+    // Grim Pursuit mode (a) (verified token def): spend 1 to perform an additional Roll
+    // Attempt, once per turn. Offered at the FINAL window (rollsRemaining 0 — the roll is
+    // otherwise over), the only moment the choice is informative.
+    if (
+      step.rollsRemaining === 0 && self.heroId === 'hh' && self.tokens.grimPursuit >= 1
+      && !self.grimPursuitRerollUsedThisTurn
+      && policy.chooseGrimPursuitReroll?.(state, playerIdx, dice)
+    ) {
+      hh.spendGrimPursuit(self, 1)
+      self.grimPursuitRerollUsedThisTurn = true
+      extraRollsGranted += 1
+      log(state, playerIdx, 'roll', 'Grim Pursuit (mode a): +1 additional Roll Attempt')
+    }
+
     return { oracleState: oracleStateFor(self, opp), dice, extraRollsGranted }
   }
 
@@ -386,7 +411,9 @@ function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   return ROLL_MANIPULATION_CARD_IDS.filter(id => self.hand.includes(id) && self.cp >= (cardById(hero, id)?.cpCost ?? 0))
 }
 
-function applyRollManipulationCard(
+// Exported for the RL policy's roll-manipulation scorer (valueGreedyPolicy), which replays a
+// candidate card play on a cloned state before rolling the modified dice forward.
+export function applyRollManipulationCard(
   state: GameState, playerIdx: 0 | 1, choice: RollManipulationChoice, dice: number[], rng: RNG,
 ): { dice: number[]; extraRollsGranted: number } {
   const self = state.players[playerIdx]

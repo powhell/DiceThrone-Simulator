@@ -41,6 +41,9 @@ export interface PlayerState {
   // Reset to false each own-turn upkeep. Black Widow's Covert Ops is "spent once per turn during
   // your Main Phase" to put an Ability Upgrade into play for free — this guards the once-per-turn.
   covertOpsUsedThisTurn: boolean
+  // Reset to false each own-turn upkeep. Grim Pursuit mode (a) — "an additional Roll Attempt
+  // during your Offensive Roll Phase" — is likewise once per turn (same verified token def).
+  grimPursuitRerollUsedThisTurn: boolean
 }
 
 // Verified order (official rulebook, characters/rules/Turn Phases.png, 2026-07-01):

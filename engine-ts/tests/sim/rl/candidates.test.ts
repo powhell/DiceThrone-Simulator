@@ -102,9 +102,19 @@ describe('enumerateRollManipulationChoices', () => {
     for (const [choice] of options) expect(choice.values).toEqual([6])
   })
 
-  it('so-wild: every (die, value) pair', () => {
+  it('so-wild: pruned to {6} ∪ current values, never a die\'s own current value', () => {
+    // Pruned from the full 1-6 search now that these candidates are actually SCORED by the
+    // policy (see candidates.ts): "max it out" or "match an existing die" only.
     const options = enumerateRollManipulationChoices(dice, ['so-wild']).filter(o => o.length > 0)
-    expect(options.length).toBe(dice.length * 6)
+    const allowed = new Set([6, ...dice])
+    for (const [choice] of options) {
+      const [i] = choice.dieIndices!
+      const [v] = choice.values!
+      expect(allowed.has(v)).toBe(true)
+      expect(dice[i]).not.toBe(v) // setting a die to its own value would waste the card
+    }
+    // dice [1,2,3,4,5]: each die can take the 4 other values + 6 = 5 → 25 candidates
+    expect(options.length).toBe(25)
   })
 
   it('samesies: sets a die to another die\'s current value, never itself', () => {

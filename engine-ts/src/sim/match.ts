@@ -47,6 +47,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     upgradesPlayedThisTurn: 0,
     grimPursuitBonusUsedThisTurn: false,
     covertOpsUsedThisTurn: false,
+    grimPursuitRerollUsedThisTurn: false,
   }
 }
 
