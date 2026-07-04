@@ -88,11 +88,19 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
     const eligible = hh.canTerrorize(self)
     const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible)
     if (choice === 'terrorize' && eligible) {
+      // resolveTerrorize sets self.head = 1; the head is unique, so reclaiming it must also
+      // clear the opponent's copy (they may be holding it after a giveHead / Rolling Pumpkin!).
+      opp.tokens.head = 0
       const r = hh.resolveTerrorize(self)
       opp.hp -= r.damageToOpponent
       log(state, playerIdx, 'upkeep', `Terrorize: ${r.damageToOpponent} dmg to opponent, +${r.cpGained} CP, reclaimed Head`)
     } else if (choice === 'giveHead') {
+      // Bug fixed 2026-07-04 (user report: "the head goes to the opponent but no token shows"):
+      // this cleared self.head without ever GIVING it — the head vanished from the game, so
+      // "opponent holds the Head" effects (Cranial Assist!, the head feature the network sees)
+      // could never trigger.
       self.tokens.head = 0
+      opp.tokens.head = 1
       log(state, playerIdx, 'upkeep', 'Gave the Haunted Head to the opponent')
     }
   }

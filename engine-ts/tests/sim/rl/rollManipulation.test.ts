@@ -6,7 +6,8 @@ import { FEATURE_COUNT, encodeState } from '../../../src/sim/rl/features.js'
 import { enumerateRollManipulationChoices } from '../../../src/sim/rl/candidates.js'
 import { completeOffensiveRoll } from '../../../src/sim/oracle.js'
 import { createInitialGameState } from '../../../src/sim/match.js'
-import { playTurn, oracleStateFor } from '../../../src/sim/turn.js'
+import { playTurn, oracleStateFor, playUpkeepPhase } from '../../../src/sim/turn.js'
+import { greedyHighestDamagePolicy } from '../../../src/sim/policy.js'
 import { mulberry32 } from '../../../src/sim/rng.js'
 
 // Opponent HP is the first field of the "opponent" block (layout: [turn, self..., opp...]).
@@ -43,6 +44,30 @@ describe('oracle.completeOffensiveRoll (resumable roll tail)', () => {
     const dice = completeOffensiveRoll('hh', os, [1, 1, 2, 3, 4], 2, mulberry32(2))
     expect(dice).toHaveLength(5)
     for (const d of dice) { expect(d).toBeGreaterThanOrEqual(1); expect(d).toBeLessThanOrEqual(6) }
+  })
+})
+
+// Regression: giveHead used to clear self.head WITHOUT giving it to the opponent — the unique
+// Haunted Head vanished from the game (user-reported from the play UI, 2026-07-04).
+describe('Headless Mayhem: the Haunted Head actually moves', () => {
+  const forced = (choice: 'giveHead' | 'terrorize') =>
+    ({ ...greedyHighestDamagePolicy, chooseHeadlessMayhem: () => choice })
+
+  it('giveHead transfers the head to the opponent (never destroys it)', () => {
+    const state = createInitialGameState('hh', 'bw')
+    playUpkeepPhase(state, 0, mulberry32(1), forced('giveHead'))
+    expect(state.players[0].tokens.head).toBe(0)
+    expect(state.players[1].tokens.head).toBe(1)
+  })
+
+  it('terrorize reclaims the head: opponent loses it, self gets it, exactly one head exists', () => {
+    const state = createInitialGameState('hh', 'bw')
+    state.players[0].tokens.head = 0
+    state.players[1].tokens.head = 1 // opponent holds it (after a prior giveHead)
+    state.players[0].tokens.dreadful = 4
+    playUpkeepPhase(state, 0, mulberry32(2), forced('terrorize'))
+    expect(state.players[0].tokens.head).toBe(1)
+    expect(state.players[1].tokens.head).toBe(0)
   })
 })
 
