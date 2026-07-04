@@ -88,6 +88,11 @@ export interface GameState {
   // window closes the (possibly altered) dice are matched to an ability, so the roller re-decides
   // on whatever the dice became. null outside that window.
   pendingRoll: { rollerIdx: 0 | 1; dice: number[] } | null
+  // Transient during the Defensive Roll Phase's DRP3 alter window: the attack context the tail of
+  // resolveDefense (DRP4-6) needs but which isn't otherwise on the state (incomingDamage is a local
+  // parameter). Lets the RL lookahead score a defense-roll alteration by cloning, applying it, then
+  // running finalizeDefenseRoll. defenderIdx = 1 - attackerIdx. null outside that window.
+  pendingDefenseRoll: { attackerIdx: 0 | 1; incomingDamage: number } | null
 }
 
 export interface AbilityCandidate {
