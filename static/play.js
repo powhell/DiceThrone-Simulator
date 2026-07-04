@@ -73,6 +73,16 @@
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
 
+  // ---- coach & game logging ----
+  // The AI policy is seat-agnostic, so the SAME object can evaluate YOUR decisions: at each
+  // human decision we silently ask "what would the network do here?" and record it. The
+  // post-game analysis lists the disagreements — "pourquoi j'ai perdu / qu'aurait joué l'IA".
+  const coach = ai;
+  const replayLog = [];        // {t, kind, you, coach, agree}
+  function coachNote(kind, you, coachPick){
+    replayLog.push({ t: g.state.turnNumber, kind, you, coach: coachPick, agree: you === coachPick });
+  }
+
   const $ = id => document.getElementById(id);
   const logBox = $('log');
 
@@ -535,7 +545,15 @@
   // ---------- actions ----------
   function mainPhaseNow(){ return phase==='main2' ? 'main2' : 'main1'; }
   function playMainCard(id){ const a=G.humanMainOptions(g,mainPhaseNow()).find(o=>(o.kind==='playCard'||o.kind==='playInstant')&&o.cardId===id); if(a) applyMain(a); }
-  function applyMain(a){ log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
+  function applyMain(a){
+    try { // coach: with the same options on the table, what would the network play?
+      const opts = G.humanMainOptions(g, mainPhaseNow());
+      if (opts.length > 1) {
+        const pick = coach.decide(g.state, g.humanIdx, { ctx: { windowType:'mainPhase', phase: mainPhaseNow() }, options: opts });
+        coachNote('main', mainLabel(a), pick.kind==='pass'?'passer':mainLabel(pick));
+      }
+    } catch (e) {}
+    log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
   function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll(); }
   function toAlter(){ G.beginOffensiveAlter(g, dice.map(d=>d.v));
     altSel.clear();
@@ -561,6 +579,10 @@
     renderDice(true); renderControls(); renderMatch(); renderAbilities();
   }
   function chooseAbility(name){
+    try { // coach: which ability would the network have activated on these dice?
+      const cands = G.matchedAbilities(g, dice.map(d=>d.v));
+      if (cands.length > 1) coachNote('habileté', name, coach.chooseAbility(g.state, g.humanIdx, cands));
+    } catch (e) {}
     log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+ dé Grim Pursuit)':''}.`);
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
     const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
@@ -611,6 +633,12 @@
     renderAll();
   }
   function onDefenseChoice(action){
+    try { // coach: what would the network have done in this defense window?
+      if (pendingDefense && pendingDefense.options.length > 1) {
+        const pick = coach.decide(g.state, g.humanIdx, { ctx: pendingDefense.ctx, options: pendingDefense.options });
+        coachNote('défense', action.kind==='pass'?'passer':defenseLabel(action), pick.kind==='pass'?'passer':defenseLabel(pick));
+      }
+    } catch (e) {}
     // Even a pass goes through the script + re-probe: passing the ROLL window must still let
     // the CARDS window come up next (the old "pass = resolve everything now" shortcut silently
     // skipped every later defense window).
@@ -702,6 +730,9 @@
     else doBeginTurn(undefined);
   }
   function doBeginTurn(mayhem){
+    if (mayhem !== undefined) {
+      try { coachNote('upkeep', mayhem, coach.chooseHeadlessMayhem(g.state, g.humanIdx, G.humanCanTerrorize(g))); } catch (e) {}
+    }
     const logBefore = g.state.log.length;
     G.beginHumanTurn(g, mayhem);
     aiDice = null;
@@ -723,7 +754,7 @@
 
   function end(){
     phase='over';
-    aiDice = null; pendingDefense = null; // a late renderAll must never repaint dice over the banner
+    aiDice = null; pendingDefense = null; lastDefDice = null;
     const w = g.state.winner;
     const msg = w===g.humanIdx ? '🏆 Victoire !' : w===null ? '⚔️ Match nul (double KO)' : '☠️ Défaite';
     $('controls').innerHTML=''; $('tray').innerHTML='';
@@ -731,6 +762,37 @@
     $('tray').replaceWith(b); b.id='tray';
     $('turntag').textContent='Partie terminée';
     renderFighters();
+
+    // ---- post-game coach analysis + persistence ----
+    const disagreements = replayLog.filter(r=>!r.agree);
+    log(`<b style="font-size:1.08em">📋 ANALYSE DE PARTIE — ${replayLog.length} décision(s) évaluée(s) par l'IA, `+
+        `${disagreements.length} désaccord(s)${disagreements.length?' (du plus récent au plus ancien) :':'. Vos lignes concordent.'}</b>`);
+    for (const r of disagreements)
+      log(`T${r.t} [${r.kind}] — toi : <b>${r.you}</b> · l'IA aurait joué : <b style="color:#ef6b2b">${r.coach}</b>`);
+    // Auto-save to localStorage (last 20 games) + download button.
+    const gameRecord = {
+      date: new Date().toISOString(), result: msg, turns: g.state.turnNumber,
+      humanHero: HUMAN, aiHero: AI_HERO, humanFirst: g.humanIdx === 0,
+      decisions: replayLog, engineLog: g.state.log,
+      finalHp: [g.state.players[0].hp, g.state.players[1].hp],
+    };
+    try {
+      const all = JSON.parse(localStorage.getItem('dt_games') || '[]');
+      all.push(gameRecord);
+      localStorage.setItem('dt_games', JSON.stringify(all.slice(-20)));
+      log(`💾 Partie sauvegardée (${all.length > 20 ? 20 : all.length} en mémoire locale).`);
+    } catch (e) {}
+    const dl = document.createElement('button');
+    dl.className = 'btn gold'; dl.textContent = '💾 Télécharger cette partie (JSON)';
+    dl.style.marginTop = '8px';
+    dl.onclick = () => {
+      const blob = new Blob([JSON.stringify(gameRecord, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `dicethrone_${gameRecord.date.replace(/[:.]/g,'-')}.json`;
+      a.click();
+    };
+    b.after(dl);
   }
 
   // ---------- log ----------
