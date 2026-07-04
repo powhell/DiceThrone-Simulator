@@ -403,7 +403,7 @@
         // Grim Pursuit mode (a): out of rerolls, spend 1 token for one more Roll Attempt.
         const you = g.state.players[g.humanIdx];
         if (rollsLeft<=0 && you.tokens.grimPursuit>0 && !you.grimPursuitRerollUsedThisTurn)
-          c.appendChild(btn(`Grim Pursuit : +1 relance (−1 jeton, reste ${you.tokens.grimPursuit})`,'primary', ()=>{
+          c.appendChild(btn(`Grim Pursuit : +1 relance (1×/tour · −1 jeton, reste ${you.tokens.grimPursuit})`,'primary', ()=>{
             if (G.humanSpendGrimPursuitReroll(g)) { rollsLeft++; log('💜 <b>Grim Pursuit</b> : +1 tentative de jet.'); renderAll(); }
           }));
         // Roller-only Roll Phase cards (Six-It!/Samesies!/Try Try Again!/One More Time!) — the
@@ -448,7 +448,7 @@
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
       if (cands.length && you.tokens.grimPursuit>0 && !you.grimPursuitBonusUsedThisTurn) {
-        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (max +5) (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
+        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
