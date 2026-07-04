@@ -472,7 +472,14 @@
       // Offered even at 0 Grim Pursuit: "Gain X Grim Pursuit. THEN deal dmg" abilities (Ride
       // Down...) grant tokens BEFORE the attack modifiers fire, so pre-arming at 0 is legal —
       // the engine re-checks you hold >=1 at spend time (user-caught on Ride Down).
-      if (cands.length && !you.grimPursuitBonusUsedThisTurn) {
+      // Shown only when it can actually fire: you hold a token, OR one of the candidate
+      // abilities grants Grim Pursuit BEFORE damage (Ride Down...). At turn 1 with 0 tokens
+      // and no granting candidate, the button was pure noise (user-caught).
+      const gpPossible = you.tokens.grimPursuit > 0 || cands.some(cd => {
+        try { const d = G.resolvedAbilityByBoardName(G.heroTemplateFor(HUMAN), cd.name, you.upgradesInPlay);
+              return !!(d && d.tokensGrantedToSelf && d.tokensGrantedToSelf.grimPursuit); } catch (e) { return false; }
+      });
+      if (cands.length && gpPossible && !you.grimPursuitBonusUsedThisTurn) {
         const hint = you.tokens.grimPursuit>0 ? '' : " — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)";
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
