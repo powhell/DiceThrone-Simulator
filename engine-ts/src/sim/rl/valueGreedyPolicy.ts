@@ -14,7 +14,7 @@ import type { GameState, AbilityCandidate, WindowAction, DecisionRequest } from 
 import type { Policy, RollManipulationChoice } from '../policy.js'
 import {
   playUpkeepPhase, playDiscardPhase, playCard, resolveDefense, applyAttackModifierCard,
-  applyWindowAction, finalizePendingAttackDamage,
+  applyWindowAction, finalizePendingAttackDamage, resolveAbilityPhase, finalizeDefenseRoll,
 } from '../turn.js'
 import type { AttackModifierResult } from '../turn.js'
 import * as bw from '../hero/bw.rules.js'
@@ -99,12 +99,48 @@ export function createValueGreedyPolicy(network: Network): Policy {
     // through here for free. Salt keys the lookahead RNG per window type (fairness across options).
     decide(state, playerIdx, request: DecisionRequest): WindowAction {
       if (request.options.length === 1) return request.options[0]
-      // Roll-alter windows (Tip It!/Helping Hand!/Better D!): the payoff of altering a die is only
-      // realized once the attack/defense resolves, and encodeState doesn't see the in-progress
-      // dice — so the network can't score these yet. Pass for now (greedy does too); proper
-      // lookahead-through-resolution + dice features are Stage 6.
-      if (request.ctx.windowType === 'offensiveRoll' || request.ctx.windowType === 'defenseRoll') {
-        return { kind: 'pass' }
+      // ORP2 offensive-alter window (Stage 6a): a die alteration's payoff is only realized once the
+      // attack resolves, and encodeState can't see the in-progress dice. So score each candidate by
+      // applying it to the roller's pending dice, then RESOLVING the attack on those final dice
+      // (resolveAbilityPhase — the same tail playTurn runs after this window) so the network sees the
+      // post-attack HP/tokens. Scored from the acting player's view (roller maximises its attack; the
+      // opponent, altering the roller's dice, maximises its OWN V = minimises the attack).
+      if (request.ctx.windowType === 'offensiveRoll') {
+        return scoreCandidatesByReplay(
+          network, playerIdx, state, seedFor(state, 10), request.options,
+          (clone, action: WindowAction, rng) => {
+            applyWindowAction(clone, playerIdx, action, request.ctx, rng)
+            const pr = clone.pendingRoll
+            if (pr) {
+              const finalDice = pr.dice.slice()
+              clone.pendingRoll = null
+              resolveAbilityPhase(clone, pr.rollerIdx, finalDice, rng, [policy, policy])
+            }
+          },
+        )
+      }
+      // DRP3 defense-roll-alter window (Stage 6b): symmetric to offensiveRoll. Score each candidate
+      // by applying it to the defender's pending defense dice, then running the tail of resolveDefense
+      // (finalizeDefenseRoll — DRP4 effects on the final dice, Agility, DRP5, DRP6) so the network
+      // sees the post-defense HP. The attack context (attackerIdx, incomingDamage) rides on
+      // state.pendingDefenseRoll. Scored from the acting player's view (defender wants max prevention/
+      // counter via Better D!; the attacker altering the defense dice wants min prevention).
+      if (request.ctx.windowType === 'defenseRoll') {
+        const pd = state.pendingDefenseRoll
+        if (!pd) return { kind: 'pass' } // safety: no context to finalize against
+        return scoreCandidatesByReplay(
+          network, playerIdx, state, seedFor(state, 11), request.options,
+          (clone, action: WindowAction, rng) => {
+            applyWindowAction(clone, playerIdx, action, request.ctx, rng)
+            const pr = clone.pendingRoll
+            if (pr) {
+              const finalDice = pr.dice.slice()
+              clone.pendingRoll = null
+              clone.pendingDefenseRoll = null
+              finalizeDefenseRoll(clone, pd.attackerIdx, pd.incomingDamage, finalDice, rng, [policy, policy])
+            }
+          },
+        )
       }
       // Salt keys the lookahead RNG per window type (reuses the old per-decision salts: 4 main
       // phase, 7 defense) so options at one decision are compared under identical dice.

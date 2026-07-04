@@ -60,6 +60,7 @@ export function createInitialGameState(heroA: HeroId, heroB: HeroId, rng?: RNG):
     pendingDamage: [0, 0],
     pendingAttack: null,
     pendingRoll: null,
+    pendingDefenseRoll: null,
   }
 }
 

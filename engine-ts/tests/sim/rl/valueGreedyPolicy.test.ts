@@ -101,6 +101,36 @@ describe('createValueGreedyPolicy: legality of returned choices', () => {
     for (const id of chosen) expect(['cranial-assist']).toContain(id)
   })
 
+  // Stage 6a: the offensiveRoll window is now scored (was a blanket pass) by resolving the attack
+  // through resolveAbilityPhase on each candidate's altered dice. This exercises that path end to
+  // end (clone -> applyWindowAction -> resolveAbilityPhase -> V) and checks a legal choice comes out.
+  it('decide on an offensiveRoll window scores via resolve-through and returns a legal option', () => {
+    const state = createInitialGameState('hh', 'bw') // roller 0, opponent 1
+    state.players[1].hand = ['tip-it']
+    state.players[1].cp = 5
+    state.pendingRoll = { rollerIdx: 0, dice: [4, 4, 4, 4, 4] }
+    const ctx = { windowType: 'offensiveRoll' as const }
+    const options = enumerateWindowActions(state, 1, ctx)
+    expect(options.length).toBeGreaterThan(1) // pass + Tip It! alterations
+    const action = policy.decide(state, 1, { ctx, options })
+    expect(options).toContainEqual(action)
+  })
+
+  // Stage 6b: the defenseRoll window is scored (was a pass) by running finalizeDefenseRoll on each
+  // candidate's altered defense dice. Needs state.pendingDefenseRoll set (the attack context).
+  it('decide on a defenseRoll window scores via finalizeDefenseRoll and returns a legal option', () => {
+    const state = createInitialGameState('bw', 'hh') // defender = player 0 (bw), attacker = player 1
+    state.players[0].hand = ['better-d'] // defender may reroll all defense dice
+    state.players[0].cp = 5
+    state.pendingRoll = { rollerIdx: 0, dice: [1, 2, 3] }
+    state.pendingDefenseRoll = { attackerIdx: 1, incomingDamage: 8 }
+    const ctx = { windowType: 'defenseRoll' as const }
+    const options = enumerateWindowActions(state, 0, ctx)
+    expect(options.length).toBeGreaterThan(1) // pass + Better D!
+    const action = policy.decide(state, 0, { ctx, options })
+    expect(options).toContainEqual(action)
+  })
+
   it('chooseMidRollCards and chooseRollManipulationCards are v1 no-ops', () => {
     const state = createInitialGameState('bw', 'hh')
     expect(policy.chooseMidRollCards(state, 0, [1, 2, 3, 4, 5], 2)).toEqual([])

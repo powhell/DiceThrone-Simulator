@@ -682,9 +682,28 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     defenseDice = hh.rollHallowedDice(defender, rng, hallowedUpgraded)
   }
   state.pendingRoll = { rollerIdx: defenderIdx, dice: defenseDice }
+  // Stash the attack context the DRP4-6 tail needs but that isn't otherwise on the state
+  // (incomingDamage is a local), so the RL lookahead can score a defense-roll alteration by cloning,
+  // applying it, then running finalizeDefenseRoll. Cleared right after the window.
+  state.pendingDefenseRoll = { attackerIdx, incomingDamage }
   resolveResponseWindow(state, [attackerIdx, defenderIdx], { windowType: 'defenseRoll' }, rng, policies, enumerateWindowActions, applyWindowAction)
   const finalDefenseDice = state.pendingRoll.dice
   state.pendingRoll = null
+  state.pendingDefenseRoll = null
+  finalizeDefenseRoll(state, attackerIdx, incomingDamage, finalDefenseDice, rng, policies)
+}
+
+// DRP4-6: resolve a defense roll's effects on its FINAL (possibly altered) dice, then the DRP5
+// response window, then apply damage simultaneously (DRP6). Split out of resolveDefense so the RL
+// lookahead can score a DRP3 defense-roll alteration: clone, apply the candidate to the defense
+// dice, then run this on the clone to see the post-defense HP. defenderIdx = 1 - attackerIdx.
+export function finalizeDefenseRoll(
+  state: GameState, attackerIdx: 0 | 1, incomingDamage: number, finalDefenseDice: number[],
+  rng: RNG, policies: [Policy, Policy],
+): void {
+  const defenderIdx = (1 - attackerIdx) as 0 | 1
+  const attacker = state.players[attackerIdx]
+  const defender = state.players[defenderIdx]
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
@@ -695,6 +714,7 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     if (r.tbInflictedOnAttacker > 0) bw.inflictTimeBomb(attacker, defender.upgradesInPlay.length, r.tbInflictedOnAttacker)
     log(state, defenderIdx, 'defense', `Sabotage: prevented ${r.damagePrevented}, ${r.damageToAttacker} dmg back, ${r.tbInflictedOnAttacker} TB inflicted`)
   } else {
+    const hallowedUpgraded = defender.upgradesInPlay.includes('hallowed-reckoning-ii')
     const r = hh.hallowedEffects(defender, finalDefenseDice, hallowedUpgraded)
     damagePrevented = r.damagePrevented
     if (r.counterDamageToAttacker > 0) queueDamage(state, attackerIdx, r.counterDamageToAttacker)
@@ -715,11 +735,10 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   }
 
   // DRP5: response window (Advanced Rules) — both players have priority in turn, active player
-  // (the attacker) first, looping until pass-pass. Today the defender plays "after being Attacked"
-  // cards (Not This Time!, Recoil!, Elude!, Spirited Reprisal!) to whittle `remaining`; the
-  // attacker has no legal action yet (Instants arrive in a later stage) so auto-passes. The state
-  // the window mutates lives on state.pendingAttack, so applyWindowAction('defense') — shared with
-  // the RL lookahead — can reach `remaining` without a closure.
+  // (the attacker) first, looping until pass-pass. The defender plays "after being Attacked" cards
+  // (Not This Time!, Recoil!, Elude!, Spirited Reprisal!) to whittle `remaining`; either player may
+  // also play Instants. The state the window mutates lives on state.pendingAttack, so
+  // applyWindowAction('defense') — shared with the RL lookahead — can reach `remaining`.
   state.pendingAttack = { attackerIdx, defenderIdx, remaining }
   resolveResponseWindow(
     state, [attackerIdx, defenderIdx], { windowType: 'defense', eludeEligible },
