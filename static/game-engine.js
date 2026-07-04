@@ -54,6 +54,7 @@ var Game = (() => {
     hhHero: () => hhHero,
     humanApplyMain: () => humanApplyMain,
     humanAttack: () => humanAttack,
+    humanAttackModifierOptions: () => humanAttackModifierOptions,
     humanCanTerrorize: () => humanCanTerrorize,
     humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
@@ -2409,14 +2410,26 @@ var Game = (() => {
     const opp = g.state.players[g.aiIdx];
     return resolveMatchedAbilities(self.heroId, dice, oracleStateFor(self, opp));
   }
-  function humanAttack(g, dice, abilityName, gpBonus = false) {
+  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = []) {
     const humanPolicy = {
       ...greedyHighestDamagePolicy,
       chooseAbility: () => abilityName,
-      chooseGrimPursuitSpend: () => gpBonus
+      chooseGrimPursuitSpend: () => gpBonus,
+      chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter((id) => eligible.includes(id))
     };
     const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);
+  }
+  function humanAttackModifierOptions(g) {
+    const self = g.state.players[g.humanIdx];
+    const hero = heroTemplateFor(self.heroId);
+    return ["unescapable", "cranial-assist", "subversion", "thundering-hooves"].filter((id) => {
+      if (!self.hand.includes(id)) return false;
+      const card = cardById(hero, id);
+      if (!card || self.cp < (card.cpCost ?? 0)) return false;
+      if (id === "unescapable" && self.tokens.grimPursuit < 1) return false;
+      return true;
+    });
   }
   function humanPlayRollCard(g, choice, dice) {
     return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng);

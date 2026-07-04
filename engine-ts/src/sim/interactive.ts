@@ -27,6 +27,7 @@ import {
 } from './turn.js'
 import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
+import { heroTemplateFor, cardById } from './data/load.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
 import * as core from '../core/evaluator.js'
@@ -120,16 +121,33 @@ export function matchedAbilities(g: HumanGame, dice: number[]): AbilityCandidate
 // Resolve the human's chosen attack. The chosen ability name is injected into a one-shot policy so
 // the real resolveAbilityPhase (which also runs the AI's defense) picks it. Returns nothing; read
 // g.state for the result. If dice match no ability it's a Whiff (handled inside resolveAbilityPhase).
-export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false): void {
-  // gpBonus: the human pre-decided to spend 1 Grim Pursuit on mode (b) — "+1d6 dmg after
-  // attacking" — so the one-shot policy answers yes when applyAttackModifiers asks.
+export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = []): void {
+  // gpBonus: mode (b) Grim Pursuit pre-armed. attackMods: attack-modifier card ids the human
+  // pre-armed in the UI (Cranial Assist!, Unescapable!, Subversion!, Thundering Hooves!) —
+  // before this parameter the human hook always answered "none", making those 4 cards
+  // unplayable on your own attacks (user-caught on Cranial Assist!).
   const humanPolicy: Policy = {
     ...greedyHighestDamagePolicy,
     chooseAbility: () => abilityName,
     chooseGrimPursuitSpend: () => gpBonus,
+    chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter(id => eligible.includes(id)),
   }
   const policies: [Policy, Policy] = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy]
   resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies)
+}
+
+// The attack-modifier cards the human could arm for the attack being chosen (hand + CP +
+// per-card conditions, same filter the engine applies at resolution time).
+export function humanAttackModifierOptions(g: HumanGame): string[] {
+  const self = g.state.players[g.humanIdx]
+  const hero = heroTemplateFor(self.heroId)
+  return ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves'].filter(id => {
+    if (!self.hand.includes(id)) return false
+    const card = cardById(hero, id)
+    if (!card || self.cp < (card.cpCost ?? 0)) return false
+    if (id === 'unescapable' && self.tokens.grimPursuit < 1) return false
+    return true
+  })
 }
 
 // Roll-manipulation card play for the HUMAN's manual roll (Six-It!/Samesies!/Try Try Again!/
