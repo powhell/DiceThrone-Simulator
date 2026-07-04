@@ -604,6 +604,31 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
       }
       // So Wild! / Twice As Wild! — either player sets the roller's dice to chosen values.
       pushSetDieOptions(pr.dice, canAfford, options)
+      // Six-It! / Samesies! / Try Try Again! — Roll Phase Actions on YOUR OWN dice, so
+      // roller-only. They already fire via the roller's mid-roll hook during the OFFENSIVE
+      // roll; these windows extend them to the post-roll alter windows INCLUDING the defense
+      // roll (user-caught: had Samesies! + CP on a defense roll and was never offered it).
+      // One More Time! stays offensive-only (its printed text; Better D! is the defense twin).
+      if (playerIdx === pr.rollerIdx) {
+        if (canAfford('six-it')) {
+          pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'six-it', sets: [{ dieIndex: i, value: 6 }] }) })
+        }
+        if (canAfford('samesies')) {
+          const seen = new Set<string>()
+          for (let i = 0; i < pr.dice.length; i++) {
+            for (let j = 0; j < pr.dice.length; j++) {
+              if (i === j || pr.dice[i] === pr.dice[j]) continue
+              const key = `${i}:${pr.dice[j]}`
+              if (seen.has(key)) continue
+              seen.add(key)
+              options.push({ kind: 'setDie', cardId: 'samesies', sets: [{ dieIndex: i, value: pr.dice[j] }] })
+            }
+          }
+        }
+        if (canAfford('try-try-again')) {
+          pr.dice.forEach((_, i) => options.push({ kind: 'rerollDie', cardId: 'try-try-again', dieIndex: i }))
+        }
+      }
     }
   }
   return options
@@ -656,7 +681,8 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'setDie') {
     const before = pr.dice.join(',')
     for (const s of action.sets) pr.dice[s.dieIndex] = s.value
-    log(state, playerIdx, 'roll', `${action.cardId === 'so-wild' ? 'So Wild!' : 'Twice As Wild!'}: set dice ${before}->${pr.dice.join(',')}`)
+    const setDieName = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId)?.name ?? action.cardId
+    log(state, playerIdx, 'roll', `${setDieName}: set dice ${before}->${pr.dice.join(',')}`)
     return
   }
   if (action.kind === 'rerollAll') {
@@ -674,7 +700,8 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
     log(state, playerIdx, 'roll', `Tip It!: die ${action.dieIndex + 1} ${old}->${pr.dice[action.dieIndex]}`)
   } else if (action.kind === 'rerollDie') {
     pr.dice[action.dieIndex] = 1 + Math.floor(rng() * 6)
-    log(state, playerIdx, 'roll', `Helping Hand!: rerolled die ${action.dieIndex + 1} ${old}->${pr.dice[action.dieIndex]}`)
+    const rerollName = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId)?.name ?? action.cardId
+    log(state, playerIdx, 'roll', `${rerollName}: rerolled die ${action.dieIndex + 1} ${old}->${pr.dice[action.dieIndex]}`)
   }
 }
 
@@ -807,7 +834,10 @@ export function finalizeDefenseRoll(
 
   let remaining = Math.max(0, incomingDamage - damagePrevented)
   let eludeEligible = false
-  if (defender.heroId === 'bw' && defender.tokens.agility > 0 && remaining > 0) {
+  // ANY defender holding Agility may use it — tokens are cross-player-transferable by design
+  // (Transference!), and the old `heroId === 'bw'` gate made a stolen Agility token dead weight
+  // (user-caught: stole it, couldn't use it, lost).
+  if (defender.tokens.agility > 0 && remaining > 0) {
     // TODO(user): MVP auto-spends Agility whenever available; make this an explicit Policy
     // decision once card/Agility timing rules (guide: "peut être dépensée à tout moment") are settled.
     const r = bw.spendAgilityToHalveDamage(defender, remaining, rng)

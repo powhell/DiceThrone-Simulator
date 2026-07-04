@@ -448,8 +448,12 @@
       c.appendChild(s);
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
-      if (cands.length && you.tokens.grimPursuit>0 && !you.grimPursuitBonusUsedThisTurn) {
-        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
+      // Offered even at 0 Grim Pursuit: "Gain X Grim Pursuit. THEN deal dmg" abilities (Ride
+      // Down...) grant tokens BEFORE the attack modifiers fire, so pre-arming at 0 is legal —
+      // the engine re-checks you hold >=1 at spend time (user-caught on Ride Down).
+      if (cands.length && !you.grimPursuitBonusUsedThisTurn) {
+        const hint = you.tokens.grimPursuit>0 ? '' : ' — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)';
+        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
       // Attack-modifier cards, armed the same toggle way (Cranial Assist! & co were unplayable
