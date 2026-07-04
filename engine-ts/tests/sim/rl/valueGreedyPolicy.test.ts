@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createValueGreedyPolicy } from '../../../src/sim/rl/valueGreedyPolicy.js'
 import { createNetwork } from '../../../src/sim/rl/network.js'
-import { FEATURE_COUNT } from '../../../src/sim/rl/features.js'
+import { FEATURE_COUNT, UPGRADE_ONEHOT_SIZE, HAND_ONEHOT_SIZE } from '../../../src/sim/rl/features.js'
 import type { Network } from '../../../src/sim/rl/network.js'
 import { createInitialGameState } from '../../../src/sim/match.js'
 import { playTurn, enumerateWindowActions } from '../../../src/sim/turn.js'
@@ -9,8 +9,9 @@ import { mulberry32 } from '../../../src/sim/rng.js'
 import { MAX_HAND_SIZE } from '../../../src/sim/data/config.js'
 import { heroTemplateFor, cardById } from '../../../src/sim/data/load.js'
 
-// Opponent HP is the first field of the "opponent" block: [turn, ...self(15), ...opp(15)].
-const OPP_HP_FEATURE_INDEX = 1 + 15
+// Opponent HP is the first field of the "opponent" block. v2 layout:
+// [turn, self(15 base + upgrade one-hot), selfHand(one-hot), opp(15 base + upgrade one-hot)].
+const OPP_HP_FEATURE_INDEX = 1 + (15 + UPGRADE_ONEHOT_SIZE) + HAND_ONEHOT_SIZE
 
 function preferLowerOpponentHpNetwork(): Network {
   const row = new Array(FEATURE_COUNT).fill(0)

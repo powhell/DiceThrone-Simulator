@@ -22,7 +22,7 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
   state.log.push({ turn: state.turnNumber, playerIdx, phase, message })
 }
 
-function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
   if (player.heroId === 'hh') {
     const t = player.tokens
     return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay }
@@ -32,7 +32,7 @@ function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | B
   return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay }
 }
 
-function checkGameOver(state: GameState): boolean {
+export function checkGameOver(state: GameState): boolean {
   const [p0, p1] = state.players
   // Mutual kill = draw (Advanced Rules, DRP6 note: "If all remaining players are simultaneously
   // reduced to 0 health, the game is a draw"). winner stays null for a draw, so gameOver is what
@@ -80,6 +80,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   self.upgradesPlayedThisTurn = 0
   self.grimPursuitBonusUsedThisTurn = false
+  self.covertOpsUsedThisTurn = false
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -195,6 +196,17 @@ function isCardPlayableNow(card: CardTemplate, phase: Phase, heroId: HeroId): bo
   return false
 }
 
+// Moves an upgrade from hand into play, replacing any card already in its slot (level II over base).
+// Returns the replaced card's id (if any). Shared by the CP path and the free Covert Ops path.
+function placeUpgradeIntoPlay(self: PlayerState, card: CardTemplate, hero: HeroTemplate): string | undefined {
+  const existingId = self.upgradesInPlay.find(id => cardById(hero, id)?.upgradeSlot === card.upgradeSlot)
+  self.hand.splice(self.hand.indexOf(card.id), 1)
+  if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter(id => id !== existingId)
+  self.upgradesInPlay.push(card.id)
+  self.upgradesPlayedThisTurn += 1
+  return existingId
+}
+
 function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: CardTemplate, hero: HeroTemplate): void {
   const self = state.players[playerIdx]
   if (!card.upgradeSlot) {
@@ -212,11 +224,24 @@ function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card:
     return
   }
   self.cp -= cost
-  self.hand.splice(self.hand.indexOf(card.id), 1)
-  if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter(id => id !== existingId)
-  self.upgradesInPlay.push(card.id)
-  self.upgradesPlayedThisTurn += 1
+  placeUpgradeIntoPlay(self, card, hero)
   log(state, playerIdx, phase, `Played upgrade ${card.name} for ${cost} CP${existingCard ? ` (upgraded from ${existingCard.name})` : ''}`)
+}
+
+// Covert Ops (Black Widow, verified token def): "Spend once per turn during your Main Phase to put
+// an Ability Upgrade from your hand into play" — for FREE (no CP). This is BW's ramp engine toward
+// the 4-upgrade (Sabotage reroll) and 5-upgrade (+1 dmg to all Attacks) power thresholds. Guarded so
+// an illegal call (no token, already used this turn, card no longer in hand) is a harmless no-op.
+function applyCovertOpsUpgrade(state: GameState, playerIdx: 0 | 1, cardId: string): void {
+  const self = state.players[playerIdx]
+  const hero = heroTemplateFor(self.heroId)
+  const card = cardById(hero, cardId)
+  if (!card || card.kind !== 'upgrade' || !card.upgradeSlot) return
+  if (self.tokens.covertOps <= 0 || self.covertOpsUsedThisTurn || !self.hand.includes(cardId)) return
+  self.tokens.covertOps -= 1
+  self.covertOpsUsedThisTurn = true
+  const existingId = placeUpgradeIntoPlay(self, card, hero)
+  log(state, playerIdx, 'main1', `Covert Ops: put ${card.name} into play free${existingId ? ` (upgraded from ${cardById(hero, existingId)?.name})` : ''}`)
 }
 
 function grantTokenToSelf(self: PlayerState, kind: TokenKind, amount: number): void {
@@ -504,6 +529,14 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
         const cost = Math.max(0, card.cpCost - existingCost)
         if (cost <= player.cp) options.push({ kind: 'playCard', cardId })
       }
+      // Covert Ops (BW): spend 1 (once/turn) to put an upgrade into play for FREE — offered for
+      // every placeable upgrade in hand, independent of CP. This is BW's upgrade-ramp engine.
+      if (player.tokens.covertOps > 0 && !player.covertOpsUsedThisTurn) {
+        for (const cardId of player.hand) {
+          const card = cardById(hero, cardId)
+          if (card?.kind === 'upgrade' && card.upgradeSlot) options.push({ kind: 'covertOpsUpgrade', cardId })
+        }
+      }
       for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
       pushCrossPlayerOptions(state, canAfford, options)
     }
@@ -570,6 +603,7 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'removeToken') { applyRemoveToken(state, playerIdx, action); return }
   if (action.kind === 'removeAllTokens') { applyRemoveAllTokens(state, playerIdx, action); return }
   if (action.kind === 'moveHead') { applyMoveHead(state, playerIdx, action); return }
+  if (action.kind === 'covertOpsUpgrade') { applyCovertOpsUpgrade(state, playerIdx, action.cardId); return }
   if (action.kind === 'spendGrimPursuitBonus') return // handled in applyAttackModifiers, not a window
 
   // Dice-alteration actions mutate the in-progress roll on state.pendingRoll (ORP2 / DRP3).

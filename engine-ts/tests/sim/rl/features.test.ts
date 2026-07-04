@@ -31,17 +31,35 @@ describe('encodeState', () => {
     expect(f0[0]).toBeCloseTo(f1[0]) // turn-progress feature is the same regardless of perspective
   })
 
-  it('zeroes out hero-specific tokens that do not apply (hh tokens are 0 for a bw player)', () => {
+  // v2 layout: [turn, self(15 base + 8 upgrade one-hot), selfHand(31), opp(15 base + 8)].
+  const SELF_BASE = 1
+  const SELF_UPGRADES = SELF_BASE + 15
+  const SELF_HAND = SELF_UPGRADES + 8
+
+  it('v2: encodes WHICH upgrades are in play, not just how many', () => {
+    const state = createInitialGameState('bw', 'hh')
+    const f0 = encodeState(state, 0)
+    expect(f0.slice(SELF_UPGRADES, SELF_UPGRADES + 8).every(v => v === 0)).toBe(true)
+    // red-room-training-ii is bw's 3rd upgrade card in hero.json order (index 2)
+    state.players[0].upgradesInPlay = ['red-room-training-ii']
+    const f1 = encodeState(state, 0)
+    expect(f1[SELF_UPGRADES + 2]).toBe(1)
+    expect(f1.slice(SELF_UPGRADES, SELF_UPGRADES + 8).filter(v => v === 1)).toHaveLength(1)
+  })
+
+  it('v2: encodes the exact contents of SELF hand (one-hot over the full deck)', () => {
     const state = createInitialGameState('hh', 'bw')
-    const bwSelf = encodeState(state, 1) // player 1 is bw
-    // Feature layout: [turn, ...self(15), ...opp(15)]; self block starts at index 1.
-    // self block order: hp,cp,hand,deck,discard,upgrades,timeBombs,upgradesPlayedThisTurn,
-    // isHH,isBW,dreadful,grimPursuit,hasHead,agility,covertOps (indices 1..15)
-    const dreadfulIdx = 1 + 10
-    const grimPursuitIdx = 1 + 11
-    const hasHeadIdx = 1 + 12
-    expect(bwSelf[dreadfulIdx]).toBe(0)
-    expect(bwSelf[grimPursuitIdx]).toBe(0)
-    expect(bwSelf[hasHeadIdx]).toBe(0)
+    state.players[0].hand = ['cleave-ii'] // hh's first card in hero.json → deck index 0
+    const f = encodeState(state, 0)
+    expect(f[SELF_HAND + 0]).toBe(1)
+    expect(f.slice(SELF_HAND, SELF_HAND + 31).filter(v => v === 1)).toHaveLength(1)
+  })
+
+  it('v2: tokens are un-gated — a bw player holding dreadful (via transfer) is visible', () => {
+    const state = createInitialGameState('bw', 'hh')
+    state.players[0].tokens.dreadful = 3
+    const f = encodeState(state, 0)
+    const dreadfulIdx = SELF_BASE + 10
+    expect(f[dreadfulIdx]).toBeCloseTo(3 / 5)
   })
 })

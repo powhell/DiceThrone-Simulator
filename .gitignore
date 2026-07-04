@@ -5,3 +5,7 @@ __pycache__/
 node_modules/
 .claude/
 engine-ts/src/sim/rl/weights/
+rl-py/venv/
+rl-py/weights/
+rl-py/experience/
+rl-py/runs/

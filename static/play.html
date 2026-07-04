@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dice Throne — Jouer contre l'IA</title>
+<style>
+  :root{
+    --felt:#141019; --felt-2:#1b1524; --panel:#221a2e; --panel-2:#2a2038; --edge:#392c4e;
+    --ink:#ede7f2; --muted:#9c90ae; --muted-2:#6f6480;
+    --gold:#e0ac4e; --hh:#d8465a; --hh-dim:#7e2c3a; --bw:#9c6bff; --bw-dim:#4d357f;
+    --hp:#54b983; --danger:#e5484d;
+    --display:Georgia,'Iowan Old Style','Times New Roman',serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:ui-monospace,'Cascadia Code','SFMono-Regular',Consolas,monospace;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans); color:var(--ink); background:var(--felt);
+    background-image:radial-gradient(120% 80% at 50% 6%, #241a33 0%, #17111f 46%, #0e0a14 100%);
+    min-height:100vh; padding:16px; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:12px}
+  .mast{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    border-bottom:1px solid var(--edge); padding-bottom:9px}
+  .mast h1{font-family:var(--display); font-weight:700; font-size:22px; margin:0}
+  .mast h1 .vs{color:var(--gold); font-style:italic; font-size:17px; margin:0 6px}
+  .mast .tag{font-size:11px; text-transform:uppercase; letter-spacing:.13em; color:var(--muted)}
+
+  .fighter{display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
+    background:linear-gradient(180deg,var(--panel),var(--felt-2)); border:1px solid var(--edge);
+    border-radius:var(--r); padding:11px 15px}
+  .fighter.you{border-color:var(--hh-dim)} .fighter.ai{border-color:var(--bw-dim)}
+  .fighter.active{box-shadow:0 0 0 2px var(--gold)}
+  .crest{width:44px; height:44px; border-radius:11px; display:grid; place-items:center;
+    font-family:var(--display); font-weight:700; font-size:20px; color:#120c17}
+  .you .crest{background:linear-gradient(150deg,var(--hh),#8f2c39)}
+  .ai .crest{background:linear-gradient(150deg,var(--bw),#5b3fa0); color:#fff}
+  .who{display:flex; flex-direction:column; gap:5px; min-width:0}
+  .who .name{font-family:var(--display); font-size:16px; font-weight:700}
+  .who .name small{font-family:var(--sans); font-weight:400; color:var(--muted); font-size:11px;
+    text-transform:uppercase; letter-spacing:.1em; margin-left:8px}
+  .hpbar{position:relative; height:15px; border-radius:8px; background:#0e0a14; overflow:hidden; border:1px solid var(--edge)}
+  .hpbar > i{position:absolute; inset:0; border-radius:8px; background:linear-gradient(90deg,#3f9c6c,var(--hp)); transition:width .4s}
+  .hpbar > span{position:absolute; inset:0; display:grid; place-items:center; font-family:var(--mono);
+    font-size:10.5px; font-variant-numeric:tabular-nums; color:#eafff2; text-shadow:0 1px 2px #000}
+  .tokens{display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+  .tok{display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px;
+    background:var(--panel-2); border:1px solid var(--edge); font-size:12px; font-family:var(--mono);
+    font-variant-numeric:tabular-nums; white-space:nowrap}
+  .tok b{font-family:var(--sans); font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+  .tok .dot{width:12px; height:12px; border-radius:4px; display:inline-block}
+  .tok.cp{border-color:#7a5c1f} .tok.cp .dot{background:var(--gold)}
+  .tok.dread .dot{background:var(--hh)} .tok.grim .dot{background:#c98bff}
+  .tok.agi .dot{background:#5fd0d6} .tok.covert .dot{background:#7ba7ff}
+  .tok.head{border-color:#7a5c1f} .tok.bomb{border-color:var(--danger)} .tok.bomb .dot{background:var(--danger)}
+
+  .arena{display:grid; grid-template-columns:1fr 300px; gap:12px}
+  @media(max-width:860px){.arena{grid-template-columns:1fr}}
+  .col-main,.col-side{display:flex; flex-direction:column; gap:12px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--felt-2)); border:1px solid var(--edge); border-radius:var(--r); padding:13px 15px}
+  .panel h2{font-family:var(--sans); font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--muted); margin:0 0 11px}
+  .tray-wrap{display:flex; flex-direction:column; gap:13px; align-items:center;
+    background:radial-gradient(80% 120% at 50% 30%, #2a2039, #171020); border:1px solid var(--edge); border-radius:var(--r); padding:20px 14px 16px}
+  .tray{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; min-height:84px}
+  .die{width:80px; height:80px; border-radius:15px; cursor:pointer; position:relative;
+    background:linear-gradient(155deg,#6f4fa8,#573c8c); border:1px solid #46316f;
+    box-shadow:0 5px 0 #3a2758, 0 9px 16px #0009; transition:transform .12s, box-shadow .12s; display:grid; place-items:center}
+  .die:hover{transform:translateY(-2px)} .die:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
+  .die svg{width:52px; height:52px; color:#f3ede2}
+  .glyph{fill:currentColor}
+  /* verified from the HH die (leaflet): Axe = white, Horseshoe = cyan, Scare/pumpkin = orange */
+  .die[data-cls="A"] svg{color:#f3ede2} .die[data-cls="B"] svg{color:#3fb6e8} .die[data-cls="C"] svg{color:#ef6b2b}
+  /* mini symbol icons reused in ability lists */
+  .msym{width:17px; height:17px; vertical-align:-3px; margin:0 1px}
+  .patt{display:inline-flex; align-items:center; gap:1px; vertical-align:middle}
+  .straightbadge{font-family:var(--mono); font-size:10px; background:#2a2038; border:1px solid var(--edge);
+    border-radius:5px; padding:1px 5px; color:var(--gold); letter-spacing:.03em}
+  .die .pip{position:absolute; bottom:5px; right:8px; font-family:var(--mono); font-size:11px; color:#d7c8f0; font-variant-numeric:tabular-nums}
+  .die[data-cls="A"] .pip{color:#f3ede2} .die[data-cls="B"] .pip{color:#3fb6e8} .die[data-cls="C"] .pip{color:#ef6b2b}
+  .die.kept{box-shadow:0 0 0 3px var(--gold), 0 5px 0 #3a2758, 0 9px 16px #0009; transform:translateY(-3px)}
+  .die.kept::after{content:"GARDÉ"; position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    background:var(--gold); color:#160f06; font-size:9px; font-weight:700; letter-spacing:.06em; padding:2px 7px; border-radius:999px}
+  .die.rolling{animation:tumble .5s ease}
+  @keyframes tumble{0%{transform:rotate(0) scale(1)}30%{transform:rotate(-14deg) scale(1.06)}60%{transform:rotate(10deg) scale(.98)}100%{transform:rotate(0) scale(1)}}
+  .die.disabled{cursor:default; opacity:.9}
+  .controls{display:flex; gap:9px; align-items:center; flex-wrap:wrap; justify-content:center; min-height:40px}
+  .btn{font-family:var(--sans); font-size:13px; font-weight:600; border-radius:10px; cursor:pointer;
+    padding:9px 15px; border:1px solid var(--edge); background:var(--panel-2); color:var(--ink); transition:transform .1s, background .15s}
+  .btn:hover{transform:translateY(-1px)} .btn:focus-visible{outline:3px solid var(--gold); outline-offset:2px}
+  .btn.primary{background:linear-gradient(180deg,var(--hh),#a43442); border-color:var(--hh); color:#fff}
+  .btn.gold{background:linear-gradient(180deg,var(--gold),#b8862f); border-color:var(--gold); color:#160f06}
+  .btn:disabled{opacity:.4; cursor:not-allowed; transform:none}
+  .rolls{font-family:var(--mono); font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .match{text-align:center; min-height:20px}
+  .match .lead{font-size:11px; text-transform:uppercase; letter-spacing:.13em; color:var(--muted-2)}
+  .match .name{font-family:var(--display); font-size:18px; color:var(--gold)}
+  .abils{display:flex; flex-direction:column; gap:6px}
+  .abil{display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:8px 10px; border-radius:9px;
+    border:1px solid transparent; background:#1a1424; opacity:.55; transition:.15s; text-align:left; width:100%; cursor:default; color:var(--ink)}
+  .abil.on{opacity:1; border-color:var(--hh-dim); background:#241722; box-shadow:inset 3px 0 0 var(--hh)}
+  .abil.pick{cursor:pointer; opacity:1; border-color:var(--gold)} .abil.pick:hover{background:#2a1e18}
+  .abil .an{font-family:var(--display); font-size:14px} .abil .req{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .abil .dv{font-family:var(--mono); font-size:12px; color:var(--gold); font-variant-numeric:tabular-nums}
+  .log{display:flex; flex-direction:column; font-size:12.5px; max-height:280px; overflow-y:auto}
+  .log .l{padding:5px 2px; border-bottom:1px solid #241c31; color:var(--muted); line-height:1.35}
+  .log .l:last-child{border-bottom:0} .log .l b{color:var(--ink); font-weight:600}
+  .log .l .t{font-family:var(--mono); font-size:10px; color:var(--muted-2); margin-right:6px}
+  .hand{display:flex; gap:11px; overflow-x:auto; padding:4px 2px 9px; min-height:60px}
+  .card{flex:0 0 152px; height:206px; border-radius:12px; padding:10px 11px; cursor:pointer;
+    background:linear-gradient(180deg,#efe7d6,#d8cbb0); color:#241a12; border:1px solid #b7a684;
+    display:flex; flex-direction:column; gap:6px; box-shadow:0 7px 14px #0007; position:relative; transition:transform .12s}
+  .card:hover{transform:translateY(-6px)} .card:focus-visible{outline:3px solid var(--gold); outline-offset:2px}
+  .card.playable{box-shadow:0 0 0 2px var(--gold), 0 7px 14px #0007}
+  .card .ctop{display:flex; justify-content:space-between; align-items:flex-start; gap:6px}
+  .card .cname{font-family:var(--display); font-weight:700; font-size:13.5px; line-height:1.1}
+  .card .cost{flex:0 0 auto; width:23px; height:23px; border-radius:50%; background:var(--gold); color:#160f06;
+    display:grid; place-items:center; font-family:var(--mono); font-weight:700; font-size:12.5px}
+  .card .ctype{font-size:9px; text-transform:uppercase; letter-spacing:.09em; color:#7c5a2a; font-weight:700}
+  .card .ctext{font-size:10.5px; line-height:1.3; color:#3a2c1e; flex:1; overflow:hidden}
+  .empty{color:var(--muted-2); font-size:12.5px; font-style:italic; padding:6px 2px}
+  .note{font-size:11.5px; color:var(--muted-2); line-height:1.5; border-top:1px solid var(--edge); padding-top:9px}
+  .note b{color:var(--muted)}
+  .banner{text-align:center; font-family:var(--display); font-size:20px; padding:12px; border-radius:var(--r);
+    background:linear-gradient(180deg,#2a2039,#171020); border:1px solid var(--gold); color:var(--gold)}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="mast">
+      <h1 id="title">Dice Throne <span class="vs">·</span> Jouer contre l'IA</h1>
+      <span class="tag" id="turntag">chargement…</span>
+    </div>
+    <div class="fighter ai" id="ai-strip"></div>
+    <div class="arena">
+      <div class="col-main">
+        <div class="tray-wrap">
+          <div class="tray" id="tray"></div>
+          <div class="controls" id="controls"></div>
+          <div class="match" id="match"></div>
+        </div>
+        <div class="panel"><h2>Ta main</h2><div class="hand" id="hand"></div></div>
+      </div>
+      <div class="col-side">
+        <div class="panel"><h2 id="board-title">Habiletés</h2><div class="abils" id="abils"></div></div>
+        <div class="panel"><h2>Journal</h2><div class="log" id="log"></div></div>
+      </div>
+    </div>
+    <div class="fighter you" id="you-strip"></div>
+    <div class="note">
+      Ton tour est entièrement interactif : cartes, dés (3 jets, clique un dé pour le garder),
+      manipulation de dés, choix d'habileté, et tu joues tes cartes défensives quand l'IA t'attaque.
+      <span id="ai-note">Adversaire : réseau entraîné (self-play).</span>
+      À venir : altération des dés adverses, vraies images de cartes.
+    </div>
+  </div>
+  <script>
+    // The RL lookahead clones the game state via structuredClone; polyfill it for older browsers
+    // (and headless test runners). The game state is plain JSON data, so a JSON round-trip is a
+    // correct deep clone. Native structuredClone (modern browsers) wins when present.
+    if (typeof structuredClone === 'undefined') { window.structuredClone = function (o) { return JSON.parse(JSON.stringify(o)); }; }
+  </script>
+  <script src="game-engine.js"></script>
+  <script src="ai-weights.js"></script>
+  <script src="play.js"></script>
+</body>
+</html>

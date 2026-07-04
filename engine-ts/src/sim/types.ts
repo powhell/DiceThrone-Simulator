@@ -38,6 +38,9 @@ export interface PlayerState {
   // Reset to false each own-turn upkeep. Grim Pursuit's mode (b) — "after attacking, roll 1 die and
   // add that many dmg" — is usable once per turn (verified token def); this guards the once-per-turn.
   grimPursuitBonusUsedThisTurn: boolean
+  // Reset to false each own-turn upkeep. Black Widow's Covert Ops is "spent once per turn during
+  // your Main Phase" to put an Ability Upgrade into play for free — this guards the once-per-turn.
+  covertOpsUsedThisTurn: boolean
 }
 
 // Verified order (official rulebook, characters/rules/Turn Phases.png, 2026-07-01):
@@ -134,6 +137,9 @@ export type WindowAction =
   | { kind: 'moveHead'; cardId: string; toIdx: 0 | 1 }
   // Grim Pursuit spend mode (b): after attacking, roll 1 die and add it as bonus damage (not a card).
   | { kind: 'spendGrimPursuitBonus' }
+  // Black Widow's Covert Ops: spend 1 Covert Ops (once/turn, Main Phase) to put an Ability Upgrade
+  // from hand into play for FREE (no CP). The key ramp toward the 4-/5-upgrade power thresholds.
+  | { kind: 'covertOpsUpgrade'; cardId: string }
 
 // What kind of decision point this is, plus any context the enumeration/application needs.
 export interface WindowContext {
