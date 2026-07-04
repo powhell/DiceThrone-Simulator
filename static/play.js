@@ -39,7 +39,8 @@
   }
   const HERO = {
     // col = verified die-symbol colors (leaflet). HH die violet; BW die noir.
-    hh: { name:'Cavalier Sans Tête', crest:'HH', cls:v=>v<=3?'A':v<=5?'B':'C',
+    // Hero names stay in ENGLISH (the printed card/board names) — user preference.
+    hh: { name:'Headless Horseman', crest:'HH', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:GLYPH.axe,B:GLYPH.shoe,C:GLYPH.scare}, symName:{A:'Hache',B:'Fer',C:'Frayeur'},
       col:{A:'#f3ede2',B:'#3fb6e8',C:'#ef6b2b'} },
     bw: { name:'Black Widow', crest:'BW', cls:v=>v<=2?'A':v<=5?'B':'C',
@@ -66,6 +67,7 @@
   let attempts = 0, rollsLeft = 2;
   let pendingDefense = null;   // current DefensePrompt while defending against the AI (else null)
   let pendingAttackInfo = null;// AiAttackInfo for the incoming attack being defended
+  let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
 
   const $ = id => document.getElementById(id);
   const logBox = $('log');
@@ -110,10 +112,15 @@
   function renderDice(animate) {
     // Defense-roll window: show YOUR Hallowed/Sabotage dice (the ones your cards can alter) —
     // previously invisible, you were offered "set die 3 to 6" on dice you couldn't see.
+    // Dice are CLICKABLE to select which ones Better D! rerolls (a Roll Attempt = up to 5 dice).
     if (phase==='defense' && pendingDefense && pendingDefense.defenseDice) {
+      const hasBetterD = pendingDefense.options.some(o=>o.kind==='rerollAll');
       $('tray').innerHTML =
-        `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE — tu peux le modifier :</div>` +
-        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:false}, i, false)).join('');
+        `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE${hasBetterD?' — clique les dés à relancer avec Better D!':' — tu peux le modifier :'}</div>` +
+        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, hasBetterD)).join('');
+      if (hasBetterD) $('tray').querySelectorAll('.die').forEach(el=>{
+        el.onclick = () => { const i=+el.dataset.i; defSel.has(i)?defSel.delete(i):defSel.add(i); renderDice(false); renderControls(); };
+      });
       return;
     }
     if (aiDice) {
@@ -152,8 +159,9 @@
       $('board-title').textContent = 'Choisis ton habileté';
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
       if (!cands.length) { box.innerHTML = '<div class="empty">Tes dés ne forment aucune habileté.</div>'; return; }
-      box.innerHTML = cands.map(c=>{ const f=formatAbility(humanHero,c.name); return `<button class="abil pick" data-name="${c.name.replace(/"/g,'&quot;')}">
-        <div><div class="an">${f.name}</div><div class="req">${f.req} ${c.defendable?'· défendable':'· indéfendable'}</div></div>
+      box.innerHTML = cands.map(c=>{ const f=formatAbility(humanHero,c.name); const eff=abilityEffects(c.name);
+        return `<button class="abil pick" data-name="${c.name.replace(/"/g,'&quot;')}">
+        <div><div class="an">${f.name}</div><div class="req">${f.req} ${c.defendable?'· défendable':'· indéfendable'}${eff?` · ${eff}`:''}</div></div>
         <div class="dv">${c.baseDamage!=null?c.baseDamage+' dmg':'—'}</div></button>`; }).join('');
       box.querySelectorAll('.abil.pick').forEach(el=>el.onclick=()=>chooseAbility(el.dataset.name));
     } else {
@@ -173,17 +181,29 @@
     const playable = new Set(inMain
       ? usableOptions(G.humanMainOptions(g, phase)).filter(o=>o.kind==='playCard'||o.kind==='playInstant').map(o=>o.cardId) : []);
     if (!p.hand.length) { $('hand').innerHTML='<div class="empty">Main vide.</div>'; return; }
-    $('hand').innerHTML = p.hand.map(id=>{
+    $('hand').innerHTML = p.hand.map((id,idx)=>{
       const c = G.cardById(hero, id) || {name:id, cpCost:0, kind:'', text:''};
       const canPlay = playable.has(id);
-      return `<div class="card${canPlay?' playable':''}" data-id="${id}" ${canPlay?'role="button" tabindex="0"':''}>
+      // Official rule: any hand card can be sold for 1 CP during your Main Phases.
+      const sellBtn = inMain ? `<button class="btn sell" data-sell="${idx}" style="margin-top:6px;font-size:.72rem;padding:3px 8px">Vendre +1 CP</button>` : '';
+      return `<div class="card${canPlay?' playable':''}" data-id="${id}" data-idx="${idx}" ${canPlay?'role="button" tabindex="0"':''}>
         <div class="ctop"><div class="cname">${c.name||id}</div><div class="cost">${c.cpCost!=null?c.cpCost:'·'}</div></div>
-        <div class="ctype">${labelKind(c)}</div><div class="ctext">${c.text||''}</div></div>`;
+        <div class="ctype">${labelKind(c)}</div><div class="ctext">${c.text||''}</div>${sellBtn}</div>`;
     }).join('');
-    if (inMain) $('hand').querySelectorAll('.card.playable').forEach(el=>{
-      el.onclick = ()=>playMainCard(el.dataset.id);
-      el.onkeydown = e=>{ if(e.key==='Enter'||e.key===' ') { e.preventDefault(); playMainCard(el.dataset.id); } };
-    });
+    if (inMain) {
+      $('hand').querySelectorAll('.card.playable').forEach(el=>{
+        el.onclick = ()=>playMainCard(el.dataset.id);
+        el.onkeydown = e=>{ if(e.key==='Enter'||e.key===' ') { e.preventDefault(); playMainCard(el.dataset.id); } };
+      });
+      $('hand').querySelectorAll('button.sell').forEach(el=>{
+        el.onclick = (e)=>{
+          e.stopPropagation(); // don't also trigger the card's own "play" click
+          const cardId = p.hand[+el.dataset.sell];
+          const a = G.humanMainOptions(g, mainPhaseNow()).find(o=>o.kind==='sellCard'&&o.cardId===cardId);
+          if (a) { log(`Tu vends <b>${(G.cardById(hero,cardId)||{}).name||cardId}</b> (+1 CP).`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
+        };
+      });
+    }
   }
   function labelKind(c){ return (c.kind==='upgrade'?'Amélioration':c.actionTiming==='instant'?'Instant':c.actionTiming==='mainPhase'?'Main Phase':c.actionTiming==='rollPhase'?'Roll Phase':(c.kind||'')); }
 
@@ -207,8 +227,10 @@
         c.appendChild(btn('Donner la Tête à l\'IA (+1 Dreadful à chaque fin de ton tour)','', ()=>doBeginTurn('giveHead')));
       c.appendChild(btn('Ne rien faire','gold', ()=>doBeginTurn('none')));
     } else if (phase==='main1' || phase==='main2') {
-      const acts = usableOptions(G.humanMainOptions(g, phase)).filter(o=>o.kind!=='pass');
-      if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer.'; c.appendChild(s); }
+      // sellCard options (one per hand card) live on the cards themselves (renderHand), not here —
+      // they'd flood this button row.
+      const acts = usableOptions(G.humanMainOptions(g, phase)).filter(o=>o.kind!=='pass' && o.kind!=='sellCard');
+      if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
     } else if (phase==='roll') {
@@ -240,18 +262,45 @@
         : `${a&&a.abilityName?formatAbility(aiHero,a.abilityName).name+' — ':''}${rem}. Défense :`;
       c.appendChild(s);
       pendingDefense.options.filter(o=>o.kind!=='pass').slice(0,8)
-        .forEach(o=>c.appendChild(btn(defenseLabel(o),'primary', ()=>onDefenseChoice(o))));
+        .forEach(o=>{
+          if (o.kind==='rerollAll') {
+            // Better D!: reroll the SELECTED dice (click them above), or all if none selected.
+            const n = defSel.size;
+            const label = n>0 ? `Better D! : relance les ${n} dé(s) sélectionné(s)` : 'Better D! : relance TOUS tes dés';
+            c.appendChild(btn(label,'primary', ()=>onDefenseChoice(n>0 ? {...o, dieIndices:[...defSel]} : o)));
+          }
+          else c.appendChild(btn(defenseLabel(o),'primary', ()=>onDefenseChoice(o)));
+        });
       c.appendChild(btn(isRollWindow?'Garder ce jet →':'Encaisser (ne rien jouer) →','gold', ()=>onDefenseChoice({kind:'pass'})));
     }
   }
   function alterLabel(a){ return actionLabel(a); }
   function mainLabel(a){ return actionLabel(a); }
 
-  // Cards whose engine effect is not wired yet (effect: null in the data) — clicking them
-  // would "play" for CP with zero game impact, which reads as a broken game. Never offer them.
-  const UNWIRED_CARD_IDS = new Set(['vegas-baby']);
-  function usableOptions(opts){
-    return opts.filter(o=>!((o.kind==='playCard'||o.kind==='playInstant') && UNWIRED_CARD_IDS.has(o.cardId)));
+  // (Vegas Baby! turned out to be wired engine-side as a code special-case — the earlier
+  // "unwired" filter was wrong and blocked a working card. All 45 cards are playable.)
+  function usableOptions(opts){ return opts; }
+
+  // Effect summary for an ability, built from the verified hero data (resolvedAbilityByBoardName
+  // applies the II-upgrade numbers when in play) — "6 dmg" alone hid the token/draw riders
+  // (reported: Reap didn't mention +2 Dreadful/draw, The Reaper didn't mention draw 1).
+  function abilityEffects(boardName){
+    const self = g.state.players[g.humanIdx];
+    const a = G.resolvedAbilityByBoardName(G.heroTemplateFor(HUMAN), boardName, self.upgradesInPlay);
+    if (!a) return '';
+    const out = [];
+    const tokenFr = { dreadful:'Dreadful', grimPursuit:'Grim Pursuit', agility:'Agility', covertOps:'Covert Ops', timeBomb:'Time Bomb' };
+    for (const [k,n] of Object.entries(a.tokensGrantedToSelf||{})) if (n) out.push(`+${n} ${tokenFr[k]||k}`);
+    for (const [k,n] of Object.entries(a.tokensInflictedOnOpponent||{})) if (n) out.push(`inflige ${n} ${tokenFr[k]||k}`);
+    if (a.cpGain) out.push(`+${a.cpGain} CP`);
+    if (a.cardDraw) out.push(`pioche ${a.cardDraw}`);
+    if (a.cardDrawIfHasHead) out.push('pioche 1 (si Tête)');
+    if (a.tokensGrantedIfHasHead) for (const [k,n] of Object.entries(a.tokensGrantedIfHasHead)) if (n) out.push(`+${n} ${tokenFr[k]||k} (si Tête)`);
+    if (a.bonusRoll) out.push('jet bonus');
+    if (a.numberMatchBonus) out.push(`+${Object.values(a.numberMatchBonus.tokensGranted)[0]||1} Dreadful (carré de #)`);
+    if (a.searchUpgradesIntoPlay) out.push(`pose ${a.searchUpgradesIntoPlay} upgrade(s) du deck`);
+    if (a.advancesAllTimeBombsInPlay) out.push('avance les Time Bombs');
+    return out.join(' · ');
   }
 
   // ---------- actions ----------
@@ -313,6 +362,7 @@
   // Probe the next defense decision; if none, resolve the attack for real and finish the AI's turn.
   function aiDefenseStep(){
     const prompt = G.nextDefenseDecision(g);
+    defSel = new Set(); // fresh window, fresh Better D! selection
     if (!prompt) { pendingDefense = null; return resolveAiAttackAndFinish(); }
     pendingDefense = prompt;
     phase = 'defense';
@@ -328,7 +378,13 @@
     aiDefenseStep();
   }
   function resolveAiAttackAndFinish(){
+    const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
     G.resolveAiAttack(g);
+    // Big readable recap — "je ne vois même pas ce que ma défense fait" (reported).
+    const you2 = g.state.players[g.humanIdx].hp, ai2 = g.state.players[g.aiIdx].hp;
+    const taken = hpYou - you2, countered = hpAi - ai2;
+    log(`<b style="font-size:1.05em">🛡️ BILAN DÉFENSE — tu encaisses ${Math.max(0,taken)} dégât(s)`+
+        `${countered>0?`, ta défense renvoie ${countered} dégât(s) à l'IA`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
     renderAll();                                   // shows your Hallowed/Sabotage roll + damage in the log
     if (g.state.gameOver) return end();
     $('turntag').textContent = 'L\'IA (Black Widow) termine son tour…';
@@ -446,6 +502,12 @@
       return `Joue <b>${m[1]}</b> (${m[2]} CP)${parts&&!/no effect|TODO/.test(parts)?` — ${parts}`:''}`;
     }
     if ((m = msg.match(/^Sold (\d+) card/))) return `Vend ${m[1]} carte(s) (+${m[1]} CP)`;
+    if ((m = msg.match(/^Sold (.+?) \(\+1 CP\)/))) {
+      const c = G.cardById(G.heroTemplateFor(isHuman?HUMAN:AI_HERO), m[1]);
+      return `Vend <b>${(c&&c.name)||m[1]}</b> (+1 CP)`;
+    }
+    if ((m = msg.match(/^Better D!: rerolled (\d+) dice ([\d,]+)->([\d,]+)/)))
+      return `<b>Better D!</b> : relance ${m[1]} dé(s) — ${m[2]} → <b>${m[3]}</b>`;
     if ((m = msg.match(/^Terrorize/i))) return `💀 <b>Terrorize</b> — 3 dégâts sûrs, reprend la Tête, +1 Grim Pursuit, +1 CP`;
     if ((m = msg.match(/^Time Bomb (advanced|detonated|defused)/i)))
       return m[1]==='detonated' ? '💣 <b>Time Bomb explose</b> — 4 dégâts indéfendables'

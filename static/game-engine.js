@@ -1738,6 +1738,7 @@ var Game = (() => {
           }
         }
         for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: "playInstant", cardId: id });
+        for (const cardId of player.hand) options.push({ kind: "sellCard", cardId });
         pushCrossPlayerOptions(state, canAfford, options);
       }
     } else if (ctx.windowType === "defense") {
@@ -1783,6 +1784,16 @@ var Game = (() => {
       if (card) playActionCard(state, playerIdx, ctx.phase ?? "main2", card, rng);
       return;
     }
+    if (action.kind === "sellCard") {
+      const self = state.players[playerIdx];
+      const i = self.hand.indexOf(action.cardId);
+      if (i < 0) return;
+      self.hand.splice(i, 1);
+      self.discard.push(action.cardId);
+      grantCp(self, 1);
+      log(state, playerIdx, ctx.phase ?? "main1", `Sold ${action.cardId} (+1 CP)`);
+      return;
+    }
     if (action.kind === "transferToken") {
       applyTransferToken(state, playerIdx, action, rng);
       return;
@@ -1814,8 +1825,9 @@ var Game = (() => {
     }
     if (action.kind === "rerollAll") {
       const before = pr.dice.join(",");
-      for (let i = 0; i < pr.dice.length; i++) pr.dice[i] = 1 + Math.floor(rng() * 6);
-      log(state, playerIdx, "roll", `Better D!: rerolled all dice ${before}->${pr.dice.join(",")}`);
+      const targets = action.dieIndices ?? pr.dice.map((_, i) => i);
+      for (const i of targets) if (i >= 0 && i < pr.dice.length) pr.dice[i] = 1 + Math.floor(rng() * 6);
+      log(state, playerIdx, "roll", `Better D!: rerolled ${targets.length} dice ${before}->${pr.dice.join(",")}`);
       return;
     }
     const old = pr.dice[action.dieIndex];

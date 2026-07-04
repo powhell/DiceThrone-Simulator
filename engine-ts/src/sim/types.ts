@@ -123,7 +123,12 @@ export type WindowAction =
   | { kind: 'playCard'; cardId: string }
   | { kind: 'alterDie'; cardId: string; dieIndex: number; delta: 1 | -1 } // Tip It!: nudge a die ±1
   | { kind: 'rerollDie'; cardId: string; dieIndex: number } // Helping Hand!: force a die reroll
-  | { kind: 'rerollAll'; cardId: string } // Better D!: reroll all of the roller's dice (defense only)
+  // Better D!: an additional defense Roll Attempt — reroll the roller's dice; `dieIndices`
+  // restricts the reroll to chosen dice (a Roll Attempt is "up to five dice"), omitted = all.
+  | { kind: 'rerollAll'; cardId: string; dieIndices?: number[] }
+  // Sell a card from hand for 1 CP (official rules: allowed during your Main Phases, any card,
+  // whatever its cost — same exchange rate as the forced end-of-turn sale).
+  | { kind: 'sellCard'; cardId: string }
   // So Wild! (1 set) / Twice As Wild! (2 sets): set the value of any die on the in-progress roll —
   // either player may target the roller's dice (user-confirmed "any die" includes the opponent's).
   | { kind: 'setDie'; cardId: string; sets: { dieIndex: number; value: number }[] }
