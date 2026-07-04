@@ -521,8 +521,12 @@
     for (const [k,n] of Object.entries(a.tokensInflictedOnOpponent||{})) if (n) out.push(`inflige ${n} ${tokenFr[k]||k}`);
     if (a.cpGain) out.push(`+${a.cpGain} CP`);
     if (a.cardDraw) out.push(`pioche ${a.cardDraw}`);
-    if (a.cardDrawIfHasHead) out.push('pioche 1 (si Tête)');
-    if (a.tokensGrantedIfHasHead) for (const [k,n] of Object.entries(a.tokensGrantedIfHasHead)) if (n) out.push(`+${n} ${tokenFr[k]||k} (si Tête)`);
+    // Head-conditional riders show YOUR current status, not just the condition (user hit Reap
+    // expecting the draw without holding the Head).
+    const hasHead = self.tokens.head > 0;
+    if (a.cardDrawIfHasHead) out.push(hasHead ? 'pioche 1 (Tête ✔)' : '✘ pas de pioche (exige la Tête — tu ne l'as pas)');
+    if (a.tokensGrantedIfHasHead) for (const [k,n] of Object.entries(a.tokensGrantedIfHasHead)) if (n)
+      out.push(hasHead ? `+${n} ${tokenFr[k]||k} (Tête ✔)` : `✘ +${n} ${tokenFr[k]||k} seulement avec la Tête`);
     if (a.bonusRoll) out.push('jet bonus');
     if (a.numberMatchBonus) out.push(`+${Object.values(a.numberMatchBonus.tokensGranted)[0]||1} Dreadful (carré de #)`);
     if (a.searchUpgradesIntoPlay) out.push(`pose ${a.searchUpgradesIntoPlay} upgrade(s) du deck`);
