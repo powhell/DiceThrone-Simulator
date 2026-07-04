@@ -68,6 +68,7 @@
   let pendingDefense = null;   // current DefensePrompt while defending against the AI (else null)
   let pendingAttackInfo = null;// AiAttackInfo for the incoming attack being defended
   let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
+  let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
 
   const $ = id => document.getElementById(id);
   const logBox = $('log');
@@ -88,12 +89,16 @@
     const p = g.state.players[idx];
     const pct = Math.max(0, Math.min(100, p.hp * 2));
     const activeCls = (g.state.activePlayerIdx === idx && phase !== 'over') ? ' active' : '';
+    // Upgrades in play were invisible ("je ne vois pas si j'ai Cleave II") — show them as chips.
+    const hero = G.heroTemplateFor(p.heroId);
+    const ups = p.upgradesInPlay.map(id => (G.cardById(hero, id) || { name: id }).name)
+      .map(n => `<span class="tok" style="border-color:var(--gold)"><b>${n}</b></span>`).join('');
     $(elId).className = 'fighter ' + (isHuman ? 'you' : 'ai') + activeCls;
     $(elId).innerHTML =
       `<div class="crest">${def.crest}</div>
        <div class="who"><div class="name">${def.name}<small>${isHuman ? 'toi' : 'IA'}</small></div>
          <div class="hpbar"><i style="width:${pct}%"></i><span>${Math.max(0,p.hp)} / 50</span></div></div>
-       <div class="tokens">${tokenChips(p, isHuman)}</div>`;
+       <div class="tokens">${tokenChips(p, isHuman)}${ups}</div>`;
   }
   function renderFighters() {
     renderFighter('ai-strip', g.aiIdx, aiHero, false);
@@ -168,8 +173,25 @@
       $('board-title').textContent = 'Habiletés — ' + humanHero.name;
       const cands = ((phase==='roll' && attempts>0) || phase==='alter') ? G.matchedAbilities(g, dice.map(d=>d.v)) : [];
       const isOn = name => cands.some(c=>c.name===name || c.name.startsWith(name+' '));
-      const board = REFERENCE[HUMAN];
-      box.innerHTML = board.map(a=>`<div class="abil${isOn(a.name)?' on':''}">
+      const self = g.state.players[g.humanIdx];
+      const hero = G.heroTemplateFor(HUMAN);
+      // Data-driven board: base abilities (marked ' II' when their upgrade is in play) PLUS the
+      // sub-abilities (altAbility) unlocked by upgrades — previously invisible on the panel.
+      const rows = [];
+      for (const a of REFERENCE[HUMAN]) {
+        const upId = REF_UPGRADE[a.name];
+        const upgraded = upId && self.upgradesInPlay.includes(upId);
+        rows.push({ name: a.name + (upgraded ? ' II' : ''), matchName: a.name, req: a.req, dmg: a.dmg, on: isOn(a.name) });
+      }
+      for (const card of hero.cards) {
+        if (card.altAbility && self.upgradesInPlay.includes(card.id)) {
+          const alt = card.altAbility;
+          const short = alt.boardName.replace(/\s*\([^)]*\)$/, '');
+          const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
+          rows.push({ name: `↳ ${short}`, matchName: short, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—', on: isOn(short) });
+        }
+      }
+      box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
         <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('');
     }
   }
@@ -238,6 +260,12 @@
       else {
         c.appendChild(btn(rollsLeft>0?'Relancer les non-gardés':'Plus de relance','', doRoll, rollsLeft<=0));
         const s=document.createElement('span'); s.className='rolls'; s.textContent=`Relances : ${rollsLeft} · clic un dé pour le garder`; c.appendChild(s);
+        // Grim Pursuit mode (a): out of rerolls, spend 1 token for one more Roll Attempt.
+        const you = g.state.players[g.humanIdx];
+        if (rollsLeft<=0 && you.tokens.grimPursuit>0 && !you.grimPursuitRerollUsedThisTurn)
+          c.appendChild(btn(`Grim Pursuit : +1 relance (−1 jeton, reste ${you.tokens.grimPursuit})`,'primary', ()=>{
+            if (G.humanSpendGrimPursuitReroll(g)) { rollsLeft++; log('💜 <b>Grim Pursuit</b> : +1 tentative de jet.'); renderAll(); }
+          }));
         c.appendChild(btn('Continuer →','gold', toAlter));
       }
     } else if (phase==='alter') {
@@ -250,6 +278,12 @@
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = cands.length ? 'Choisis une habileté à droite →' : 'Aucune habileté — tu rates ton attaque.';
       c.appendChild(s);
+      // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
+      const you = g.state.players[g.humanIdx];
+      if (cands.length && you.tokens.grimPursuit>0 && !you.grimPursuitBonusUsedThisTurn) {
+        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : +1d6 dégâts sur cette attaque (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
+        c.appendChild(b);
+      }
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
     } else if (phase==='defense' && pendingDefense) {
       const a = pendingAttackInfo;
@@ -331,8 +365,9 @@
     renderDice(true); renderControls(); renderMatch(); renderAbilities();
   }
   function chooseAbility(name){
-    log(`Tu attaques avec <b>${name}</b>.`);
-    G.humanAttack(g, dice.map(d=>d.v), name);
+    log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+1d6 Grim Pursuit)':''}.`);
+    G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel);
+    gpBonusSel = false;
     renderAll();
     if (g.state.gameOver) return end();
     toMain2();
@@ -461,7 +496,7 @@
       }
     }
     if (g.state.gameOver) { renderAll(); return end(); }
-    phase='main1'; dice=[]; attempts=0; rollsLeft=2;
+    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false;
     $('turntag').textContent = `Ton tour · tour ${g.state.turnNumber}`;
     renderAll();
   }
@@ -547,6 +582,13 @@
 
   function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderAbilities(); renderHand(); drainEngineLog(); }
 
+  // Which upgrade card marks each base ability as "II" on the side panel.
+  const REF_UPGRADE = {
+    'Cleave':'cleave-ii','Ride Down':'ride-down-ii','Reap':'reap-ii','Sow Despair':'sow-despair-ii',
+    'Horrify':'horrify-ii','Spectral Assault':'spectral-assault-ii',
+    'Baton Strike':'baton-strike-ii',"Widow's Gauntlets":'widows-gauntlets-ii','Hacked':'hacked-ii',
+    'Grapple':'grapple-ii','Vengeance':'vengeance-ii','Infiltrate':'infiltrate-ii',
+  };
   // Static ability reference (dice pattern -> name/dmg) for the side panel when not choosing.
   const REFERENCE = {
     hh:[ {name:'Cleave',req:'AAA',dmg:'4–7'},{name:'Ride Down',req:'AAABB',dmg:'6 ·+Grim'},

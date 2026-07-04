@@ -56,6 +56,7 @@ var Game = (() => {
     humanAttack: () => humanAttack,
     humanCanTerrorize: () => humanCanTerrorize,
     humanMainOptions: () => humanMainOptions,
+    humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
     matchedAbilities: () => matchedAbilities,
     mulberry32: () => mulberry32,
     mulberry32Stateful: () => mulberry32Stateful,
@@ -448,7 +449,7 @@ var Game = (() => {
       const dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A;
       out.push(["Cleave 3A", dmg, dmg]);
     }
-    if (a >= 2 && b >= 2 && c === 0) {
+    if (a >= 3 && b >= 2) {
       const grimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
       const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG;
       out.push(["Ride Down", val, RIDE_DOWN_BASE]);
@@ -2381,10 +2382,22 @@ var Game = (() => {
     const opp = g.state.players[g.aiIdx];
     return resolveMatchedAbilities(self.heroId, dice, oracleStateFor(self, opp));
   }
-  function humanAttack(g, dice, abilityName) {
-    const humanPolicy = { ...greedyHighestDamagePolicy, chooseAbility: () => abilityName };
+  function humanAttack(g, dice, abilityName, gpBonus = false) {
+    const humanPolicy = {
+      ...greedyHighestDamagePolicy,
+      chooseAbility: () => abilityName,
+      chooseGrimPursuitSpend: () => gpBonus
+    };
     const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);
+  }
+  function humanSpendGrimPursuitReroll(g) {
+    const self = g.state.players[g.humanIdx];
+    if (self.heroId !== "hh" || self.tokens.grimPursuit < 1 || self.grimPursuitRerollUsedThisTurn) return false;
+    self.tokens.grimPursuit -= 1;
+    self.grimPursuitRerollUsedThisTurn = true;
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "roll", message: "Grim Pursuit (mode a): +1 additional Roll Attempt" });
+    return true;
   }
   function endHumanTurn(g) {
     if (!g.state.gameOver) {

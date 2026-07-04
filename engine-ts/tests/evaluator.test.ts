@@ -46,9 +46,12 @@ describe('terminal states', () => {
     expect(evalState([1, 6, 6, 6, 6], 0, 0, true)).toBeCloseTo(16.66, 2)
   })
 
-  it('Ride Down at dreadful=0 (6+2×1.66=9.32)', () => {
-    // [1,2,4,4,4] → a=2, b=3, c=0 → RideDown: 6 + 2*1.66 = 9.32
-    expect(evalState([1, 2, 4, 4, 4], 0, 0, false)).toBeCloseTo(9.32, 2)
+  it('Ride Down at dreadful=0 (6+2×1.66=9.32) — needs the verified AAABB, not AABBB', () => {
+    // [1,1,2,4,4] → a=3, b=2 (true AAABB, no straight) → RideDown: 6 + 2*1.66 = 9.32
+    expect(evalState([1, 1, 2, 4, 4], 0, 0, false)).toBeCloseTo(9.32, 2)
+    // AABBB does NOT activate Ride Down (old matcher wrongly accepted it — user-caught in
+    // the play UI): only the Whiff consolation remains.
+    expect(evalState([1, 2, 4, 4, 4], 0, 0, false)).toBeCloseTo(1.66, 2)
   })
 
   it('Sow Despair L at dreadful=0 (9+6=15)', () => {
@@ -86,7 +89,9 @@ describe('terminal states', () => {
 describe('non-terminal states (oracle)', () => {
   it('[4,4,4,6,6] rolls=2 dreadful=0 — best keep EV ≈ 9.335', () => {
     const result = calculateOptimalKeep([4, 4, 4, 6, 6], 2, 0, false)
-    expect(result.topOptions[0].ev).toBeCloseTo(9.335, 2)
+    // 9.335 → 9.028 after the Ride Down matcher fix (AABBB keeps no longer credit a
+    // phantom Ride Down in the reroll EV).
+    expect(result.topOptions[0].ev).toBeCloseTo(9.028, 2)
   })
 
   it('[1,1,3,6,6] rolls=1 dreadful=2 — SA already matched, best EV = 11.0', () => {

@@ -103,7 +103,11 @@ export function getCandidates(
     const dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A
     out.push(['Cleave 3A', dmg, dmg])
   }
-  if (a >= 2 && b >= 2 && c === 0) {
+  // Verified board pattern: AAABB = 3 Axes + 2 Horseshoes. The old `a >= 2 && b >= 2` was a
+  // pre-verification leftover that let AABBB (2 Axes + 3 Horseshoes) activate Ride Down —
+  // user-caught in the play UI 2026-07-04, and the same class of bug as the old inverted
+  // Widow's Gauntlets pattern. On 5 dice, a>=3 && b>=2 is exact (uses all five).
+  if (a >= 3 && b >= 2) {
     const grimPursuit = has('ride-down-ii') ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT
     const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG
     out.push(['Ride Down', val, RIDE_DOWN_BASE])

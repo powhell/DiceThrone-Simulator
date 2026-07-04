@@ -25,6 +25,20 @@ describe('sellCard (Main Phase sale, +1 CP)', () => {
   })
 })
 
+describe('Ride Down matcher: exactly AAABB (regression, user-caught)', () => {
+  it('AABBB (2 Axes + 3 Horseshoes) does NOT activate Ride Down', async () => {
+    const { resolveMatchedAbilities } = await import('../../src/sim/ability-resolver.js')
+    // faces 1-3 = A, 4-5 = B for hh: [1,2,4,4,5] = AABBB
+    const cands = resolveMatchedAbilities('hh', [1, 2, 4, 4, 5], { dreadful: 0, hasHead: true })
+    expect(cands.map(c => c.name)).not.toContain('Ride Down (AAABB)')
+  })
+  it('AAABB (3 Axes + 2 Horseshoes) does activate Ride Down', async () => {
+    const { resolveMatchedAbilities } = await import('../../src/sim/ability-resolver.js')
+    const cands = resolveMatchedAbilities('hh', [1, 2, 3, 4, 5], { dreadful: 0, hasHead: true })
+    expect(cands.some(c => c.name.startsWith('Ride Down'))).toBe(true)
+  })
+})
+
 describe('Better D! with die selection (rerollAll.dieIndices)', () => {
   it('rerolls only the chosen dice, leaving the others untouched', () => {
     const state = createInitialGameState('bw', 'hh')

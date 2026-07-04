@@ -115,10 +115,28 @@ export function matchedAbilities(g: HumanGame, dice: number[]): AbilityCandidate
 // Resolve the human's chosen attack. The chosen ability name is injected into a one-shot policy so
 // the real resolveAbilityPhase (which also runs the AI's defense) picks it. Returns nothing; read
 // g.state for the result. If dice match no ability it's a Whiff (handled inside resolveAbilityPhase).
-export function humanAttack(g: HumanGame, dice: number[], abilityName: string): void {
-  const humanPolicy: Policy = { ...greedyHighestDamagePolicy, chooseAbility: () => abilityName }
+export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false): void {
+  // gpBonus: the human pre-decided to spend 1 Grim Pursuit on mode (b) — "+1d6 dmg after
+  // attacking" — so the one-shot policy answers yes when applyAttackModifiers asks.
+  const humanPolicy: Policy = {
+    ...greedyHighestDamagePolicy,
+    chooseAbility: () => abilityName,
+    chooseGrimPursuitSpend: () => gpBonus,
+  }
   const policies: [Policy, Policy] = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy]
   resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies)
+}
+
+// Grim Pursuit mode (a) for the HUMAN's manual roll: spend 1 token for an additional Roll
+// Attempt (once per turn — same rule the AI plays by). The UI grants itself one more reroll
+// when this returns true.
+export function humanSpendGrimPursuitReroll(g: HumanGame): boolean {
+  const self = g.state.players[g.humanIdx]
+  if (self.heroId !== 'hh' || self.tokens.grimPursuit < 1 || self.grimPursuitRerollUsedThisTurn) return false
+  self.tokens.grimPursuit -= 1
+  self.grimPursuitRerollUsedThisTurn = true
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'roll', message: 'Grim Pursuit (mode a): +1 additional Roll Attempt' })
+  return true
 }
 
 // Discard to the hand limit (auto in v1) + end-of-turn bookkeeping, then hand priority to the AI.
