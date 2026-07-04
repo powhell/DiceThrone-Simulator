@@ -4,3 +4,4 @@ __pycache__/
 *.pdf
 node_modules/
 .claude/
+engine-ts/src/sim/rl/weights/
