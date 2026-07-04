@@ -68,6 +68,12 @@ export function playSelfPlayGame(network: Network, heroA: HeroId, heroB: HeroId,
 export interface EvalResult {
   winsLearned: number
   winsGreedy: number
+  // A mutual kill (both players lethal in the same simultaneous-damage step — Golden Rule #4) ends
+  // the game with gameOver=true but winner=null. That's a DRAW, not a timeout, and is common (BW's
+  // counter-damage, Time Bomb self-damage). Kept separate from `timeouts` so the eval line doesn't
+  // read a normal ~13-turn draw as a 200-turn stall.
+  draws: number
+  // A TRUE timeout: MAX_TURNS reached with the game still not over. Should be ~0 in a healthy engine.
   timeouts: number
 }
 
@@ -76,6 +82,7 @@ export function evaluateVsGreedy(network: Network, heroA: HeroId, heroB: HeroId,
   const policies: [Policy, Policy] = [learned, greedyHighestDamagePolicy]
   let winsLearned = 0
   let winsGreedy = 0
+  let draws = 0
   let timeouts = 0
 
   for (let i = 0; i < n; i++) {
@@ -87,12 +94,13 @@ export function evaluateVsGreedy(network: Network, heroA: HeroId, heroB: HeroId,
       playTurn(state, activeIdx, rng, policies)
       state.activePlayerIdx = (1 - activeIdx) as 0 | 1
     }
-    if (state.winner === null) timeouts += 1
-    else if (state.winner === 0) winsLearned += 1
-    else winsGreedy += 1
+    if (state.winner === 0) winsLearned += 1
+    else if (state.winner === 1) winsGreedy += 1
+    else if (state.gameOver) draws += 1 // mutual kill (winner null but game over)
+    else timeouts += 1 // reached MAX_TURNS without a decision
   }
 
-  return { winsLearned, winsGreedy, timeouts }
+  return { winsLearned, winsGreedy, draws, timeouts }
 }
 
 // Returns the aggregate learned-winrate (0-1, decisive games only, pooled across all 4
@@ -105,7 +113,7 @@ export function runEvalReport(network: Network, seed: number): number {
     const r = evaluateVsGreedy(network, heroA, heroB, EVAL_GAMES_PER_MATCHUP, seed)
     const decisive = r.winsLearned + r.winsGreedy
     const rate = decisive > 0 ? ((100 * r.winsLearned) / decisive).toFixed(1) : 'n/a'
-    console.log(`  eval ${heroA}(learned) vs ${heroB}(greedy): learned ${r.winsLearned}, greedy ${r.winsGreedy}, timeouts ${r.timeouts}, learned winrate=${rate}%`)
+    console.log(`  eval ${heroA}(learned) vs ${heroB}(greedy): learned ${r.winsLearned}, greedy ${r.winsGreedy}, draws ${r.draws}, timeouts ${r.timeouts}, learned winrate=${rate}%`)
     totalLearned += r.winsLearned
     totalDecisive += decisive
   }
