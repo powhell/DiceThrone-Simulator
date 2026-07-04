@@ -42,22 +42,52 @@ export function runOffensiveRoll(
   rng: RNG,
   beforeReroll?: (step: RollStep) => RollStepUpdate,
 ): number[] {
+  const dice = rollDice(5, rng).sort((a, b) => a - b)
+  return completeOffensiveRoll(heroId, initialOracleState, dice, 2, rng, beforeReroll)
+}
+
+/**
+ * Resumable tail of the Offensive Roll: finishes a roll already in progress (given the current
+ * dice and how many Roll Attempts remain) with the same DP-optimal keep/reroll loop. Extracted
+ * from runOffensiveRoll (which is now "roll 5 fresh dice, then complete from 2 rolls left") so
+ * the RL policy can SCORE mid-roll card plays by rolling a candidate's modified dice forward to
+ * their final state — the exact re-entry point the v1 "chooseRollManipulationCards is a no-op"
+ * gap was blocked on.
+ */
+export function completeOffensiveRoll(
+  heroId: HeroId,
+  initialOracleState: OracleState,
+  initialDice: number[],
+  initialRollsRemaining: number,
+  rng: RNG,
+  beforeReroll?: (step: RollStep) => RollStepUpdate,
+): number[] {
   const cfg = cfgFor(heroId)
   let oracleState = initialOracleState
-  let dice = rollDice(5, rng).sort((a, b) => a - b)
-  let rollsRemaining = 2
+  let dice = initialDice.slice().sort((a, b) => a - b)
+  let rollsRemaining = initialRollsRemaining
 
-  while (rollsRemaining > 0) {
+  // The hook also fires one FINAL time at rollsRemaining === 0 (the "final dice" window):
+  // Roll Phase Action cards are legal until the Roll Phase ends, and this is where the
+  // resurrect-the-roll effects live (One More Time!, Grim Pursuit mode (a) — an
+  // extraRollsGranted here re-enters the keep/reroll loop). Value-setters played here are
+  // deterministic: no reroll follows unless the player grants one.
+  while (true) {
     if (beforeReroll) {
       const update = beforeReroll({ rollsRemaining, dice })
       oracleState = update.oracleState
       dice = update.dice.slice().sort((a, b) => a - b)
       rollsRemaining += update.extraRollsGranted ?? 0
     }
+    if (rollsRemaining <= 0) break
 
     const result = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleState)
     const kept = result.topOptions[0].kept
-    if (kept.length === 5) break // DP says keep everything — nothing left to reroll
+    if (kept.length === 5) {
+      // DP says keep everything — skip the remaining attempts, but still open the final window.
+      rollsRemaining = 0
+      continue
+    }
 
     const nReroll = 5 - kept.length
     const rerolled = rollDice(nReroll, rng)

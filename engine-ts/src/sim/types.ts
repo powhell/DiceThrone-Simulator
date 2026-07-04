@@ -38,6 +38,9 @@ export interface PlayerState {
   // Reset to false each own-turn upkeep. Grim Pursuit's mode (b) — "after attacking, roll 1 die and
   // add that many dmg" — is usable once per turn (verified token def); this guards the once-per-turn.
   grimPursuitBonusUsedThisTurn: boolean
+  // Reset to false each own-turn upkeep. Grim Pursuit mode (a) — "an additional Roll Attempt
+  // during your Offensive Roll Phase" — is likewise once per turn (same verified token def).
+  grimPursuitRerollUsedThisTurn: boolean
 }
 
 // Verified order (official rulebook, characters/rules/Turn Phases.png, 2026-07-01):

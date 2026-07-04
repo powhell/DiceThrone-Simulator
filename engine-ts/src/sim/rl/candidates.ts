@@ -96,8 +96,14 @@ function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoic
   if (cardId === 'six-it') {
     for (let i = 0; i < n; i++) out.push({ cardId, dieIndices: [i], values: [6] })
   } else if (cardId === 'so-wild') {
+    // Pruned from the full 1-6 value search to {6} ∪ current die values (same rationale as
+    // twice-as-wild below): the useful sets are "max it out" or "match an existing die" —
+    // keeps the scorer's candidate count bounded now that these are actually scored.
+    const soWildValues = Array.from(new Set([6, ...dice]))
     for (let i = 0; i < n; i++) {
-      for (let v = 1; v <= 6; v++) out.push({ cardId, dieIndices: [i], values: [v] })
+      for (const v of soWildValues) {
+        if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
+      }
     }
   } else if (cardId === 'samesies') {
     for (let i = 0; i < n; i++) {
@@ -106,7 +112,13 @@ function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoic
       }
     }
   } else if (cardId === 'twice-as-wild') {
-    const candidateValues = Array.from(new Set([6, ...dice]))
+    // Tightened now that these get scored (was {6} ∪ all current values, ~360 pairs·value² in
+    // the worst case): {6, most frequent current value} — "complete the N-of-a-kind" and "max
+    // out" cover the real uses; caps the pair search at 10·2² = 40 candidates.
+    const counts = new Map<number, number>()
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+    const mode = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    const candidateValues = Array.from(new Set([6, mode]))
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         for (const v1 of candidateValues) {

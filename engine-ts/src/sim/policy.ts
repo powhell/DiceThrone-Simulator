@@ -56,9 +56,14 @@ export interface Policy {
   // Headless Horseman's Grim Pursuit spend, mode (b): "after attacking, roll 1 die and add that
   // many dmg as an Attack Modifier" (once per turn). Called from applyAttackModifiers when the
   // attacker holds >=1 Grim Pursuit and hasn't spent mode (b) this turn. Return true to spend 1
-  // Grim Pursuit for the bonus. Optional — omit to never spend (scripted greedy default). Mode (a)
-  // (an extra Offensive Roll Attempt) needs a resumable roll and is not wired (Stage 6).
+  // Grim Pursuit for the bonus. Optional — omit to never spend (scripted greedy default).
   chooseGrimPursuitSpend?(state: GameState, playerIdx: 0 | 1, dmg: number): boolean
+
+  // Grim Pursuit mode (a): "spend 1 to perform an additional Roll Attempt during your Offensive
+  // Roll Phase" (once per turn). Offered at the roll's FINAL window (rollsRemaining 0), when the
+  // dice are otherwise final — return true to spend 1 Grim Pursuit and re-enter the keep/reroll
+  // loop with one more attempt. Optional — omit to never spend (scripted greedy default).
+  chooseGrimPursuitReroll?(state: GameState, playerIdx: 0 | 1, dice: number[]): boolean
 
   // Roll Phase Action cards that directly manipulate the roller's OWN current dice mid-roll
   // (Six-It!, So Wild!, Twice As Wild!, Samesies!, Try Try Again!, One More Time!) — called

@@ -22,7 +22,9 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
   state.log.push({ turn: state.turnNumber, playerIdx, phase, message })
 }
 
-function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
+// Exported for the RL policy's roll-manipulation scorer (valueGreedyPolicy), which needs the
+// oracle state to roll a candidate's modified dice forward via completeOffensiveRoll.
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
   if (player.heroId === 'hh') {
     const t = player.tokens
     return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay }
@@ -80,6 +82,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   self.upgradesPlayedThisTurn = 0
   self.grimPursuitBonusUsedThisTurn = false
+  self.grimPursuitRerollUsedThisTurn = false
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -321,6 +324,20 @@ export function playOffensiveRollPhase(state: GameState, playerIdx: 0 | 1, rng: 
       }
     }
 
+    // Grim Pursuit mode (a) (verified token def): spend 1 to perform an additional Roll
+    // Attempt, once per turn. Offered at the FINAL window (rollsRemaining 0 — the roll is
+    // otherwise over), the only moment the choice is informative.
+    if (
+      step.rollsRemaining === 0 && self.heroId === 'hh' && self.tokens.grimPursuit >= 1
+      && !self.grimPursuitRerollUsedThisTurn
+      && policy.chooseGrimPursuitReroll?.(state, playerIdx, dice)
+    ) {
+      hh.spendGrimPursuit(self, 1)
+      self.grimPursuitRerollUsedThisTurn = true
+      extraRollsGranted += 1
+      log(state, playerIdx, 'roll', 'Grim Pursuit (mode a): +1 additional Roll Attempt')
+    }
+
     return { oracleState: oracleStateFor(self, opp), dice, extraRollsGranted }
   }
 
@@ -361,7 +378,9 @@ function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   return ROLL_MANIPULATION_CARD_IDS.filter(id => self.hand.includes(id) && self.cp >= (cardById(hero, id)?.cpCost ?? 0))
 }
 
-function applyRollManipulationCard(
+// Exported for the RL policy's roll-manipulation scorer (valueGreedyPolicy), which replays a
+// candidate card play on a cloned state before rolling the modified dice forward.
+export function applyRollManipulationCard(
   state: GameState, playerIdx: 0 | 1, choice: RollManipulationChoice, dice: number[], rng: RNG,
 ): { dice: number[]; extraRollsGranted: number } {
   const self = state.players[playerIdx]

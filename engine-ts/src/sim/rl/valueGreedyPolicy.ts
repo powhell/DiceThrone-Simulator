@@ -15,7 +15,9 @@ import type { Policy, RollManipulationChoice } from '../policy.js'
 import {
   playUpkeepPhase, playDiscardPhase, playCard, resolveDefense, applyAttackModifierCard,
   applyWindowAction, finalizePendingAttackDamage, resolveAbilityPhase, finalizeDefenseRoll,
+  applyRollManipulationCard, oracleStateFor,
 } from '../turn.js'
+import { completeOffensiveRoll } from '../oracle.js'
 import type { AttackModifierResult } from '../turn.js'
 import * as bw from '../hero/bw.rules.js'
 import * as hh from '../hero/hh.rules.js'
@@ -25,6 +27,7 @@ import { scoreCandidatesByReplay, cloneForLookahead } from './lookahead.js'
 import {
   enumerateAbilityCandidates, enumerateHorrifyBonus, enumerateHeadlessMayhem,
   enumerateSabotageReroll, enumerateDiscardSubsets, enumerateSmallCardSubsets,
+  enumerateRollManipulationChoices,
 } from './candidates.js'
 
 // Deterministic per-decision seed (not real randomness) — its only job is to be the SAME value
@@ -221,13 +224,71 @@ export function createValueGreedyPolicy(network: Network): Policy {
       )
     },
 
-    // v1 gap, not an oversight: both of these fire from WITHIN oracle.ts's runOffensiveRoll
-    // loop, whose in-progress dice/rollsRemaining aren't resumable via any exported re-entry
-    // point (playOffensiveRollPhase always starts a fresh 5-dice roll). Scoring these properly
-    // would need an oracle.ts change to expose a resumable roll step, out of scope for v1 — see
-    // the RL plan. Matches greedyHighestDamagePolicy's own default (never play these).
+    // v1 gap, not an oversight: fires from WITHIN oracle.ts's roll loop for BW's mid-roll
+    // upgrade plays (Red Room Training); scoring it would need the same resume machinery as
+    // below plus upgrade-play replay — still future work. Matches greedy's default.
     chooseMidRollCards: () => [],
-    chooseRollManipulationCards: (): RollManipulationChoice[] => [],
+
+    // Roll-manipulation cards (Six-It!/So Wild!/Twice As Wild!/Samesies!/Try Try Again!/One
+    // More Time!) — un-stubbed (was the "5 cards the RL literally cannot play" gap). Scored by
+    // full resolve-through in V units, no hand-tuned CP-to-damage constant anywhere: for each
+    // candidate (including "play nothing"), clone the state, apply the card (real
+    // applyRollManipulationCard: CP debit + discard), roll the modified dice FORWARD to their
+    // final state with the real DP loop (oracle.completeOffensiveRoll — the resumable re-entry
+    // point added for exactly this), resolve the attack on those final dice, then let V judge.
+    // Same per-decision seed across candidates (RNG-fairness rule), so "played Six-It!" vs
+    // "didn't" are compared under identical reroll luck.
+    //
+    // Only acts on the FINAL window (rollsRemaining === 0, fired since the oracle's final-window
+    // change): the dice are otherwise final, so value-setters are DETERMINISTIC (no reroll can
+    // undo them) and their rollout is a single resolve — maximum information at minimum cost.
+    // One More Time! grants +1 attempt and is rolled forward through the granted attempt.
+    chooseRollManipulationCards(state, playerIdx, dice, rollsRemaining, eligibleCardIds): RollManipulationChoice[] {
+      if (rollsRemaining !== 0 || eligibleCardIds.length === 0) return []
+      const options = enumerateRollManipulationChoices(dice, eligibleCardIds)
+      if (options.length === 1) return options[0]
+      const heroId = state.players[playerIdx].heroId
+      const oppIdx = (1 - playerIdx) as 0 | 1
+      return scoreCandidatesByReplay(
+        network, playerIdx, state, seedFor(state, 12), options,
+        (clone, choices: RollManipulationChoice[], rng) => {
+          let d = dice
+          let extra = 0
+          for (const choice of choices) {
+            const r = applyRollManipulationCard(clone, playerIdx, choice, d, rng)
+            d = r.dice
+            extra += r.extraRollsGranted
+          }
+          const finalDice = completeOffensiveRoll(
+            heroId, oracleStateFor(clone.players[playerIdx], clone.players[oppIdx]),
+            d, rollsRemaining + extra, rng,
+          )
+          resolveAbilityPhase(clone, playerIdx, finalDice, rng, [policy, policy])
+        },
+      )
+    },
+
+    // Grim Pursuit mode (a): same resolve-through scoring as the roll-manipulation cards above —
+    // "keep these final dice" vs "spend 1 Grim Pursuit for one more DP attempt", both rolled
+    // forward under the same seed and judged by V. No hand-tuned token-value constant anywhere.
+    chooseGrimPursuitReroll(state, playerIdx, dice) {
+      const heroId = state.players[playerIdx].heroId
+      const oppIdx = (1 - playerIdx) as 0 | 1
+      return scoreCandidatesByReplay(
+        network, playerIdx, state, seedFor(state, 13), [false, true],
+        (clone, spend: boolean, rng) => {
+          if (spend) {
+            hh.spendGrimPursuit(clone.players[playerIdx], 1)
+            clone.players[playerIdx].grimPursuitRerollUsedThisTurn = true
+          }
+          const finalDice = completeOffensiveRoll(
+            heroId, oracleStateFor(clone.players[playerIdx], clone.players[oppIdx]),
+            dice, spend ? 1 : 0, rng,
+          )
+          resolveAbilityPhase(clone, playerIdx, finalDice, rng, [policy, policy])
+        },
+      )
+    },
   }
 
   return policy
