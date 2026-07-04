@@ -84,6 +84,26 @@
   // seulement en fin de partie. Cache par (dés, relances) pour ne pas recalculer à chaque rendu.
   let coachLive = (localStorage.getItem('dt_coach_live') ?? '1') !== '0';
   const adviceCache = new Map();
+
+  // Quels plans (attaques) la garde du DP vise — approximation lisible : pour chaque pattern
+  // HH, combien de dés manquent par rapport aux dés gardés.
+  function planHint(kept){
+    const a=kept.filter(v=>v<=3).length, b=kept.filter(v=>v>=4&&v<=5).length, c=kept.filter(v=>v===6).length;
+    const uniq=[...new Set(kept)].sort((x,y)=>x-y);
+    const plans=[];
+    const need=(na,nb,nc)=>Math.max(0,na-a)+Math.max(0,nb-b)+Math.max(0,nc-c);
+    plans.push(['Ride Down', need(3,2,0)]); plans.push(['Reap', need(0,3,1)]);
+    plans.push(['Cleave', need(3,0,0)]); plans.push(['Spectral Assault', need(3,0,2)]);
+    plans.push(['Horrify', need(0,0,4)]);
+    // suites : plus longue fenetre consécutive couverte
+    let bestRun=0;
+    for(let s0=1;s0<=3;s0++){ let run=0; for(let v=s0;v<s0+4;v++) if(uniq.includes(v)) run++; bestRun=Math.max(bestRun,run); }
+    plans.push(['Suite (Sow Despair)', 4-bestRun]);
+    plans.sort((x,y)=>x[1]-y[1]);
+    const top=plans.filter(pl=>pl[1]<=5-kept.length).slice(0,2);
+    if(!top.length) return '';
+    return 'vise : '+top.map(pl=>pl[1]===0?`${pl[0]} (déjà fait !)`:`${pl[0]} (manque ${pl[1]})`).join(' ou ');
+  }
   function liveAdvice(){
     if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
     const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft;
@@ -253,9 +273,11 @@
     const adv = liveAdvice();
     if (adv) {
       const stop = adv.kept.length===5 || adv.ev <= adv.keepAllEv + 0.05;
+      const hint = stop ? '' : planHint(adv.kept);
       $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
         stop ? `S'ARRÊTER — tout garder vaut ${adv.keepAllEv.toFixed(1)}`
-             : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · tout garder = ${adv.keepAllEv.toFixed(1)}`}</div>`;
+             : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · tout garder = ${adv.keepAllEv.toFixed(1)}`}</div>${
+        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}`;
       return;
     }
     const show = (phase==='roll' && attempts>0) || phase==='alter';

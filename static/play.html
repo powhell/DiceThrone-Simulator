@@ -56,7 +56,7 @@
   .tok.head{border-color:#7a5c1f} .tok.bomb{border-color:var(--danger)} .tok.bomb .dot{background:var(--danger)}
 
   .arena{display:grid; grid-template-columns:260px 1fr 300px; gap:12px}
-  @media(max-width:1100px){.arena{grid-template-columns:1fr 300px} .col-left{display:none}}
+  @media(max-width:1100px){.arena{grid-template-columns:1fr 300px} .col-left{grid-column:1 / -1} .col-left .abils{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}}
   @media(max-width:860px){.arena{grid-template-columns:1fr}}
   .col-main,.col-side,.col-left{display:flex; flex-direction:column; gap:12px}
   .defbox{margin-top:8px; padding:8px 10px; border-radius:9px; background:#151024; border:1px solid var(--edge);
