@@ -69,6 +69,7 @@
   let pendingAttackInfo = null;// AiAttackInfo for the incoming attack being defended
   let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
+  let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
 
   const $ = id => document.getElementById(id);
   const logBox = $('log');
@@ -122,7 +123,8 @@
       const hasBetterD = pendingDefense.options.some(o=>o.kind==='rerollAll');
       $('tray').innerHTML =
         `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE${hasBetterD?' — clique les dés à relancer avec Better D!':' — tu peux le modifier :'}</div>` +
-        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, hasBetterD)).join('');
+        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, hasBetterD)).join('') +
+        `<div class="empty" style="width:100%">${defenseExplain(HUMAN, pendingDefense.defenseDice)}</div>`;
       if (hasBetterD) $('tray').querySelectorAll('.die').forEach(el=>{
         el.onclick = () => { const i=+el.dataset.i; defSel.has(i)?defSel.delete(i):defSel.add(i); renderDice(false); renderControls(); };
       });
@@ -141,6 +143,17 @@
     if (phase==='roll' && attempts>0) $('tray').querySelectorAll('.die').forEach(el=>{
       el.onclick = () => { const i=+el.dataset.i; dice[i].kept=!dice[i].kept; renderDice(false); renderControls(); };
     });
+  }
+
+  // What a defense roll DOES, die by die, from the verified defense rules — so the outcome is
+  // readable on the board instead of buried in the journal (reported).
+  function defenseExplain(heroId, vals){
+    if (heroId==='hh'){
+      const a=vals.filter(v=>v<=3).length, b=vals.filter(v=>v>=4&&v<=5).length, cc=vals.filter(v=>v===6).length;
+      return `→ ${a} contre-dégât(s) (Haches) · ${Math.floor(b/2)} dégât(s) prévenu(s) (par paire de Fers) · +${cc} Dreadful (Frayeurs)`;
+    }
+    const a=vals.filter(v=>v<=2).length, b=vals.filter(v=>v>=3&&v<=5).length, cc=vals.filter(v=>v===6).length;
+    return `→ ${b} contre-dégât(s) (Bâtons) · ${a} dégât(s) prévenu(s) (Espionnage)${cc>=2?' · inflige 1 Time Bomb (paire de Veuves)':''}`;
   }
 
   function bestAbility(vals) {
@@ -191,8 +204,27 @@
           rows.push({ name: `↳ ${short}`, matchName: short, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—', on: isOn(short) });
         }
       }
+      // The opponent's board was invisible (reported) — same data-driven list for the AI, below
+      // yours: its base abilities (II-marked) + unlocked sub-abilities + its defense.
+      const ai = g.state.players[g.aiIdx];
+      const aiHeroT = G.heroTemplateFor(AI_HERO);
+      const aiRows = [];
+      for (const a of REFERENCE[AI_HERO]) {
+        const upId = REF_UPGRADE[a.name];
+        aiRows.push({ name: a.name + (upId && ai.upgradesInPlay.includes(upId) ? ' II' : ''), req: a.req, dmg: a.dmg });
+      }
+      for (const card of aiHeroT.cards) {
+        if (card.altAbility && ai.upgradesInPlay.includes(card.id)) {
+          const alt = card.altAbility;
+          const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
+          aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—' });
+        }
+      }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
-        <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('');
+        <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('')
+        + `<div class="lead" style="margin-top:12px;opacity:.8">BOARD IA — ${aiHero.name}</div>`
+        + aiRows.map(a=>`<div class="abil" style="opacity:.85">
+        <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('');
     }
   }
 
@@ -236,10 +268,20 @@
     const c = $('controls'); c.innerHTML='';
     // While it's the AI's turn (except the defense window, which IS yours to act in), never show
     // your action buttons — otherwise a stale Main-Phase panel could be clicked during the AI's turn.
-    if (phase!=='defense' && phase!=='over' && g.state.activePlayerIdx !== g.humanIdx) {
+    if (phase!=='defense' && phase!=='defarm' && phase!=='over' && g.state.activePlayerIdx !== g.humanIdx) {
       const s=document.createElement('span'); s.className='rolls'; s.textContent='L\'IA joue son tour…'; c.appendChild(s); return;
     }
-    if (phase==='upkeep') {
+    if (phase==='tbroll') {
+      const n = g.state.players[g.humanIdx].timeBombs.length;
+      const s=document.createElement('span'); s.className='rolls'; s.textContent=`Tu portes ${n} Time Bomb — lance pour voir si elle avance (1-5) ou se désamorce (6) :`; c.appendChild(s);
+      c.appendChild(btn('💣 Lancer le dé de Time Bomb','primary', ()=>{ tbArmed=true; startHumanTurn(); }));
+    } else if (phase==='defarm') {
+      const a = pendingAttackInfo;
+      const s=document.createElement('span'); s.className='rolls';
+      s.textContent = a && a.abilityName ? `${formatAbility(aiHero,a.abilityName).name} arrive (${a.defendable?`~${a.incomingDamage} dégâts, défendable`:'indéfendable !'}) :` : 'Attaque entrante :';
+      c.appendChild(s);
+      c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
+    } else if (phase==='upkeep') {
       const canTz = G.humanCanTerrorize(g);
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = 'Upkeep — Headless Mayhem, choisis :'; c.appendChild(s);
@@ -266,6 +308,10 @@
           c.appendChild(btn(`Grim Pursuit : +1 relance (−1 jeton, reste ${you.tokens.grimPursuit})`,'primary', ()=>{
             if (G.humanSpendGrimPursuitReroll(g)) { rollsLeft++; log('💜 <b>Grim Pursuit</b> : +1 tentative de jet.'); renderAll(); }
           }));
+        // Roller-only Roll Phase cards (Six-It!/Samesies!/Try Try Again!/One More Time!) — the
+        // AI reaches these via its oracle hook; the human plays them here, between attempts.
+        // Hard cap 6 buttons to avoid flooding the row (the useful targets come first).
+        humanRollCardChoices().slice(0,6).forEach(ch=>c.appendChild(btn(rollCardLabel(ch),'', ()=>playRollCard(ch))));
         c.appendChild(btn('Continuer →','gold', toAlter));
       }
     } else if (phase==='alter') {
@@ -337,6 +383,43 @@
     return out.join(' · ');
   }
 
+  // ---------- roller-only Roll Phase cards (human path) ----------
+  const ROLLER_CARDS = ['six-it','samesies','try-try-again','one-more-time'];
+  function humanRollCardChoices(){
+    const you = g.state.players[g.humanIdx]; const hero = G.heroTemplateFor(HUMAN);
+    const vals = dice.map(d=>d.v); const out = [];
+    for (const id of ROLLER_CARDS){
+      const card = G.cardById(hero, id);
+      if (!card || !you.hand.includes(id) || you.cp < (card.cpCost||0)) continue;
+      if (id==='one-more-time') out.push({cardId:id});
+      else if (id==='six-it') vals.forEach((v,i)=>{ if(v!==6) out.push({cardId:id, dieIndices:[i], values:[6]}); });
+      else if (id==='try-try-again'){
+        // Only offer rerolling UNKEPT dice (rerolling a die you chose to keep makes no sense),
+        // lowest values first — keeps the button row short.
+        const idx = vals.map((v,i)=>({v,i})).filter(x=>!dice[x.i].kept).sort((x,y)=>x.v-y.v).slice(0,2);
+        for (const x of idx) out.push({cardId:id, dieIndices:[x.i]});
+      }
+      else if (id==='samesies'){ const mx=Math.max(...vals); vals.forEach((v,i)=>{ if(v!==mx) out.push({cardId:id, dieIndices:[i], values:[mx]}); }); }
+    }
+    return out;
+  }
+  function rollCardLabel(ch){
+    const hero=G.heroTemplateFor(HUMAN); const c=G.cardById(hero,ch.cardId)||{};
+    const cost=c.cpCost?` · ${c.cpCost} CP`:'';
+    const i=(ch.dieIndices||[])[0];
+    if (ch.cardId==='one-more-time') return `One More Time! : +1 tentative de jet${cost}`;
+    if (ch.cardId==='try-try-again') return `Try Try Again! : relance le dé ${i+1} (${dice[i].v})${cost}`;
+    return `${c.name} : dé ${i+1} (${dice[i].v}→${ch.values[0]})${cost}`;
+  }
+  function playRollCard(ch){
+    const lbl = rollCardLabel(ch); // label reads the CURRENT dice — compute before they change
+    const r = G.humanPlayRollCard(g, ch, dice.map(d=>d.v));
+    dice = r.dice.map((v,i)=>({v, kept: dice[i] ? dice[i].kept : false}));
+    if (r.extraRollsGranted) rollsLeft += r.extraRollsGranted;
+    log(`Tu joues <b>${lbl}</b>.`);
+    renderAll();
+  }
+
   // ---------- actions ----------
   function mainPhaseNow(){ return phase==='main2' ? 'main2' : 'main1'; }
   function playMainCard(id){ const a=G.humanMainOptions(g,mainPhaseNow()).find(o=>(o.kind==='playCard'||o.kind==='playInstant')&&o.cardId===id); if(a) applyMain(a); }
@@ -366,8 +449,12 @@
   }
   function chooseAbility(name){
     log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+1d6 Grim Pursuit)':''}.`);
+    const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
     G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel);
     gpBonusSel = false;
+    const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
+    log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — tu infliges ${Math.max(0,dealt)} dégât(s)`+
+        `${taken>0?`, sa défense t'en renvoie ${taken}`:''} (IA ${hpAi}→${g.state.players[g.aiIdx].hp} PV)</b>`);
     renderAll();
     if (g.state.gameOver) return end();
     toMain2();
@@ -388,11 +475,13 @@
     // Show the AI's actual dice (g.def.finalDice — set by runAiTurnUpToAttack) so its attack
     // is something you SEE, not a one-line log flash.
     aiDice = (g.def && g.def.finalDice) ? g.def.finalDice.slice() : null;
-    renderAll();
     if (r.attack.abilityName === null) log(`L'IA rate son attaque (aucune habileté formée).`);
     else log(`⚔️ L'IA t'attaque avec <b>${formatAbility(aiHero, r.attack.abilityName).name}</b>` +
       (r.attack.defendable ? ` (~${r.attack.incomingDamage} dégâts).` : ` — <b>indéfendable</b>.`));
-    setTimeout(aiDefenseStep, 600); // let the dice be seen before the defense prompt appears
+    // Click-to-roll pacing: YOU press the button that rolls your defense (reported: invisible).
+    phase='defarm';
+    $('turntag').textContent = 'Défense — l\'IA t\'attaque';
+    renderAll();
   }
   // Probe the next defense decision; if none, resolve the attack for real and finish the AI's turn.
   function aiDefenseStep(){
@@ -471,11 +560,14 @@
   }
   function defenseLabel(a){ return actionLabel(a); }
   function startHumanTurn(){
-    // HH Upkeep = Headless Mayhem: Terrorize (needs >=4 Dreadful) OR move the Haunted Head OR
-    // nothing. The old gate only opened the prompt when Terrorize was available — which made
-    // "give the Head" impossible most turns (reported bug). Offer the prompt whenever ANY real
-    // choice exists: Terrorize eligible, or you hold your own Head (so you can send it).
     const you = g.state.players[g.humanIdx];
+    // Click-to-roll pacing: if you carry Time Bombs, YOU press the button that rolls them
+    // (they resolve inside beginHumanTurn) instead of it happening invisibly.
+    if (you.timeBombs.length > 0 && !tbArmed) {
+      phase='tbroll'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll(); return;
+    }
+    // HH Upkeep = Headless Mayhem: Terrorize (needs >=4 Dreadful) OR move the Haunted Head OR
+    // nothing. Offer the prompt whenever ANY real choice exists.
     const canGiveHead = you.heroId==='hh' && you.tokens.head > 0;
     if (G.humanCanTerrorize(g) || canGiveHead) {
       phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
@@ -496,7 +588,7 @@
       }
     }
     if (g.state.gameOver) { renderAll(); return end(); }
-    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false;
+    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; tbArmed=false;
     $('turntag').textContent = `Ton tour · tour ${g.state.turnNumber}`;
     renderAll();
   }

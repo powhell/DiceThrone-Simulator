@@ -56,6 +56,7 @@ var Game = (() => {
     humanAttack: () => humanAttack,
     humanCanTerrorize: () => humanCanTerrorize,
     humanMainOptions: () => humanMainOptions,
+    humanPlayRollCard: () => humanPlayRollCard,
     humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
     matchedAbilities: () => matchedAbilities,
     mulberry32: () => mulberry32,
@@ -2390,6 +2391,9 @@ var Game = (() => {
     };
     const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);
+  }
+  function humanPlayRollCard(g, choice, dice) {
+    return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng);
   }
   function humanSpendGrimPursuitReroll(g) {
     const self = g.state.players[g.humanIdx];

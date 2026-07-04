@@ -23,7 +23,9 @@ import {
   playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn,
   playMainPhase, playOffensiveRollPhase, resolveOffensiveAlterWindow, checkGameOver,
   enumerateWindowActions, applyWindowAction, resolveAbilityPhase, playTurn, oracleStateFor,
+  applyRollManipulationCard,
 } from './turn.js'
+import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
 
 export interface HumanGame {
@@ -125,6 +127,16 @@ export function humanAttack(g: HumanGame, dice: number[], abilityName: string, g
   }
   const policies: [Policy, Policy] = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy]
   resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies)
+}
+
+// Roll-manipulation card play for the HUMAN's manual roll (Six-It!/Samesies!/Try Try Again!/
+// One More Time! — the roller-hook cards that only the AI's oracle path could reach before).
+// The UI builds the choice (cardId + dieIndices + values); applyRollManipulationCard validates
+// hand/CP and pays/discards. Returns the updated dice and any extra Roll Attempts granted.
+export function humanPlayRollCard(
+  g: HumanGame, choice: RollManipulationChoice, dice: number[],
+): { dice: number[]; extraRollsGranted: number } {
+  return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng)
 }
 
 // Grim Pursuit mode (a) for the HUMAN's manual roll: spend 1 token for an additional Roll
