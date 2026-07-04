@@ -254,6 +254,14 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     log(state, playerIdx, phase, `Vegas Baby!: rolled ${v}, +${gain} CP`)
     return
   }
+  if (card.id === 'undercover-mission') {
+    // "A chosen opponent gains Time Bomb. If you have >=4 Ability Upgrades in play, gain Agility."
+    const n = bw.inflictTimeBomb(opp, self.upgradesInPlay.length, 1)
+    const gotAgility = self.upgradesInPlay.length >= 4
+    if (gotAgility) bw.grantAgility(self, 1)
+    log(state, playerIdx, phase, `Undercover Mission!: ${n} Time Bomb inflicted${gotAgility ? ', +1 Agility (>=4 upgrades)' : ''}`)
+    return
+  }
 
   const eff = card.effect
   if (!eff) {
@@ -388,9 +396,12 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
 const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble']
-// Main Phase self-buff Actions (not Instant-timed, so only in your own Main Phase): Dancing Pumpkin!
-// (HH conditional Dreadful/Grim Pursuit) and Vegas Baby! (roll a die for CP).
-const MAIN_PHASE_SELFBUFF_IDS = ['dancing-pumpkin', 'vegas-baby']
+// Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
+// cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
+// Baby!, Undercover Mission! (BW). All resolve via playActionCard. Cunning! (BW deck-peek) is
+// intentionally omitted — its effect is not wired (effect:null), so offering it would just burn a
+// card for nothing; it stays unplayable until the deck-look mechanic is implemented (TODO(user)).
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -481,7 +492,7 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
         const cost = Math.max(0, card.cpCost - existingCost)
         if (cost <= player.cp) options.push({ kind: 'playCard', cardId })
       }
-      for (const id of MAIN_PHASE_SELFBUFF_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
+      for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
       pushCrossPlayerOptions(state, canAfford, options)
     }
   } else if (ctx.windowType === 'defense') {
