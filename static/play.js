@@ -70,6 +70,7 @@
   let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
+  let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
 
   const $ = id => document.getElementById(id);
   const logBox = $('log');
@@ -134,6 +135,18 @@
       $('tray').innerHTML =
         `<div class="empty" style="width:100%">L'IA a lancé :</div>` +
         aiDice.map((v,i)=>dieHTML(aiHero, {v,kept:false}, i, false)).join('');
+      return;
+    }
+    // Alter phase: dice are clickable to SELECT which to modify (So Wild!/Twice As Wild!/Tip It!)
+    if (phase==='alter') {
+      $('tray').innerHTML =
+        `<div class="empty" style="width:100%">Clique 1 ou 2 dés à modifier, puis choisis la valeur :</div>` +
+        dice.map((d,i)=>dieHTML(humanHero, {v:d.v, kept:altSel.has(i)}, i, true)).join('');
+      $('tray').querySelectorAll('.die').forEach(el=>{
+        el.onclick = () => { const i=+el.dataset.i;
+          if (altSel.has(i)) altSel.delete(i); else { if (altSel.size>=2) altSel.delete([...altSel][0]); altSel.add(i); }
+          renderDice(false); renderControls(); };
+      });
       return;
     }
     $('tray').innerHTML = dice.length
@@ -217,7 +230,8 @@
       for (const a of REFERENCE[HUMAN]) {
         const upId = REF_UPGRADE[a.name];
         const upgraded = upId && self.upgradesInPlay.includes(upId);
-        rows.push({ name: a.name + (upgraded ? ' II' : ''), matchName: a.name, req: a.req, dmg: a.dmg, on: isOn(a.name) });
+        rows.push({ name: a.name + (upgraded ? ' II' : ''), matchName: a.name, req: a.req,
+          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg, on: isOn(a.name) });
       }
       for (const card of hero.cards) {
         if (card.altAbility && self.upgradesInPlay.includes(card.id)) {
@@ -234,7 +248,9 @@
       const aiRows = [];
       for (const a of REFERENCE[AI_HERO]) {
         const upId = REF_UPGRADE[a.name];
-        aiRows.push({ name: a.name + (upId && ai.upgradesInPlay.includes(upId) ? ' II' : ''), req: a.req, dmg: a.dmg });
+        const upgraded = upId && ai.upgradesInPlay.includes(upId);
+        aiRows.push({ name: a.name + (upgraded ? ' II' : ''), req: a.req,
+          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg });
       }
       for (const card of aiHeroT.cards) {
         if (card.altAbility && ai.upgradesInPlay.includes(card.id)) {
@@ -338,9 +354,32 @@
         c.appendChild(btn('Continuer →','gold', toAlter));
       }
     } else if (phase==='alter') {
-      const acts = usableOptions(G.offensiveAlterOptions(g)).filter(o=>o.kind!=='pass');
-      if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Aucune carte de manipulation en main.'; c.appendChild(s); }
-      else acts.slice(0,8).forEach(a=>c.appendChild(btn(alterLabel(a),'', ()=>applyAlter(a))));
+      // Die-selection UX (the old flat list buried the useful combos under 250 buttons —
+      // user-reported): click 1-2 dice above, value buttons appear here.
+      const you = g.state.players[g.humanIdx];
+      const hero = G.heroTemplateFor(HUMAN);
+      const cardOK = id => { const cd=G.cardById(hero,id); return cd && you.hand.includes(id) && you.cp >= (cd.cpCost||0); };
+      const sel = [...altSel].sort((a,b)=>a-b);
+      const anyCard = ['so-wild','twice-as-wild','tip-it'].some(cardOK);
+      const s=document.createElement('span'); s.className='rolls';
+      if (!anyCard) s.textContent='Aucune carte de manipulation en main.';
+      else if (sel.length===0) s.textContent='Clique 1 dé (So Wild!/Tip It!) ou 2 dés (Twice As Wild!) ci-dessus.';
+      else if (sel.length===1) s.textContent=`Dé ${sel[0]+1} (${dice[sel[0]].v}) sélectionné — nouvelle valeur :`;
+      else s.textContent=`Dés ${sel[0]+1} et ${sel[1]+1} sélectionnés — nouvelle valeur pour les DEUX :`;
+      c.appendChild(s);
+      if (sel.length===1) {
+        const i=sel[0], cur=dice[i].v;
+        if (cardOK('tip-it')) {
+          if (cur<6) c.appendChild(btn(`Tip It! : ${cur}→${cur+1} · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'alterDie',cardId:'tip-it',dieIndex:i,delta:1}); }));
+          if (cur>1) c.appendChild(btn(`Tip It! : ${cur}→${cur-1} · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'alterDie',cardId:'tip-it',dieIndex:i,delta:-1}); }));
+        }
+        if (cardOK('so-wild')) for (let v=1; v<=6; v++) if (v!==cur)
+          c.appendChild(btn(`So Wild! : ${cur}→${v} · 2 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'so-wild',sets:[{dieIndex:i,value:v}]}); }));
+      } else if (sel.length===2 && cardOK('twice-as-wild')) {
+        const [i,j]=sel;
+        for (let v=1; v<=6; v++) if (!(dice[i].v===v && dice[j].v===v))
+          c.appendChild(btn(`Twice As Wild! : (${dice[i].v},${dice[j].v})→(${v},${v}) · 3 CP`,'primary', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'twice-as-wild',sets:[{dieIndex:i,value:v},{dieIndex:j,value:v}]}); }));
+      }
       c.appendChild(btn('Choisir l\'habileté →','gold', toAbilityFromAlter));
     } else if (phase==='ability') {
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
@@ -449,11 +488,12 @@
   function applyMain(a){ log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
   function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll(); }
   function toAlter(){ G.beginOffensiveAlter(g, dice.map(d=>d.v));
+    altSel.clear();
     const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
     if(!acts.length){ dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; } else phase='alter';
     renderAll(); }
   function applyAlter(a){ log(`Tu joues <b>${alterLabel(a)}</b>.`); dice=G.applyOffensiveAlter(g,a).map(v=>({v,kept:false})); renderAll(); }
-  function toAbilityFromAlter(){ dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; renderAll(); }
+  function toAbilityFromAlter(){ altSel.clear(); dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; renderAll(); }
   function toMain2(){ phase='main2'; renderAll(); }
   function doRoll(){
     if (attempts===0){ const vals=G.rollOffense(g,null,[]); dice=vals.map(v=>({v,kept:false})); attempts=1; }
@@ -709,6 +749,13 @@
 
   function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderAbilities(); renderHand(); drainEngineLog(); }
 
+  // Upgraded ("II") display numbers for the side panel — the verified card values, so the board
+  // stops showing base damage once the II upgrade is in play (user-reported on Reap II).
+  const REF_II_DMG = {
+    'Cleave':'5–8','Ride Down':'6 ·+3 Grim','Reap':'4 ·+Dread','Sow Despair':'7–10',
+    'Horrify':'6 ·+3D+2G','Spectral Assault':'9 +jet',
+    'Baton Strike':'6–8',"Widow's Gauntlets":'7 ·+CP','Hacked':'6 ·+Bomb','Grapple':'7 indéf.',
+  };
   // Which upgrade card marks each base ability as "II" on the side panel.
   const REF_UPGRADE = {
     'Cleave':'cleave-ii','Ride Down':'ride-down-ii','Reap':'reap-ii','Sow Despair':'sow-despair-ii',

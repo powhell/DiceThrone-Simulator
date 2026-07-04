@@ -511,13 +511,17 @@ function pushCrossPlayerOptions(state: GameState, canAfford: (id: string) => boo
 // card is one WindowAction carrying its full set of (dieIndex, value) assignments.
 function pushSetDieOptions(dice: number[], canAfford: (id: string) => boolean, options: WindowAction[]): void {
   const values = [1, 2, 3, 4, 5, 6]
+  // No-op assignments (setting a die to the value it already shows) waste the card for nothing:
+  // never enumerate them (they flooded the UI and the RL scoring alike — user-reported the
+  // "dé 1 (1→1)" buttons burying the useful Twice As Wild! combos).
   if (canAfford('so-wild')) {
-    dice.forEach((_, i) => { for (const v of values) options.push({ kind: 'setDie', cardId: 'so-wild', sets: [{ dieIndex: i, value: v }] }) })
+    dice.forEach((cur, i) => { for (const v of values) if (v !== cur) options.push({ kind: 'setDie', cardId: 'so-wild', sets: [{ dieIndex: i, value: v }] }) })
   }
   if (canAfford('twice-as-wild')) {
     for (let i = 0; i < dice.length; i++) {
       for (let j = i + 1; j < dice.length; j++) {
         for (const vi of values) for (const vj of values) {
+          if (vi === dice[i] && vj === dice[j]) continue // both unchanged = pure waste
           options.push({ kind: 'setDie', cardId: 'twice-as-wild', sets: [{ dieIndex: i, value: vi }, { dieIndex: j, value: vj }] })
         }
       }

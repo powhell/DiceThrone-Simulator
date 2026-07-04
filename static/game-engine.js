@@ -1702,14 +1702,15 @@ var Game = (() => {
   function pushSetDieOptions(dice, canAfford, options) {
     const values = [1, 2, 3, 4, 5, 6];
     if (canAfford("so-wild")) {
-      dice.forEach((_, i) => {
-        for (const v of values) options.push({ kind: "setDie", cardId: "so-wild", sets: [{ dieIndex: i, value: v }] });
+      dice.forEach((cur, i) => {
+        for (const v of values) if (v !== cur) options.push({ kind: "setDie", cardId: "so-wild", sets: [{ dieIndex: i, value: v }] });
       });
     }
     if (canAfford("twice-as-wild")) {
       for (let i = 0; i < dice.length; i++) {
         for (let j = i + 1; j < dice.length; j++) {
           for (const vi of values) for (const vj of values) {
+            if (vi === dice[i] && vj === dice[j]) continue;
             options.push({ kind: "setDie", cardId: "twice-as-wild", sets: [{ dieIndex: i, value: vi }, { dieIndex: j, value: vj }] });
           }
         }
