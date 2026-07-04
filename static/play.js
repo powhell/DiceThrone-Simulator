@@ -71,6 +71,7 @@
   let lastDefDice = null;      // your resolved defense dice, shown in the tray after the attack lands
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
+  let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
 
   // ---- coach & game logging ----
@@ -170,6 +171,15 @@
           if (altSel.has(i)) altSel.delete(i); else { if (altSel.size>=2) altSel.delete([...altSel][0]); altSel.add(i); }
           renderDice(false); renderControls(); };
       });
+      return;
+    }
+    // Time Bomb roll: show the actual die/dice until you start your own roll.
+    if (tbShow && !dice.length) {
+      const verdict = tbShow.dmg>0 ? `💥 EXPLOSE — ${tbShow.dmg} dégâts !` : tbShow.defused>0 ? '✅ désamorcée (6) !' : '⏱️ elle avance d\'un cran…';
+      $('tray').innerHTML =
+        `<div class="empty" style="width:100%">💣 JET DE TIME BOMB (1-5 avance, 6 désamorce) :</div>` +
+        tbShow.rolls.map((v,i)=>dieHTML(humanHero, {v,kept:false}, i, false)).join('') +
+        `<div class="empty" style="width:100%"><b>${verdict}</b></div>`;
       return;
     }
     $('tray').innerHTML = dice.length
@@ -554,7 +564,7 @@
       }
     } catch (e) {}
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
-  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll(); }
+  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; renderAll(); }
   function toAlter(){
     try { // coach: stopping with rerolls left, when the DP says rerolling is worth more?
       if (phase==='roll' && rollsLeft > 0) {
@@ -758,6 +768,8 @@
       if (m) {
         const jets = m[1] ? `tu lances ${m[1]} — ` : '';
         const dmg = +m[2], defused = +(m[3]||0);
+        // Shown as REAL dice in the tray too (tbShow), not just this journal line.
+        if (m[1]) tbShow = { rolls: m[1].split(',').map(Number), dmg, defused };
         log(`<b style="font-size:1.05em">💣 TIME BOMB — ${jets}${dmg>0?`elle explose : tu prends ${dmg} dégâts !`:defused>0?`désamorcée (6) !`:`elle avance d'un cran…`}</b>`);
       }
     }
