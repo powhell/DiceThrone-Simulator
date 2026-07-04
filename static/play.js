@@ -475,7 +475,9 @@
       // Shown only when it can actually fire: you hold a token, OR one of the candidate
       // abilities grants Grim Pursuit BEFORE damage (Ride Down...). At turn 1 with 0 tokens
       // and no granting candidate, the button was pure noise (user-caught).
-      const gpPossible = you.tokens.grimPursuit > 0 || cands.some(cd => {
+      const gpPossible = you.tokens.grimPursuit > 0
+        || (amSel.has('thundering-hooves') && you.cp > 0) // CP->GP conversion lands BEFORE the spend
+        || cands.some(cd => {
         try { const d = G.resolvedAbilityByBoardName(G.heroTemplateFor(HUMAN), cd.name, you.upgradesInPlay);
               return !!(d && d.tokensGrantedToSelf && d.tokensGrantedToSelf.grimPursuit); } catch (e) { return false; }
       });
@@ -494,6 +496,8 @@
           'thundering-hooves': 'Thundering Hooves! : CP → Grim Pursuit (jusqu\'à 3) · 0 CP',
         };
         for (const id of G.humanAttackModifierOptions(g)) {
+          if (id==='thundering-hooves' && you.cp===0) continue; // rien à convertir
+
           c.appendChild(btn(`${amSel.has(id)?'✅ ':''}${AM_LABEL[id]||id}`, amSel.has(id)?'primary':'',
             ()=>{ amSel.has(id)?amSel.delete(id):amSel.add(id); renderControls(); }));
         }
