@@ -555,7 +555,16 @@
     } catch (e) {}
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
   function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll(); }
-  function toAlter(){ G.beginOffensiveAlter(g, dice.map(d=>d.v));
+  function toAlter(){
+    try { // coach: stopping with rerolls left, when the DP says rerolling is worth more?
+      if (phase==='roll' && rollsLeft > 0) {
+        const adv = G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
+        if (adv.kept.length < 5 && adv.ev > adv.keepAllEv + 0.3)
+          coachNote('relance', `s'arrêter (EV ${adv.keepAllEv.toFixed(1)})`,
+            `relancer en gardant [${adv.kept.join(',')}] (EV ${adv.ev.toFixed(1)})`);
+      }
+    } catch (e) {}
+    G.beginOffensiveAlter(g, dice.map(d=>d.v));
     altSel.clear();
     const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
     if(!acts.length){ dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; } else phase='alter';
@@ -567,6 +576,12 @@
     if (attempts===0){ const vals=G.rollOffense(g,null,[]); dice=vals.map(v=>({v,kept:false})); attempts=1; }
     else {
       if(rollsLeft<=0) return;
+      try { // coach: compare your keep against the EXACT DP optimum before rerolling
+        const adv = G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
+        const mine = dice.filter(d=>d.kept).map(d=>d.v).sort().join(',');
+        const dp = adv.kept.slice().sort().join(',');
+        if (mine !== dp) coachNote('relance', `gardé [${mine||'rien'}]`, `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)})`);
+      } catch (e) {}
       const keptValues = dice.filter(d=>d.kept).map(d=>d.v);
       const vals=G.rollOffense(g, dice.map(d=>d.v), dice.map(d=>d.kept));
       // The engine sorts the result, losing positions — re-mark the kept dice BY VALUE so your

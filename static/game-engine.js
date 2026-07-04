@@ -55,6 +55,7 @@ var Game = (() => {
     humanApplyMain: () => humanApplyMain,
     humanAttack: () => humanAttack,
     humanCanTerrorize: () => humanCanTerrorize,
+    humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
     humanPlayRollCard: () => humanPlayRollCard,
     humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
@@ -2419,6 +2420,14 @@ var Game = (() => {
   }
   function humanPlayRollCard(g, choice, dice) {
     return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng);
+  }
+  function humanKeepAdvice(g, dice, rollsRemaining) {
+    const self = g.state.players[g.humanIdx];
+    const opp = g.state.players[g.aiIdx];
+    const cfg = self.heroId === "hh" ? hhConfig : bwConfig;
+    const r = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp));
+    const top = r.topOptions[0];
+    return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv };
   }
   function humanSpendGrimPursuitReroll(g) {
     const self = g.state.players[g.humanIdx];

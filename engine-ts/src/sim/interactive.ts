@@ -27,6 +27,9 @@ import {
 } from './turn.js'
 import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
+import { hhConfig } from '../characters/horseman/config.js'
+import { bwConfig } from '../characters/black_widow/config.js'
+import * as core from '../core/evaluator.js'
 
 export interface HumanGame {
   state: GameState
@@ -137,6 +140,20 @@ export function humanPlayRollCard(
   g: HumanGame, choice: RollManipulationChoice, dice: number[],
 ): { dice: number[]; extraRollsGranted: number } {
   return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng)
+}
+
+// Keep-advice for the HUMAN's roll, straight from the exact DP oracle (core/evaluator — the
+// same optimal keep calculator the AI rolls with). Lets the UI coach flag reroll mistakes:
+// "you kept X, the optimal keep was Y (EV a vs b)".
+export function humanKeepAdvice(
+  g: HumanGame, dice: number[], rollsRemaining: number,
+): { kept: number[]; ev: number; keepAllEv: number } {
+  const self = g.state.players[g.humanIdx]
+  const opp = g.state.players[g.aiIdx]
+  const cfg: any = self.heroId === 'hh' ? hhConfig : bwConfig
+  const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp) as any)
+  const top = r.topOptions[0]
+  return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv }
 }
 
 // Grim Pursuit mode (a) for the HUMAN's manual roll: spend 1 token for an additional Roll
