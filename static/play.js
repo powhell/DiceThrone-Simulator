@@ -158,7 +158,7 @@
     }
     if (aiDice) {
       $('tray').innerHTML =
-        `<div class="empty" style="width:100%">L'IA a lancé :</div>` +
+        `<div class="empty" style="width:100%">⚔️ L'ATTAQUE de l'IA — ses 5 dés d'attaque (sa défense, elle, roule 3-4 dés) :</div>` +
         aiDice.map((v,i)=>dieHTML(aiHero, {v,kept:false}, i, false)).join('');
       return;
     }
