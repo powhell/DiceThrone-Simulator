@@ -145,6 +145,29 @@
     });
   }
 
+  // Scans the RAW engine log from `fromIdx` for the pieces of one attack resolution, so the
+  // BILAN lines can show the full arithmetic (base + riders + Grim Pursuit − prevented = total)
+  // instead of making the player reverse-engineer it from scattered lines (reported twice).
+  function parseCombat(fromIdx){
+    const out = { rider:0, gp:0, bonus:0, prevented:0, counter:0 };
+    for (let i=fromIdx; i<g.state.log.length; i++){
+      const msg = g.state.log[i].message; let x;
+      if ((x = msg.match(/ rider: \+(\d+) dmg/))) out.rider += +x[1];
+      if ((x = msg.match(/^Grim Pursuit spend \(b\): rolled \d+, \+(\d+)/))) out.gp += +x[1];
+      if ((x = msg.match(/bonus roll: \+(\d+) dmg/))) out.bonus += +x[1];
+      if ((x = msg.match(/(?:Hallowed Reckoning|Sabotage): prevented (\d+), (\d+) dmg back/))) { out.prevented += +x[1]; out.counter += +x[2]; }
+    }
+    return out;
+  }
+  function breakdownStr(base, cb){
+    const parts = [`${base} base`];
+    if (cb.rider) parts.push(`+${cb.rider} rider`);
+    if (cb.bonus) parts.push(`+${cb.bonus} jet bonus`);
+    if (cb.gp) parts.push(`+${cb.gp} Grim Pursuit`);
+    if (cb.prevented) parts.push(`−${cb.prevented} prévenu(s)`);
+    return parts.join(' ');
+  }
+
   // What a defense roll DOES, die by die, from the verified defense rules — so the outcome is
   // readable on the board instead of buried in the journal (reported).
   function defenseExplain(heroId, vals){
@@ -450,11 +473,15 @@
   function chooseAbility(name){
     log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+1d6 Grim Pursuit)':''}.`);
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
+    const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
+    const base = (cand && cand.baseDamage) || 0;
+    const logFrom = g.state.log.length;
     G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel);
     gpBonusSel = false;
+    const cb = parseCombat(logFrom);
     const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
-    log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — tu infliges ${Math.max(0,dealt)} dégât(s)`+
-        `${taken>0?`, sa défense t'en renvoie ${taken}`:''} (IA ${hpAi}→${g.state.players[g.aiIdx].hp} PV)</b>`);
+    log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — ${breakdownStr(base, cb)} = ${Math.max(0,dealt)} infligés`+
+        `${taken>0?` · sa défense t'en renvoie ${taken}`:''} (IA ${hpAi}→${g.state.players[g.aiIdx].hp} PV, toi ${hpYou}→${g.state.players[g.humanIdx].hp})</b>`);
     renderAll();
     if (g.state.gameOver) return end();
     toMain2();
@@ -477,7 +504,7 @@
     aiDice = (g.def && g.def.finalDice) ? g.def.finalDice.slice() : null;
     if (r.attack.abilityName === null) log(`L'IA rate son attaque (aucune habileté formée).`);
     else log(`⚔️ L'IA t'attaque avec <b>${formatAbility(aiHero, r.attack.abilityName).name}</b>` +
-      (r.attack.defendable ? ` (~${r.attack.incomingDamage} dégâts).` : ` — <b>indéfendable</b>.`));
+      (r.attack.defendable ? ` (${r.attack.incomingDamage} de base, hors riders/bonus).` : ` — <b>indéfendable</b>.`));
     // Click-to-roll pacing: YOU press the button that rolls your defense (reported: invisible).
     phase='defarm';
     $('turntag').textContent = 'Défense — l\'IA t\'attaque';
@@ -503,12 +530,16 @@
   }
   function resolveAiAttackAndFinish(){
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
+    const logFrom = g.state.log.length;
     G.resolveAiAttack(g);
-    // Big readable recap — "je ne vois même pas ce que ma défense fait" (reported).
+    // Big readable recap with the FULL arithmetic — "l'IA annonce 7 mais ça fait 9" was the
+    // Vengeance rider adding damage with no visible accounting (reported).
+    const cb = parseCombat(logFrom);
+    const base = pendingAttackInfo ? pendingAttackInfo.incomingDamage : 0;
     const you2 = g.state.players[g.humanIdx].hp, ai2 = g.state.players[g.aiIdx].hp;
     const taken = hpYou - you2, countered = hpAi - ai2;
-    log(`<b style="font-size:1.05em">🛡️ BILAN DÉFENSE — tu encaisses ${Math.max(0,taken)} dégât(s)`+
-        `${countered>0?`, ta défense renvoie ${countered} dégât(s) à l'IA`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
+    log(`<b style="font-size:1.05em">🛡️ BILAN DÉFENSE — ${breakdownStr(base, cb)} = ${Math.max(0,taken)} encaissés`+
+        `${countered>0?` · tu renvoies ${countered} dégât(s)`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
     renderAll();                                   // shows your Hallowed/Sabotage roll + damage in the log
     if (g.state.gameOver) return end();
     $('turntag').textContent = 'L\'IA (Black Widow) termine son tour…';
@@ -646,6 +677,10 @@
     if ((m = msg.match(/^(.+?): rerolled (\d+) dice$/))) return `<b>${m[1]}</b> : relance ${m[2]} dé(s)`;
     if (/^One More Time!/.test(msg)) return `<b>One More Time!</b> : +1 tentative de jet`;
     if (/^Grim Pursuit \(mode a\)/.test(msg)) return `<b>Grim Pursuit</b> : +1 tentative de jet`;
+    if ((m = msg.match(/^Grim Pursuit spend \(b\): rolled (\d+), \+(\d+)/)))
+      return `💜 <b>Grim Pursuit</b> : jet ${m[1]} → <b>+${m[2]} dégâts</b> sur l'attaque`;
+    if ((m = msg.match(/^(.+?) rider: \+(\d+) (?:dmg|dégâts)(?:, (\d+) TB inflicted)?(?:, \+(\d+) Covert Ops)?/)))
+      return `<b>Rider ${m[1]}</b> : +${m[2]} dégâts${m[3]&&+m[3]?` · ${m[3]} Time Bomb posée(s)`:''}${m[4]&&+m[4]?` · +${m[4]} Covert Ops`:''}`;
     if ((m = msg.match(/^Dice after alteration: ([\d,\s]+)$/)))
       return `Dés après altération : <b>${m[1]}</b>`;
     if ((m = msg.match(/^(.+?): set dice ([\d,]+)->([\d,]+)/)))
