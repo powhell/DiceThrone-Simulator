@@ -350,7 +350,7 @@
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
       if (cands.length && you.tokens.grimPursuit>0 && !you.grimPursuitBonusUsedThisTurn) {
-        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : +1d6 dégâts sur cette attaque (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
+        const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 1 dé, + sa valeur en dégâts (+1 à +6) (−1 jeton)`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
@@ -471,7 +471,7 @@
     renderDice(true); renderControls(); renderMatch(); renderAbilities();
   }
   function chooseAbility(name){
-    log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+1d6 Grim Pursuit)':''}.`);
+    log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+ dé Grim Pursuit)':''}.`);
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
     const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
     const base = (cand && cand.baseDamage) || 0;
@@ -579,7 +579,7 @@
       case 'rerollDie':return `${cn(a.cardId)} : relance le dé ${a.dieIndex+1}${cp(a.cardId)}`;
       case 'rerollAll':return `${cn(a.cardId)} : relance TOUS tes dés de défense${cp(a.cardId)}`;
       case 'moveHead': return `Rolling Pumpkin! : Tête Hantée ${a.toIdx===g.humanIdx?'vers TOI':'vers l\'IA'}`;
-      case 'spendGrimPursuitBonus': return 'Grim Pursuit : +1d6 dégâts';
+      case 'spendGrimPursuitBonus': return 'Grim Pursuit : lance 1 dé, + sa valeur en dégâts';
       // Token-manipulation cards enumerate one option PER TARGET — without saying who, they
       // look like duplicates and you can nuke YOUR OWN tokens by accident (reported bug).
       case 'transferToken': return `Transference! : ${a.tokenKind} ${a.fromIdx===g.humanIdx?'⚠️ de TOI vers l\'IA':'de l\'IA vers TOI'}`;
