@@ -2464,7 +2464,7 @@ var Game = (() => {
     const cfg = self.heroId === "hh" ? hhConfig : bwConfig;
     const r = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp));
     const top = r.topOptions[0];
-    return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv };
+    return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv, topOptions: r.topOptions };
   }
   function humanSpendGrimPursuitReroll(g) {
     const self = g.state.players[g.humanIdx];

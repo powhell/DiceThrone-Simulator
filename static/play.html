@@ -106,6 +106,18 @@
   .abil.pick{cursor:pointer; opacity:1; border-color:var(--gold)} .abil.pick:hover{background:#2a1e18}
   .abil .an{font-family:var(--display); font-size:14px} .abil .req{font-family:var(--mono); font-size:11px; color:var(--muted)}
   .abil .dv{font-family:var(--mono); font-size:12px; color:var(--gold); font-variant-numeric:tabular-nums}
+  .abil .eff{font-size:10.5px; color:var(--muted); line-height:1.35; margin-top:2px}
+  .abil .eff .ok{color:var(--hp)} .abil .eff .no{color:var(--danger)}
+  /* coach EV-per-keep table */
+  .evrow{display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:6px 8px;
+    border-radius:8px; background:#1a1424; border:1px solid transparent; margin-bottom:5px}
+  .evrow.best{border-color:var(--gold); background:#241d15}
+  .evrow .keep{font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums}
+  .evrow .keep small{color:var(--muted-2); font-family:var(--sans)}
+  .evrow .ev{font-family:var(--mono); font-size:13px; color:var(--gold); font-variant-numeric:tabular-nums; text-align:right}
+  .evrow .dist{font-size:10.5px; color:var(--muted); grid-column:1 / -1; line-height:1.35}
+  .evrow .sure{font-size:9px; font-weight:700; letter-spacing:.06em; color:#120c17; background:var(--hp);
+    border-radius:4px; padding:1px 5px; vertical-align:1px; margin-left:5px}
   .log{display:flex; flex-direction:column; font-size:12.5px; max-height:280px; overflow-y:auto}
   .log .l{padding:5px 2px; border-bottom:1px solid #241c31; color:var(--muted); line-height:1.35}
   .log .l:last-child{border-bottom:0} .log .l b{color:var(--ink); font-weight:600}
@@ -151,6 +163,7 @@
       </div>
       <div class="col-side">
         <div class="panel"><h2 id="board-title">Habiletés</h2><div class="abils" id="abils"></div></div>
+        <div class="panel" id="coach-panel" style="display:none"><h2>🎓 Coach — EV par garde</h2><div id="coach-evs"></div></div>
         <div class="panel"><h2>Journal</h2><div class="log" id="log"></div></div>
       </div>
     </div>

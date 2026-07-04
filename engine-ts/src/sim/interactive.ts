@@ -165,13 +165,15 @@ export function humanPlayRollCard(
 // "you kept X, the optimal keep was Y (EV a vs b)".
 export function humanKeepAdvice(
   g: HumanGame, dice: number[], rollsRemaining: number,
-): { kept: number[]; ev: number; keepAllEv: number } {
+): { kept: number[]; ev: number; keepAllEv: number; topOptions: core.KeepOption[] } {
   const self = g.state.players[g.humanIdx]
   const opp = g.state.players[g.aiIdx]
   const cfg: any = self.heroId === 'hh' ? hhConfig : bwConfig
   const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp) as any)
   const top = r.topOptions[0]
-  return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv }
+  // topOptions: the full ranked keep table (kept dice, EV, per-ability landing odds) so the UI
+  // can show the coach's alternatives, not just the single best keep.
+  return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv, topOptions: r.topOptions }
 }
 
 // Grim Pursuit mode (a) for the HUMAN's manual roll: spend 1 token for an additional Roll

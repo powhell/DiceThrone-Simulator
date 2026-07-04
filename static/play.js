@@ -106,7 +106,10 @@
   }
   function liveAdvice(){
     if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
-    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft;
+    // The key must carry the SOLVER STATE too (Dreadful count, Head, upgrades in play — see
+    // oracleStateFor): keyed on dice+rerolls alone, a turn-1 answer got replayed all game.
+    const you = g.state.players[g.humanIdx];
+    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft+'|'+you.tokens.dreadful+'|'+(you.tokens.head>0?1:0)+'|'+you.upgradesInPlay.join('+');
     if (!adviceCache.has(key)) {
       try { adviceCache.set(key, G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft)); }
       catch(e){ adviceCache.set(key, null); }
@@ -288,6 +291,31 @@
     $('match').innerHTML = `<div class="lead">Meilleure habileté disponible</div><div class="name">${f.name} ${f.req}${best.baseDamage!=null?` · ${best.baseDamage} dmg`:''}</div>`;
   }
 
+  // Coach side panel: the DP solver's full keep table (top gardes + EV + où chaque garde
+  // atterrit en %) — the one-line advice under the dice only showed the single best keep.
+  function renderCoachPanel(){
+    const panel = document.getElementById('coach-panel');
+    if (!panel) return;
+    const adv = liveAdvice();
+    if (!adv || !adv.topOptions || !adv.topOptions.length) { panel.style.display='none'; return; }
+    panel.style.display='';
+    const distName = n => n==='Whiff' ? 'Raté (whiff)' : formatAbility(humanHero, n).name;
+    const rows = adv.topOptions.map((o,i)=>{
+      const icons = o.kept.length
+        ? o.kept.map(v=>symIcon(humanHero, humanHero.cls(v))).join('')
+        : '<small>tout relancer</small>';
+      const dist = Object.entries(o.probDist||{})
+        .sort((x,y)=>y[1]-x[1]).filter(e=>e[1]>=3).slice(0,3)
+        .map(e=>`${distName(e[0])} ${Math.round(e[1])}%`).join(' · ');
+      return `<div class="evrow${i===0?' best':''}">
+        <div class="keep">${o.kept.length?`[${o.kept.join(',')}] `:''}${icons}${o.isGuaranteed?'<span class="sure">SÛR</span>':''}</div>
+        <div class="ev">${o.ev.toFixed(1)}</div>
+        ${dist?`<div class="dist">${dist}</div>`:''}</div>`;
+    }).join('');
+    document.getElementById('coach-evs').innerHTML = rows +
+      `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.</div>`;
+  }
+
   // Board / ability panel: during 'ability' phase, list matched abilities as pickable buttons.
   function renderAbilities() {
     const box = $('abils');
@@ -313,7 +341,8 @@
         const upId = REF_UPGRADE[a.name];
         const upgraded = upId && self.upgradesInPlay.includes(upId);
         rows.push({ name: a.name + (upgraded ? ' II' : ''), matchName: a.name, req: a.req,
-          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg, on: isOn(a.name) });
+          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg, on: isOn(a.name),
+          eff: boardRowEffects(HUMAN, g.humanIdx, a.name) });
       }
       for (const card of hero.cards) {
         if (card.altAbility && self.upgradesInPlay.includes(card.id)) {
@@ -321,13 +350,13 @@
           const short = alt.boardName.replace(/\s*\([^)]*\)$/, '');
           const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
           // Show the riders too (Cursed Gallop's +1 Grim Pursuit was invisible — reported).
-          const eff = abilityEffects(alt.boardName);
           rows.push({ name: `↳ ${short}`, matchName: short, req,
-            dmg: `${alt.baseDamage != null ? alt.baseDamage : '—'}${eff?` · ${eff}`:''}`, on: isOn(short) });
+            dmg: alt.baseDamage != null ? alt.baseDamage : '—', on: isOn(short),
+            eff: abilityEffects(alt.boardName) });
         }
       }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
-        <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('')
+        <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
         + defBoxHTML(HUMAN, self);
     }
     renderAiBoard();
@@ -361,17 +390,20 @@
       const upId = REF_UPGRADE[a.name];
       const upgraded = upId && ai.upgradesInPlay.includes(upId);
       aiRows.push({ name: a.name + (upgraded ? ' II' : ''), req: a.req,
-        dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg });
+        dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg,
+        eff: boardRowEffects(AI_HERO, g.aiIdx, a.name) });
     }
     for (const card of aiHeroT.cards) {
       if (card.altAbility && ai.upgradesInPlay.includes(card.id)) {
         const alt = card.altAbility;
         const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
-        aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req, dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—' });
+        aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req,
+          dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—',
+          eff: abilityEffects(alt.boardName, AI_HERO, g.aiIdx) });
       }
     }
     box.innerHTML = aiRows.map(a=>`<div class="abil" style="opacity:.85">
-      <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div></div><div class="dv">${a.dmg}</div></div>`).join('')
+      <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
       + defBoxHTML(AI_HERO, ai);
   }
 
@@ -574,27 +606,66 @@
   // Effect summary for an ability, built from the verified hero data (resolvedAbilityByBoardName
   // applies the II-upgrade numbers when in play) — "6 dmg" alone hid the token/draw riders
   // (reported: Reap didn't mention +2 Dreadful/draw, The Reaper didn't mention draw 1).
-  function abilityEffects(boardName){
-    const self = g.state.players[g.humanIdx];
-    const a = G.resolvedAbilityByBoardName(G.heroTemplateFor(HUMAN), boardName, self.upgradesInPlay);
+  // Works for EITHER seat (heroKey/playerIdx) so the AI's board gets the same treatment.
+  function abilityEffects(boardName, heroKey = HUMAN, playerIdx = g.humanIdx){
+    const p = g.state.players[playerIdx];
+    const hero = HERO[heroKey];
+    const a = G.resolvedAbilityByBoardName(G.heroTemplateFor(heroKey), boardName, p.upgradesInPlay);
     if (!a) return '';
     const out = [];
     const tokenFr = { dreadful:'Dreadful', grimPursuit:'Grim Pursuit', agility:'Agility', covertOps:'Covert Ops', timeBomb:'Time Bomb' };
+    if (a.defendable === false) out.push('indéfendable');
     for (const [k,n] of Object.entries(a.tokensGrantedToSelf||{})) if (n) out.push(`+${n} ${tokenFr[k]||k}`);
     for (const [k,n] of Object.entries(a.tokensInflictedOnOpponent||{})) if (n) out.push(`inflige ${n} ${tokenFr[k]||k}`);
     if (a.cpGain) out.push(`+${a.cpGain} CP`);
     if (a.cardDraw) out.push(`pioche ${a.cardDraw}`);
-    // Head-conditional riders show YOUR current status, not just the condition (user hit Reap
+    // Head-conditional riders show the CURRENT status, not just the condition (user hit Reap
     // expecting the draw without holding the Head).
-    const hasHead = self.tokens.head > 0;
-    if (a.cardDrawIfHasHead) out.push(hasHead ? 'pioche 1 (Tête ✔)' : "✘ pas de pioche (exige la Tête — tu ne l'as pas)");
+    const hasHead = p.tokens.head > 0;
+    const you = playerIdx === g.humanIdx;
+    if (a.cardDrawIfHasHead) out.push(hasHead ? 'pioche 1 (Tête ✔)' : `✘ pas de pioche (exige la Tête — ${you?'tu ne l\'as pas':'elle ne l\'a pas'})`);
     if (a.tokensGrantedIfHasHead) for (const [k,n] of Object.entries(a.tokensGrantedIfHasHead)) if (n)
       out.push(hasHead ? `+${n} ${tokenFr[k]||k} (Tête ✔)` : `✘ +${n} ${tokenFr[k]||k} seulement avec la Tête`);
-    if (a.bonusRoll) out.push('jet bonus');
-    if (a.numberMatchBonus) out.push(`+${Object.values(a.numberMatchBonus.tokensGranted)[0]||1} Dreadful (carré de #)`);
+    // Bonus roll spelled out from the data (was a mute "jet bonus"): dice count + what each
+    // symbol does, in the hero's own symbol names.
+    if (a.bonusRoll) {
+      const br = a.bonusRoll;
+      const n = String(br.diceCount||'')
+        .replace(/1 per Dreadful token, up to 5 total/,'1 dé/Dreadful, max 5')
+        .replace(/(\d+) \((\d+) with ([^)]+)\)/,'$1 dés ($2 avec $3)');
+      const det = [];
+      for (const [sym,d] of Object.entries(br.perSymbolDamage||{})) det.push(`+${d} dégât/${hero.symName[sym]||sym}`);
+      if (br.undefendableOnSymbolPair) det.push(`2 ${hero.symName[br.undefendableOnSymbolPair]}s = indéfendable`);
+      for (const [sym,t] of Object.entries(br.perSymbolTokens||{})) det.push(`+${t.amount} ${tokenFr[t.token]||t.token}/${hero.symName[sym]||sym}`);
+      out.push(`jet bonus (${n}) : ${det.join(' · ')}`);
+    }
+    if (a.numberMatchBonus) {
+      // Cleave II lowers the number-match threshold 4-of-a-kind -> 3 (engine special-case).
+      const three = heroKey==='hh' && p.upgradesInPlay.includes('cleave-ii');
+      out.push(`+${Object.values(a.numberMatchBonus.tokensGranted)[0]||1} Dreadful (${three?'brelan':'carré'} de mêmes #)`);
+    }
+    if (a.bonusDamagePerUpgrade) out.push(`+${a.bonusDamagePerUpgrade} dégât/upgrade (${p.upgradesInPlay.length} en jeu)`);
+    if (a.thresholdBonus) out.push(`+${a.thresholdBonus.bonusDamage} dégâts si ≥${a.thresholdBonus.upgradesAtLeast} upgrades${p.upgradesInPlay.length>=a.thresholdBonus.upgradesAtLeast?' ✔':''}`);
+    if (a.cpGainIfUpgradesAtLeast) out.push(`+${a.cpGainIfUpgradesAtLeast.cpGain} CP si ≥${a.cpGainIfUpgradesAtLeast.upgradesAtLeast} upgrades${p.upgradesInPlay.length>=a.cpGainIfUpgradesAtLeast.upgradesAtLeast?' ✔':''}`);
     if (a.searchUpgradesIntoPlay) out.push(`pose ${a.searchUpgradesIntoPlay} upgrade(s) du deck`);
     if (a.advancesAllTimeBombsInPlay) out.push('avance les Time Bombs');
     return out.join(' · ');
+  }
+
+  // Effects line for a side-panel row ("Cleave", "Sow Despair"...) — one REFERENCE row can
+  // cover several board abilities (Cleave 3A/4A/5A, Sow Despair S/L): dedupe identical
+  // effects, tag them (S:/L:) when the variants differ.
+  function boardRowEffects(heroKey, playerIdx, matchName){
+    const t = G.heroTemplateFor(heroKey);
+    const abs = t.abilities.filter(x => x.boardName === matchName || x.boardName.startsWith(matchName + ' '));
+    if (!abs.length) return '';
+    const effs = abs.map(x => ({
+      tag: x.boardName.slice(matchName.length).replace(/\([^)]*\)/,'').trim(),
+      eff: abilityEffects(x.boardName, heroKey, playerIdx),
+    }));
+    const uniq = [...new Set(effs.map(e => e.eff))];
+    if (uniq.length === 1) return uniq[0];
+    return effs.filter(e => e.eff).map(e => e.tag ? `${e.tag}: ${e.eff}` : e.eff).join(' — ');
   }
 
   // ---------- roller-only Roll Phase cards (human path) ----------
@@ -687,7 +758,7 @@
       rollsLeft--;
     }
     log(`Tu lances : <b>${dice.map(d=>humanHero.symName[humanHero.cls(d.v)]).join(', ')}</b>`);
-    renderDice(true); renderControls(); renderMatch(); renderAbilities();
+    renderDice(true); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities();
   }
   function chooseAbility(name){
     try { // coach: which ability would the network have activated on these dice?
@@ -987,7 +1058,7 @@
   function addLog(html){ const l=document.createElement('div'); l.className='l'; l.innerHTML=html; logBox.prepend(l); }
   function log(html){ addLog(`<span class="t">→</span>${html}`); }
 
-  function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderAbilities(); renderHand(); drainEngineLog(); }
+  function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities(); renderHand(); drainEngineLog(); }
 
   // Upgraded ("II") display numbers for the side panel — the verified card values, so the board
   // stops showing base damage once the II upgrade is in play (user-reported on Reap II).
@@ -1023,7 +1094,7 @@
     tg.className='btn'; tg.style.cssText='margin-left:10px;font-size:.72rem;padding:3px 10px';
     const paint = ()=>{ tg.textContent = coachLive ? '🎓 Coach live : ON' : '🎓 Coach live : OFF'; tg.style.opacity = coachLive?'1':'.55'; };
     paint();
-    tg.onclick = ()=>{ coachLive=!coachLive; localStorage.setItem('dt_coach_live', coachLive?'1':'0'); paint(); renderMatch(); };
+    tg.onclick = ()=>{ coachLive=!coachLive; localStorage.setItem('dt_coach_live', coachLive?'1':'0'); paint(); renderMatch(); renderCoachPanel(); };
     tag.parentNode.insertBefore(tg, tag);
   })();
   // Tell the truth about which opponent is driving (learned net vs scripted fallback).
