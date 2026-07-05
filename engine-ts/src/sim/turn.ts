@@ -228,7 +228,7 @@ export function playCard(state: GameState, playerIdx: 0 | 1, phase: Phase, cardI
     return
   }
 
-  if (card.kind === 'upgrade') playUpgradeCard(state, playerIdx, phase, card, hero)
+  if (card.kind === 'upgrade') playUpgradeCard(state, playerIdx, phase, card, hero, rng)
   else playActionCard(state, playerIdx, phase, card, rng)
 }
 
@@ -263,7 +263,19 @@ function placeUpgradeIntoPlay(self: PlayerState, card: CardTemplate, hero: HeroT
   return existingId
 }
 
-function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: CardTemplate, hero: HeroTemplate): void {
+// Red Room Training II (texte vérifié) : "Whenever you play an Ability Upgrade card, draw 1
+// (excluding this card)". Jamais câblé avant (user-caught). Appelé par les DEUX chemins de
+// pose (CP et Covert Ops), APRÈS placeUpgradeIntoPlay — donc poser RRT II lui-même ne pioche
+// pas (la carte s'exclut), mais tout upgrade suivant si.
+function rrtIIDrawOnUpgrade(state: GameState, playerIdx: 0 | 1, playedCardId: string, rng: RNG): void {
+  const self = state.players[playerIdx]
+  if (playedCardId === 'red-room-training-ii') return
+  if (!self.upgradesInPlay.includes('red-room-training-ii')) return
+  drawCards(self, 1, rng)
+  log(state, playerIdx, 'main1', 'Red Room Training II: drew 1 (upgrade played)')
+}
+
+function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: CardTemplate, hero: HeroTemplate, rng: RNG): void {
   const self = state.players[playerIdx]
   if (!card.upgradeSlot) {
     log(state, playerIdx, phase, `TODO(user): ${card.name} has no upgradeSlot data yet, skipped`)
@@ -281,6 +293,7 @@ function playUpgradeCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card:
   }
   self.cp -= cost
   placeUpgradeIntoPlay(self, card, hero)
+  rrtIIDrawOnUpgrade(state, playerIdx, card.id, rng)
   log(state, playerIdx, phase, `Played upgrade ${card.name} for ${cost} CP${existingCard ? ` (upgraded from ${existingCard.name})` : ''}`)
 }
 
@@ -737,7 +750,7 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'removeToken') { applyRemoveToken(state, playerIdx, action); return }
   if (action.kind === 'removeAllTokens') { applyRemoveAllTokens(state, playerIdx, action); return }
   if (action.kind === 'moveHead') { applyMoveHead(state, playerIdx, action); return }
-  if (action.kind === 'covertOpsUpgrade') { applyCovertOpsUpgrade(state, playerIdx, action.cardId); return }
+  if (action.kind === 'covertOpsUpgrade') { applyCovertOpsUpgrade(state, playerIdx, action.cardId); rrtIIDrawOnUpgrade(state, playerIdx, action.cardId, rng); return }
   if (action.kind === 'covertOpsSearch') {
     const self = state.players[playerIdx]
     if (self.tokens.covertOps < 1 || self.covertOpsUsedThisTurn) return

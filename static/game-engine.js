@@ -1763,7 +1763,7 @@ var Game = (() => {
       log(state, playerIdx, phase, `TODO(user): ${card.name} (${card.actionTiming ?? "Roll Phase Action, dice manipulation"}) not wired for phase "${phase}" \u2014 skipped`);
       return;
     }
-    if (card.kind === "upgrade") playUpgradeCard(state, playerIdx, phase, card, hero);
+    if (card.kind === "upgrade") playUpgradeCard(state, playerIdx, phase, card, hero, rng);
     else playActionCard(state, playerIdx, phase, card, rng);
   }
   function isCardPlayableNow(card, phase, heroId) {
@@ -1780,7 +1780,14 @@ var Game = (() => {
     self.upgradesPlayedThisTurn += 1;
     return existingId;
   }
-  function playUpgradeCard(state, playerIdx, phase, card, hero) {
+  function rrtIIDrawOnUpgrade(state, playerIdx, playedCardId, rng) {
+    const self = state.players[playerIdx];
+    if (playedCardId === "red-room-training-ii") return;
+    if (!self.upgradesInPlay.includes("red-room-training-ii")) return;
+    drawCards(self, 1, rng);
+    log(state, playerIdx, "main1", "Red Room Training II: drew 1 (upgrade played)");
+  }
+  function playUpgradeCard(state, playerIdx, phase, card, hero, rng) {
     const self = state.players[playerIdx];
     if (!card.upgradeSlot) {
       log(state, playerIdx, phase, `TODO(user): ${card.name} has no upgradeSlot data yet, skipped`);
@@ -1796,6 +1803,7 @@ var Game = (() => {
     }
     self.cp -= cost;
     placeUpgradeIntoPlay(self, card, hero);
+    rrtIIDrawOnUpgrade(state, playerIdx, card.id, rng);
     log(state, playerIdx, phase, `Played upgrade ${card.name} for ${cost} CP${existingCard ? ` (upgraded from ${existingCard.name})` : ""}`);
   }
   function applyCovertOpsUpgrade(state, playerIdx, cardId) {
@@ -2168,6 +2176,7 @@ var Game = (() => {
     }
     if (action.kind === "covertOpsUpgrade") {
       applyCovertOpsUpgrade(state, playerIdx, action.cardId);
+      rrtIIDrawOnUpgrade(state, playerIdx, action.cardId, rng);
       return;
     }
     if (action.kind === "covertOpsSearch") {
