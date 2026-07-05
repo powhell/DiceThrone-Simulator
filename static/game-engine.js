@@ -3633,13 +3633,20 @@ var Game = (() => {
         const freebie = request.options.find((o) => (o.kind === "playCard" || o.kind === "playInstant") && o.cardId && ["vegas-baby", "getting-paid"].includes(o.cardId));
         if (freebie) return freebie;
         const covert = request.options.filter((o) => o.kind === "covertOpsUpgrade");
-        if (!covert.length) {
-          const search = request.options.find((o) => o.kind === "covertOpsSearch");
-          if (search && Math.random() < 0) {
-          }
-        }
         if (covert.length === 1) return covert[0];
         if (covert.length > 1) request = { ...request, options: covert };
+        {
+          const sells = request.options.filter((o) => o.kind === "sellCard");
+          if (sells.length > 1) {
+            const keep = /* @__PURE__ */ new Set([sells[0]]);
+            request = { ...request, options: request.options.filter((o) => o.kind !== "sellCard" || keep.has(o)) };
+          }
+          if (request.options.length > 12) {
+            const pass = request.options.filter((o) => o.kind === "pass");
+            const rest = request.options.filter((o) => o.kind !== "pass").slice(0, 11);
+            request = { ...request, options: [...pass, ...rest] };
+          }
+        }
         if (request.ctx.windowType === "offensiveRoll") {
           return scoreCandidatesByReplay(
             network,

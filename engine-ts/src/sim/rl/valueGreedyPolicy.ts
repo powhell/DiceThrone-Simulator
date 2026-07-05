@@ -114,12 +114,27 @@ export function createValueGreedyPolicy(network: Network): Policy {
         && ['vegas-baby', 'getting-paid'].includes((o as any).cardId))
       if (freebie) return freebie
       const covert = request.options.filter(o => o.kind === 'covertOpsUpgrade')
-      if (!covert.length) {
-        const search = request.options.find(o => o.kind === 'covertOpsSearch')
-        if (search && Math.random() < 0) { /* jamais : le réseau évalue search normalement */ }
-      }
       if (covert.length === 1) return covert[0]
       if (covert.length > 1) request = { ...request, options: covert }
+      // --- Plafonnage du lookahead (perf, 2026-07-05) : chaque option evaluee = un clone
+      // COMPLET de partie rejouee. Les fenetres Main Phase enumerent 1 sellCard PAR carte en
+      // main (jusqu'a 7 clones pour des ventes quasi identiques) et les fenetres d'alteration
+      // des dizaines de setDie. On garde : toutes les actions "uniques", 1 seule vente
+      // representative, et au plus 12 options au total — la v3 tournait a 0.6 partie/s (27 h)
+      // sans ce cap. Perte de qualite marginale (les ventes se valent, le reseau tranche mal
+      // en dessous de ~0.02 de toute facon).
+      {
+        const sells = request.options.filter(o => o.kind === 'sellCard')
+        if (sells.length > 1) {
+          const keep = new Set<WindowAction>([sells[0]])
+          request = { ...request, options: request.options.filter(o => o.kind !== 'sellCard' || keep.has(o)) }
+        }
+        if (request.options.length > 12) {
+          const pass = request.options.filter(o => o.kind === 'pass')
+          const rest = request.options.filter(o => o.kind !== 'pass').slice(0, 11)
+          request = { ...request, options: [...pass, ...rest] }
+        }
+      }
       // ORP2 offensive-alter window (Stage 6a): a die alteration's payoff is only realized once the
       // attack resolves, and encodeState can't see the in-progress dice. So score each candidate by
       // applying it to the roller's pending dice, then RESOLVING the attack on those final dice
