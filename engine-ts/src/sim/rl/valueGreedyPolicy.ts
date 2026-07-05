@@ -10,7 +10,6 @@
 // that's true, this file uses the most granular ALREADY-EXPORTED effect function available
 // instead of re-deriving the logic by hand — see per-method comments below for exactly which
 // approximation applies where.
-import { heroTemplateFor, cardById } from '../data/load.js'
 import type { GameState, AbilityCandidate, WindowAction, DecisionRequest } from '../types.js'
 import type { Policy, RollManipulationChoice } from '../policy.js'
 import {
@@ -22,7 +21,7 @@ import { completeOffensiveRoll } from '../oracle.js'
 import type { AttackModifierResult } from '../turn.js'
 import * as bw from '../hero/bw.rules.js'
 import * as hh from '../hero/hh.rules.js'
-import { heroTemplateFor, abilityByBoardName } from '../data/load.js'
+import { heroTemplateFor, abilityByBoardName, cardById } from '../data/load.js'
 import type { Network } from './network.js'
 import { scoreCandidatesByReplay, cloneForLookahead } from './lookahead.js'
 import {
