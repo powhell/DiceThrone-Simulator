@@ -10,6 +10,7 @@
 // that's true, this file uses the most granular ALREADY-EXPORTED effect function available
 // instead of re-deriving the logic by hand — see per-method comments below for exactly which
 // approximation applies where.
+import { heroTemplateFor, cardById } from '../data/load.js'
 import type { GameState, AbilityCandidate, WindowAction, DecisionRequest } from '../types.js'
 import type { Policy, RollManipulationChoice } from '../policy.js'
 import {
@@ -116,6 +117,20 @@ export function createValueGreedyPolicy(network: Network): Policy {
       const covert = request.options.filter(o => o.kind === 'covertOpsUpgrade')
       if (covert.length === 1) return covert[0]
       if (covert.length > 1) request = { ...request, options: covert }
+      // Prior (guide vérifié : BW "pose TOUJOURS chaque upgrade" ; vrai aussi pour HH en
+      // pratique) : un Hero Upgrade abordable en Main Phase se JOUE — le réseau thésaurisait
+      // ses CP (9+ observés en partie, user-caught) parce que la calibration lui a appris
+      // que le CP ne vaut "rien"... précisément parce qu'il ne le dépensait pas (boucle).
+      if (request.ctx.windowType === 'mainPhase') {
+        const upgradePlays = request.options.filter(o => {
+          if (o.kind !== 'playCard') return false
+          const self = state.players[playerIdx]
+          const card = cardById(heroTemplateFor(self.heroId), (o as any).cardId)
+          return card?.kind === 'upgrade'
+        })
+        if (upgradePlays.length === 1) return upgradePlays[0]
+        if (upgradePlays.length > 1) request = { ...request, options: upgradePlays }
+      }
       // --- Plafonnage du lookahead (perf, 2026-07-05) : chaque option evaluee = un clone
       // COMPLET de partie rejouee. Les fenetres Main Phase enumerent 1 sellCard PAR carte en
       // main (jusqu'a 7 clones pour des ventes quasi identiques) et les fenetres d'alteration

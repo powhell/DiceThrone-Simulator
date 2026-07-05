@@ -157,6 +157,7 @@
   function tokenChips(p, isHuman) {
     const t = p.tokens, out = [];
     out.push(`<span class="tok cp"><span class="dot"></span><b>CP</b> ${p.cp}</span>`);
+    if (!isHuman && p.heroId !== 'nx') out.push(`<span class="tok"><b>🂠 Main</b> ${p.hand.length} · <b>Deck</b> ${p.deck.length}</span>`);
     if (t.dreadful)    out.push(`<span class="tok dread"><span class="dot"></span><b>Dreadful</b> ${t.dreadful}</span>`);
     if (t.grimPursuit) out.push(`<span class="tok grim"><span class="dot"></span><b>Grim</b> ${t.grimPursuit}</span>`);
     if (t.agility)     out.push(`<span class="tok agi"><span class="dot"></span><b>Agility</b> ${t.agility}</span>`);

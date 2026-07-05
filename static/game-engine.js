@@ -3635,6 +3635,16 @@ var Game = (() => {
         const covert = request.options.filter((o) => o.kind === "covertOpsUpgrade");
         if (covert.length === 1) return covert[0];
         if (covert.length > 1) request = { ...request, options: covert };
+        if (request.ctx.windowType === "mainPhase") {
+          const upgradePlays = request.options.filter((o) => {
+            if (o.kind !== "playCard") return false;
+            const self = state.players[playerIdx];
+            const card = cardById(heroTemplateFor(self.heroId), o.cardId);
+            return card?.kind === "upgrade";
+          });
+          if (upgradePlays.length === 1) return upgradePlays[0];
+          if (upgradePlays.length > 1) request = { ...request, options: upgradePlays };
+        }
         {
           const sells = request.options.filter((o) => o.kind === "sellCard");
           if (sells.length > 1) {
