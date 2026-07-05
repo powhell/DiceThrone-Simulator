@@ -31,9 +31,10 @@ describe('encodeState', () => {
     expect(f0[0]).toBeCloseTo(f1[0]) // turn-progress feature is the same regardless of perspective
   })
 
-  // v2 layout: [turn, self(15 base + 8 upgrade one-hot), selfHand(31), opp(15 base + 8)].
+  // v3 layout (2026-07-05, +isFM +3 Forge +2 armures) :
+  // [turn, self(21 base + 8 upgrade one-hot), selfHand(33), opp(21 base + 8)].
   const SELF_BASE = 1
-  const SELF_UPGRADES = SELF_BASE + 15
+  const SELF_UPGRADES = SELF_BASE + 21
   const SELF_HAND = SELF_UPGRADES + 8
 
   it('v2: encodes WHICH upgrades are in play, not just how many', () => {
@@ -52,14 +53,14 @@ describe('encodeState', () => {
     state.players[0].hand = ['cleave-ii'] // hh's first card in hero.json → deck index 0
     const f = encodeState(state, 0)
     expect(f[SELF_HAND + 0]).toBe(1)
-    expect(f.slice(SELF_HAND, SELF_HAND + 31).filter(v => v === 1)).toHaveLength(1)
+    expect(f.slice(SELF_HAND, SELF_HAND + 33).filter(v => v === 1)).toHaveLength(1)
   })
 
   it('v2: tokens are un-gated — a bw player holding dreadful (via transfer) is visible', () => {
     const state = createInitialGameState('bw', 'hh')
     state.players[0].tokens.dreadful = 3
     const f = encodeState(state, 0)
-    const dreadfulIdx = SELF_BASE + 10
+    const dreadfulIdx = SELF_BASE + 16 // 10 champs + isFM + 3 Forge + 2 armures avant les jetons
     expect(f[dreadfulIdx]).toBeCloseTo(3 / 5)
   })
 })
