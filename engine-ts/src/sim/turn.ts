@@ -1067,7 +1067,7 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   if (data.numberMatchBonus) {
     const ofAKind = self.upgradesInPlay.includes('cleave-ii') ? 3 : data.numberMatchBonus.ofAKind
     if (hh.hasNumberMatch(dice, ofAKind)) {
-      if (data.numberMatchBonus.tokensGranted.dreadful) hh.grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful)
+      if (data.numberMatchBonus.tokensGranted?.dreadful) hh.grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful)
       log(state, playerIdx, 'resolveAttack', `${name}: ${ofAKind}-of-a-kind bonus triggered`)
     }
   }

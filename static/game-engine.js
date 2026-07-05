@@ -2140,7 +2140,7 @@ var Game = (() => {
     if (data.numberMatchBonus) {
       const ofAKind = self.upgradesInPlay.includes("cleave-ii") ? 3 : data.numberMatchBonus.ofAKind;
       if (hasNumberMatch(dice, ofAKind)) {
-        if (data.numberMatchBonus.tokensGranted.dreadful) grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful);
+        if (data.numberMatchBonus.tokensGranted?.dreadful) grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful);
         log(state, playerIdx, "resolveAttack", `${name}: ${ofAKind}-of-a-kind bonus triggered`);
       }
     }
@@ -2293,7 +2293,10 @@ var Game = (() => {
   // src/sim/match.ts
   function buildFullDeck(heroId) {
     const hero = heroTemplateFor(heroId);
-    return [...hero.cards.map((c) => c.id), ...commonCards.cards.map((c) => c.id)];
+    const out = [];
+    for (const c of hero.cards) for (let i = 0; i < (c.count ?? 1); i++) out.push(c.id);
+    for (const c of commonCards.cards) for (let i = 0; i < (c.count ?? 1); i++) out.push(c.id);
+    return out;
   }
   function createInitialPlayer(heroId, rng, isFirstPlayer = true) {
     let deck = [];

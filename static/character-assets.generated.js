@@ -51,7 +51,7 @@ window.CHARACTER_ASSETS = {
             "name": "Grim Pursuit",
             "startingCount": 0,
             "stackCap": 3,
-            "description": "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) after attacking, roll 1 die and add that many dmg as an Attack Modifier. Each effect usable once per turn."
+            "description": "Positive Status Effect. Spend 1 to either: (a) perform an additional Roll Attempt during your Offensive Roll Phase, or (b) After Attacking, roll 5 dice: add 1 dmg per Horseshoe rolled (Attack Modifier). Each effect usable once per turn."
           }
         ],
         "flags": [
@@ -927,6 +927,344 @@ window.CHARACTER_ASSETS = {
             "actionTiming": "mainPhase",
             "text": "Main Phase Action. Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and then add them to your hand. Put all remaining cards back in any order.",
             "effect": null,
+            "verified": true
+          }
+        ]
+      }
+    },
+    "fm": {
+      "board": [
+        "../characters/forge_master/board/Board 1.jpg",
+        "../characters/forge_master/board/Board 3.jpg",
+        "../characters/forge_master/board/Bord 2.jpg"
+      ],
+      "leaflet": [
+        "../characters/forge_master/leaflet/20260704_204801.jpg",
+        "../characters/forge_master/leaflet/20260704_204806.jpg",
+        "../characters/forge_master/leaflet/Board 3.jpg",
+        "../characters/forge_master/leaflet/Scan_20260704_204227.jpg",
+        "../characters/forge_master/leaflet/Scan_20260704_204243.jpg",
+        "../characters/forge_master/leaflet/Scan_20260704_204637.jpg",
+        "../characters/forge_master/leaflet/Screenshot_1.png",
+        "../characters/forge_master/leaflet/Screenshot_2.png",
+        "../characters/forge_master/leaflet/Screenshot_3.png"
+      ],
+      "cards": [
+        "../characters/forge_master/cards/Diamond Ore 1.jpg",
+        "../characters/forge_master/cards/Diamond Ore 2.jpg",
+        "../characters/forge_master/cards/Diamond Ore 3.jpg",
+        "../characters/forge_master/cards/Diamond Ore 4.jpg",
+        "../characters/forge_master/cards/Diamond Ore 5.jpg",
+        "../characters/forge_master/cards/Diamond Ore 6.jpg",
+        "../characters/forge_master/cards/Gold Ore 1.jpg",
+        "../characters/forge_master/cards/Gold Ore 2.jpg",
+        "../characters/forge_master/cards/Gold Ore 3.jpg",
+        "../characters/forge_master/cards/Gold Ore 4.jpg",
+        "../characters/forge_master/cards/Gold Ore 5.jpg",
+        "../characters/forge_master/cards/Gold Ore 6.jpg",
+        "../characters/forge_master/cards/Gold Ore 7.jpg",
+        "../characters/forge_master/cards/Gold Ore 8.jpg",
+        "../characters/forge_master/cards/Gold Ore 9.jpg",
+        "../characters/forge_master/cards/Ultimanium Ore.jpg"
+      ],
+      "data": {
+        "id": "fm",
+        "name": "Forgemaster",
+        "diceAnatomy": "AAABBC — faces 1-3 = Pick (A), 4-5 = Forge (B), 6 = Anvil (C). Verified die leaflet (V1).",
+        "startingHp": null,
+        "cpIncomePerTurn": null,
+        "setupNotes": "Hero Setup (verified leaflet): 'If you have more than 1 opponent, begin the game with any one Gold Armor.' In 1v1 (this engine) the Forgemaster therefore starts with NO Armor.",
+        "source": "Encoded 2026-07-04 from user's scans in characters/forge_master/ (board x3, Forging Info Card x2, leaflet rules clarifications x2, die anatomy, 3 distinct Ore cards). No strategy guide exists for this hero.",
+        "tokens": [],
+        "flags": [],
+        "abilities": [
+          {
+            "id": "pick_axe_3a",
+            "boardName": "Pick Axe 3A (AAA)",
+            "dicePattern": "AAA",
+            "baseDamage": 5,
+            "defendable": true,
+            "numberMatchBonus": {
+              "ofAKind": 4,
+              "cpGain": 1
+            },
+            "notes": "Board: '3 Pick: Deal 5 dmg. 4: 6. 5: 7. On 4-of-a-kind (#'s), gain 1 CP.'",
+            "verified": true
+          },
+          {
+            "id": "pick_axe_4a",
+            "boardName": "Pick Axe 4A (AAAA)",
+            "dicePattern": "AAAA",
+            "baseDamage": 6,
+            "defendable": true,
+            "numberMatchBonus": {
+              "ofAKind": 4,
+              "cpGain": 1
+            },
+            "verified": true
+          },
+          {
+            "id": "pick_axe_5a",
+            "boardName": "Pick Axe 5A (AAAAA)",
+            "dicePattern": "AAAAA",
+            "baseDamage": 7,
+            "defendable": true,
+            "numberMatchBonus": {
+              "ofAKind": 4,
+              "cpGain": 1
+            },
+            "verified": true
+          },
+          {
+            "id": "furnace",
+            "boardName": "Furnace (BBBBB)",
+            "dicePattern": "BBBBB",
+            "baseDamage": 5,
+            "defendable": true,
+            "bonusRoll": {
+              "diceCount": "1",
+              "addRolledValueAsDamage": true
+            },
+            "notes": "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' (5 Forge symbols.)",
+            "verified": true
+          },
+          {
+            "id": "smelting_time",
+            "boardName": "Smelting Time (CCCC)",
+            "dicePattern": "CCCC",
+            "baseDamage": 9,
+            "defendable": false,
+            "cardDraw": 1,
+            "notes": "Board: 'Draw 1. Deal 9 undefendable dmg.' (4 Anvil symbols.)",
+            "verified": true
+          },
+          {
+            "id": "a_good_haul",
+            "boardName": "A Good Haul (ABCC)",
+            "dicePattern": "ABCC (1 Pick, 1 Forge, 2 Anvil)",
+            "baseDamage": 8,
+            "defendable": true,
+            "minesDeck": true,
+            "revealAllMinedOre": true,
+            "notes": "Board: 'Mine your deck. You may reveal all ORE cards that are Mined in this way and place them on your Passive Ability, THE FORGE. Then deal 8 dmg.' Pattern confirmed by user 2026-07-04: Pick + Forge + 2 Anvil.",
+            "verified": true
+          },
+          {
+            "id": "armored_up_s",
+            "boardName": "Armored Up S (4-straight)",
+            "dicePattern": "Small Straight (4 consecutive)",
+            "baseDamage": 7,
+            "defendable": true,
+            "thresholdBonusArmor": {
+              "armorAtLeast": 2,
+              "bonusDamage": 2
+            },
+            "notes": "Board: 'If you have 2 Armor, add 2 dmg. SMALL STRAIGHT: Deal 7 dmg. LARGE STRAIGHT: Deal 10 dmg.'",
+            "verified": true
+          },
+          {
+            "id": "armored_up_l",
+            "boardName": "Armored Up L (5-straight)",
+            "dicePattern": "Large Straight (5 consecutive)",
+            "baseDamage": 10,
+            "defendable": true,
+            "thresholdBonusArmor": {
+              "armorAtLeast": 2,
+              "bonusDamage": 2
+            },
+            "verified": true
+          },
+          {
+            "id": "final_touches",
+            "boardName": "Final Touches! (CCCCC)",
+            "dicePattern": "CCCCC",
+            "baseDamage": 14,
+            "defendable": false,
+            "searchOreToForge": 1,
+            "notes": "ULTIMATE. Board: 'Search your deck for any one ORE card. Place it on to your Passive Ability, THE FORGE, then shuffle your deck. Deal 14 dmg.' Leaflet clarification: 'If you have zero ORE cards in your deck, ignore the effect of placing one ORE card on THE FORGE (but still shuffle your deck).' Standard Ultimate convention: dice may be altered to prevent it, otherwise no opponent action until it completes — treated as undefendable.",
+            "verified": true
+          }
+        ],
+        "passives": [
+          {
+            "id": "the_forge",
+            "name": "The Forge",
+            "trigger": "Main Phase (passive holding area)",
+            "text": "During your Main Phase, you may place any number of ORE from your hand on to this Passive Ability. (Clarifications: ORE drawn normally is NOT auto-placed but can be placed there any time during your Main Phase; Scrap Effects can only be performed on ORE that is on THE FORGE; ORE on THE FORGE is revealed/public.)",
+            "verified": true
+          },
+          {
+            "id": "the_mines",
+            "name": "The Mines",
+            "trigger": "Upkeep Phase (optional) + any time (once per turn, 3 CP)",
+            "text": "During your Upkeep Phase, you may Mine your deck. Once per turn, you may spend 3 CP at any time to draw 1 card.",
+            "verified": true
+          },
+          {
+            "id": "mining",
+            "name": "Mining (keyword)",
+            "trigger": "Any effect that reads 'Mine your deck'",
+            "text": "Look at the top three cards of your deck: if any of them are ORE cards, reveal one of them to your opponent and place it on your Passive Ability, THE FORGE. Alternatively, you may choose to reveal none of these cards and gain 1 CP (allowed even if none of the top 3 are ORE). Each remaining card must be placed on the bottom of your deck in any order. You cannot play Instant Action cards from the looked-at cards (this is not drawing them).",
+            "verified": true
+          },
+          {
+            "id": "crafting",
+            "name": "Crafting (keyword)",
+            "trigger": "Main Phase",
+            "text": "During your Main Phase, you may Craft Armor from your leaflet. You must have the required Blueprint ORE cards on THE FORGE, and the prerequisite Armor (if applicable) on any Hero Board. All ORE used goes to the bottom of your deck; the old Blueprint Armor returns to the leaflet; place the new Armor on yourself (or a teammate — N/A in 1v1). You may not Craft an Armor whose token is not available on the leaflet.",
+            "verified": true
+          },
+          {
+            "id": "scrap",
+            "name": "Scrap (keyword)",
+            "trigger": "Any time",
+            "text": "At any time, choose an ORE card from your Passive Ability, THE FORGE, and perform its Scrap Effect. Scrapped ORE goes to the discard pile (unlike Crafted/unrevealed Mined ORE, which goes to the bottom of the deck).",
+            "verified": true
+          }
+        ],
+        "defense": {
+          "name": "Masterwork",
+          "diceCount": "1",
+          "text": "Defense Roll 1 die: On Pick, Mine your deck. On Forge, double the effect of one Armor. On Anvil, double the effect of up to two different Armor. (Armor effects themselves trigger from being Attacked — see armors.)",
+          "verified": true
+        },
+        "cards": [
+          {
+            "id": "gold-ore",
+            "name": "Gold Ore",
+            "kind": "ore",
+            "cpCost": null,
+            "count": 9,
+            "text": "Scrap Effect: Heal 1 or gain 1 CP. Then discard this card.",
+            "effect": null,
+            "scrapOptions": [
+              {
+                "heal": 1
+              },
+              {
+                "cpGain": 1
+              }
+            ],
+            "verified": true
+          },
+          {
+            "id": "diamond-ore",
+            "name": "Diamond Ore",
+            "kind": "ore",
+            "cpCost": null,
+            "count": 6,
+            "text": "Scrap Effect: You may re-roll 1 of your dice or gain 1 CP. Then discard this card.",
+            "effect": null,
+            "scrapOptions": [
+              {
+                "rerollOwnDie": true
+              },
+              {
+                "cpGain": 1
+              }
+            ],
+            "verified": true
+          },
+          {
+            "id": "ultimanium-ore",
+            "name": "Ultimanium Ore",
+            "kind": "ore",
+            "cpCost": null,
+            "count": 1,
+            "text": "Scrap Effect: Change the value of one of your dice to a 6 or draw 2. Then discard this card.",
+            "effect": null,
+            "scrapOptions": [
+              {
+                "setOwnDieTo": 6
+              },
+              {
+                "cardDraw": 2
+              }
+            ],
+            "verified": true
+          }
+        ],
+        "armors": [
+          {
+            "id": "gold_helmet",
+            "name": "Gold Helmet",
+            "slot": "helmet",
+            "tier": 1,
+            "blueprint": {
+              "ore": {
+                "gold-ore": 2
+              }
+            },
+            "effectText": "Whenever you are Attacked with normal damage, you may deal 1 dmg back to your Attacker.",
+            "verified": true
+          },
+          {
+            "id": "diamond_helmet",
+            "name": "Diamond Helmet",
+            "slot": "helmet",
+            "tier": 2,
+            "blueprint": {
+              "ore": {
+                "diamond-ore": 2
+              },
+              "requiresArmorId": "gold_helmet"
+            },
+            "effectText": "Whenever you are Attacked with normal damage, you may deal 2 dmg back to your Attacker.",
+            "verified": true
+          },
+          {
+            "id": "ultimanium_helmet",
+            "name": "Ultimanium Helmet",
+            "slot": "helmet",
+            "tier": 3,
+            "blueprint": {
+              "ore": {
+                "ultimanium-ore": 1
+              },
+              "requiresArmorId": "diamond_helmet"
+            },
+            "effectText": "Whenever you are Attacked with normal damage, you may deal 3 dmg back to your Attacker.",
+            "verified": true
+          },
+          {
+            "id": "gold_shield",
+            "name": "Gold Shield",
+            "slot": "shield",
+            "tier": 1,
+            "blueprint": {
+              "ore": {
+                "gold-ore": 2
+              }
+            },
+            "effectText": "Whenever you are Attacked with normal damage, you may prevent 1 dmg.",
+            "verified": true
+          },
+          {
+            "id": "diamond_shield",
+            "name": "Diamond Shield",
+            "slot": "shield",
+            "tier": 2,
+            "blueprint": {
+              "ore": {
+                "diamond-ore": 2
+              },
+              "requiresArmorId": "gold_shield"
+            },
+            "effectText": "Whenever you are Attacked with normal damage, you may prevent 2 dmg.",
+            "verified": true
+          },
+          {
+            "id": "ultimanium_shield",
+            "name": "Ultimanium Shield",
+            "slot": "shield",
+            "tier": 3,
+            "blueprint": {
+              "ore": {
+                "ultimanium-ore": 1
+              },
+              "requiresArmorId": "diamond_shield"
+            },
+            "effectText": "Whenever you are Attacked with any type of damage (except an Ultimate), prevent 2 dmg. (Leaflet clarification: works against normal, undefendable and pure dmg; NOT against an Ultimate or collateral dmg.)",
             "verified": true
           }
         ]

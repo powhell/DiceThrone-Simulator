@@ -51,9 +51,15 @@ export interface AbilityTemplate {
   advancesAllTimeBombsInPlay?: boolean
   searchUpgradesIntoPlay?: number
   // On N-of-a-kind by face VALUE (not symbol count) among the resolved dice, grant a bonus
-  // (HH's Cleave: "On 4-of-a-kind (#'s), gain Dreadful"). Distinct from tokensGrantedToSelf
-  // because it depends on raw face values, not the A/B/C symbol classification.
-  numberMatchBonus?: { ofAKind: number; tokensGranted: Partial<Record<TokenKind, number>> }
+  // (HH's Cleave: "On 4-of-a-kind (#'s), gain Dreadful"; FM's Pick Axe: "On 4-of-a-kind
+  // (#'s), gain 1 CP" — hence the optional cpGain).
+  numberMatchBonus?: { ofAKind: number; tokensGranted?: Partial<Record<TokenKind, number>>; cpGain?: number }
+  // Forgemaster (fm) ability effects — see characters/fm/hero.json and the leaflet's
+  // Forging Info Card for the Mine/Forge vocabulary.
+  minesDeck?: boolean                 // "Mine your deck" as part of resolving this ability
+  revealAllMinedOre?: boolean         // A Good Haul: reveal ALL Ore in the mined top-3, all go to The Forge
+  searchOreToForge?: number           // Final Touches!: tutor N Ore from deck onto The Forge, then shuffle
+  thresholdBonusArmor?: { armorAtLeast: number; bonusDamage: number } // Armored Up: "+2 dmg if you have 2 Armor"
   // A secondary dice roll resolved as part of this ability (HH's Spectral Assault: roll N
   // extra dice, tally symbols for bonus effects). diceCount is a human-readable formula.
   bonusRoll?: {
@@ -61,6 +67,7 @@ export interface AbilityTemplate {
     perSymbolDamage?: Partial<Record<'A' | 'B' | 'C', number>>
     undefendableOnSymbolPair?: 'A' | 'B' | 'C'
     perSymbolTokens?: Partial<Record<'A' | 'B' | 'C', { token: TokenKind; amount: number }>>
+    addRolledValueAsDamage?: boolean // FM's Furnace: "roll 1 die: Add dmg equal to the value rolled"
   }
   // Some Hero Upgrade ("II") cards replace this ability's own printed numbers when in play
   // (distinct from `altAbility` on CardTemplate, which is a wholly separate new ability the
@@ -88,14 +95,25 @@ export interface CardEffectTemplate {
   tokensInflictedOnOpponent?: Partial<Record<TokenKind, number>>
   cpGain?: number
   cardDraw?: number
+  heal?: number
+  rerollOwnDie?: boolean // fm Diamond Ore scrap: "You may re-roll 1 of your dice"
+  setOwnDieTo?: number   // fm Ultimanium Ore scrap: "Change the value of one of your dice to a 6"
   other?: string // anything real but not yet modeled structurally
 }
 
 export interface CardTemplate {
   id: string
   name: string
-  kind: 'upgrade' | 'action' | 'ultimate'
+  // 'ore' (Forgemaster): not playable from hand like an action — placed on THE FORGE
+  // (Mining/Main Phase), used as Crafting material or for its one-shot Scrap Effect.
+  kind: 'upgrade' | 'action' | 'ultimate' | 'ore'
   cpCost: number | null
+  // Number of identical copies in the hero's deck (Forgemaster is the only hero with
+  // duplicated cards — Gold Ore x9, Diamond Ore x6). Omitted = 1.
+  count?: number
+  // kind:'ore' only. The Scrap Effect: choose ONE of these options, then discard the card.
+  // Only performable while the Ore sits on THE FORGE (verified leaflet clarification).
+  scrapOptions?: CardEffectTemplate[]
   text: string // literal card text, once transcribed
   effect: CardEffectTemplate | null // structured effect, filled in once `text` is verified
   // Some Hero Upgrade cards unlock a second, differently-named dice-triggered ability once
@@ -142,6 +160,19 @@ export interface DefenseTemplate {
   verified: boolean
 }
 
+// Forgemaster Armor (leaflet "ARMOR — Unique Status Effect", stack limit 1 Helmet / 1 Shield).
+// Crafted during Main Phase from Blueprint Ore on THE FORGE (+ the previous-tier Armor, which
+// returns to the leaflet). May not be removed or transferred except by this hero's effects.
+export interface ArmorTemplate {
+  id: string
+  name: string
+  slot: 'helmet' | 'shield'
+  tier: number // 1 = Gold, 2 = Diamond, 3 = Ultimanium
+  blueprint: { ore: Record<string, number>; requiresArmorId?: string }
+  effectText: string // verified leaflet text of what activating it does
+  verified: boolean
+}
+
 export interface HeroTemplate {
   id: string
   name: string
@@ -156,6 +187,7 @@ export interface HeroTemplate {
   passives?: PassiveTemplate[]
   defense?: DefenseTemplate | null
   cards: CardTemplate[]
+  armors?: ArmorTemplate[] // Forgemaster only
 }
 
 export interface CommonCardsTemplate {

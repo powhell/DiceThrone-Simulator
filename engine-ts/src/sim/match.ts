@@ -8,12 +8,17 @@ import { createInitialBWTokens } from './hero/bw.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
-// One copy of every unique card (hero-specific + common) — confirmed by the user against the
-// physical decks: no duplicate copies, and the printed "~32 cards" count includes one
-// tournament-banned card intentionally left out of hero.json/common-cards.json.
+// Every card (hero-specific + common), honoring per-card copy counts. HH/BW decks have one
+// copy of every unique card — confirmed by the user against the physical decks (the printed
+// "~32 cards" count includes one tournament-banned card intentionally left out of
+// hero.json/common-cards.json). The Forgemaster is the only hero with duplicates
+// (CardTemplate.count: Gold Ore x9, Diamond Ore x6).
 export function buildFullDeck(heroId: HeroId): string[] {
   const hero = heroTemplateFor(heroId)
-  return [...hero.cards.map(c => c.id), ...commonCards.cards.map(c => c.id)]
+  const out: string[] = []
+  for (const c of hero.cards) for (let i = 0; i < (c.count ?? 1); i++) out.push(c.id)
+  for (const c of commonCards.cards) for (let i = 0; i < (c.count ?? 1); i++) out.push(c.id)
+  return out
 }
 
 // rng is optional so unit tests that don't care about deck/hand contents (most of

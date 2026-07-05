@@ -31,6 +31,12 @@ const heroes = {
     cards: listImages('../characters/Black_Widow/cards'),
     data: readJson('src/sim/data/characters/bw/hero.json'),
   },
+  fm: {
+    board: listImages('../characters/forge_master/board'),
+    leaflet: listImages('../characters/forge_master/leaflet'),
+    cards: listImages('../characters/forge_master/cards'),
+    data: readJson('src/sim/data/characters/fm/hero.json'),
+  },
 };
 
 const common = {
