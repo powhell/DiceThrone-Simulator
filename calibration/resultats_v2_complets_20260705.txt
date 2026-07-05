@@ -1,0 +1,31 @@
+=== Étalons (valeur d'1 PV en win-rate) ===
+HH +4 PV : Δwin 12.15% ± 1.01 (n=2400)  -> 1 PV = 3.04%
+BW +4 PV : Δwin 12.44% ± 0.95 (n=2400)  -> 1 PV = 3.11%
+FM +4 PV : Δwin 11.25% ± 0.52 (n=2400)  -> 1 PV = 2.81%
+
+=== Échelle Dreadful (marginal du jeton n, encodé MARGINAL_VALUE=[3,3,3,5,0.5]) ===
+jeton 1 (0->1) : Δwin 5.88% ± 1.07 (n=2400) -> 1.93 ± 0.39 dmg-equiv (encodé 3)
+jeton 2 (1->2) : Δwin 2.77% ± 1.08 (n=2400) -> 0.91 ± 0.36 dmg-equiv (encodé 3)
+jeton 3 (2->3) : Δwin 2.77% ± 0.97 (n=2400) -> 0.91 ± 0.33 dmg-equiv (encodé 3)
+jeton 4 (3->4) : Δwin 3.23% ± 1.01 (n=2400) -> 1.06 ± 0.34 dmg-equiv (encodé 5)
+jeton 5 (4->5) : Δwin -0.44% ± 0.63 (n=2400) -> -0.14 ± 0.21 dmg-equiv (encodé 0.5)
+
+=== Autres actifs (vs base) ===
+CP (HH)             : Δwin 2.29% ± 0.72 (n=2400) -> 0.75 ± 0.24 dmg-equiv (encodé 1.5)
+pioche 1 (HH)       : Δwin 4.88% ± 1.09 (n=2400) -> 1.61 ± 0.38 dmg-equiv (encodé 2)
+Grim Pursuit        : Δwin 5.46% ± 1.04 (n=2400) -> 1.80 ± 0.37 dmg-equiv (encodé 1.66)
+Time Bomb infligée  : Δwin 5.00% ± 1.16 (n=2400) -> 1.61 ± 0.39 dmg-equiv (encodé 2.8)
+CP (BW)             : Δwin -0.19% ± 0.80 (n=2400) -> -0.06 ± 0.26 dmg-equiv (encodé 1.5)
+pioche 1 (BW)       : Δwin 3.65% ± 1.12 (n=2400) -> 1.17 ± 0.37 dmg-equiv (encodé 2)
+Agility             : Δwin 4.56% ± 1.08 (n=2400) -> 1.47 ± 0.36 dmg-equiv (encodé 2)
+Covert Ops          : Δwin -0.29% ± 0.91 (n=2400) -> -0.09 ± 0.29 dmg-equiv (encodé 1.5)
+
+=== Forgemaster (vs base_fm, greedy des 2 côtés) ===
+CP (FM)                 : Δwin 0.00% ± 0.00 (n=2400) -> 0.00 ± 0.00 dmg-equiv (encodé 1.5)
+pioche 1 (FM)           : Δwin 3.58% ± 0.61 (n=2400) -> 1.27 ± 0.22 dmg-equiv (encodé 2)
+2 Gold Ore sur la Forge : Δwin 12.19% ± 0.72 (n=2400) -> 4.33 ± 0.33 dmg-equiv (encodé —)
+Gold Shield porté       : Δwin 15.83% ± 0.78 (n=2400) -> 5.63 ± 0.38 dmg-equiv (encodé —)
+Gold Helmet porté       : Δwin 17.60% ± 0.80 (n=2400) -> 6.26 ± 0.41 dmg-equiv (encodé —)
+base_fm : 2400 parties · FM gagne 60.8% vs BW
+
+base : 2400 parties · HH gagne 49.1% · nuls 167 · timeouts 0

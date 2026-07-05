@@ -27,8 +27,9 @@ function pairedDelta(treatArm, ctrlArm, hero) {
   for (const [k, rt] of t) {
     const rc = c.get(k)
     if (!rc) continue
-    const st = hero === 'hh' ? rt.hhScore : 1 - rt.hhScore
-    const sc = hero === 'hh' ? rc.hhScore : 1 - rc.hhScore
+    // hhScore = score du PREMIER héros du matchup (hh pour les bras hh/bw, fm pour les bras fm)
+    const st = hero === 'bw' ? 1 - rt.hhScore : rt.hhScore
+    const sc = hero === 'bw' ? 1 - rc.hhScore : rc.hhScore
     diffs.push(st - sc)
   }
   const n = diffs.length
