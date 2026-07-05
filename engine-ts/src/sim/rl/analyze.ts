@@ -186,7 +186,7 @@ function makeSpy(base: Policy, statsByHero: Record<HeroId, HeroStats>): Policy {
 }
 
 function analyzeNetwork(network: Network, gamesPerMatchup: number, seedBase: number): { hero: Record<HeroId, HeroStats>; matchups: MatchupStats[] } {
-  const statsByHero: Record<HeroId, HeroStats> = { hh: emptyHeroStats('hh'), bw: emptyHeroStats('bw') }
+  const statsByHero: Record<HeroId, HeroStats> = { hh: emptyHeroStats('hh'), bw: emptyHeroStats('bw'), fm: emptyHeroStats('fm') }
   const policy = makeSpy(createValueGreedyPolicy(network), statsByHero)
   const matchups: MatchupStats[] = []
 

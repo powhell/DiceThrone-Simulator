@@ -5,6 +5,7 @@ import { mulberry32, shuffle } from './rng.js'
 import { playTurn } from './turn.js'
 import { createInitialHHTokens } from './hero/hh.rules.js'
 import { createInitialBWTokens } from './hero/bw.rules.js'
+import { createInitialFMTokens } from './hero/fm.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
@@ -32,7 +33,9 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     deck = shuffle(buildFullDeck(heroId), rng)
     hand = deck.splice(0, STARTING_HAND_SIZE)
   }
-  const tokens = heroId === 'hh' ? createInitialHHTokens(true) : createInitialBWTokens()
+  const tokens = heroId === 'hh' ? createInitialHHTokens(true)
+    : heroId === 'fm' ? createInitialFMTokens()
+    : createInitialBWTokens()
   // Verified leaflet setup rule (HH "Hero Setup"): "Begin the game with the Haunted Head on
   // your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful." No
   // BW equivalent (she has no Dreadful token) — this only applies to hh going second.
@@ -53,6 +56,10 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     grimPursuitBonusUsedThisTurn: false,
     covertOpsUsedThisTurn: false,
     grimPursuitRerollUsedThisTurn: false,
+    // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
+    // "begin with any one Gold Armor" only applies with more than 1 opponent).
+    forge: [],
+    armor: { helmet: 0, shield: 0 },
   }
 }
 

@@ -45,7 +45,7 @@ function buildHeroEncoding(heroId: HeroId): HeroEncoding {
   }
 }
 
-const ENCODINGS: Record<HeroId, HeroEncoding> = { hh: buildHeroEncoding('hh'), bw: buildHeroEncoding('bw') }
+const ENCODINGS: Record<HeroId, HeroEncoding> = { hh: buildHeroEncoding('hh'), bw: buildHeroEncoding('bw'), fm: buildHeroEncoding('fm') }
 
 // Both heroes' full decks must be the same size for the hand one-hot block to have a fixed
 // width. True today (14 hero cards + 17 common = 31 for both); if a future hero breaks this,

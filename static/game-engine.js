@@ -841,9 +841,122 @@ var Game = (() => {
     }
   };
 
+  // src/characters/forgemaster/constants.ts
+  var PICK_AXE_3A = 5;
+  var PICK_AXE_4A = 6;
+  var PICK_AXE_5A = 7;
+  var FURNACE_BASE = 5;
+  var FURNACE_BONUS_ROLL_EV = 3.5;
+  var SMELTING_TIME_UNDEFENDABLE = 9;
+  var A_GOOD_HAUL_DMG = 8;
+  var ARMORED_UP_SMALL = 7;
+  var ARMORED_UP_LARGE = 10;
+  var ARMORED_UP_2ARMOR_BONUS = 2;
+  var FINAL_TOUCHES_VALUE = 14;
+  var CP_TO_DMG_EQUIV2 = 1.5;
+  var CARD_DRAW_VALUE2 = 2;
+  var MINE_VALUE = 1.5;
+  var ORE_TUTOR_VALUE = 2;
+  var WHIFF_VALUE2 = 0;
+
+  // src/characters/forgemaster/abilities.ts
+  function fmFaceToSymbol(face) {
+    if (face <= 3) return "A";
+    if (face <= 5) return "B";
+    return "C";
+  }
+  function classify3(dice) {
+    const counts = { A: 0, B: 0, C: 0 };
+    for (const face of dice) counts[fmFaceToSymbol(face)]++;
+    return counts;
+  }
+  function hasStraight3(dice, length) {
+    const unique = new Set(dice);
+    for (let start = 1; start <= 7 - length; start++) {
+      let found = true;
+      for (let i = 0; i < length; i++) {
+        if (!unique.has(start + i)) {
+          found = false;
+          break;
+        }
+      }
+      if (found) return true;
+    }
+    return false;
+  }
+  function hasNumberMatch(dice, ofAKind) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return [...counts.values()].some((n) => n >= ofAKind);
+  }
+  function getCandidates3(dice, armorCount2) {
+    const { A: a, B: b, C: c } = classify3(dice);
+    const out = [];
+    const pickCpBonus = hasNumberMatch(dice, 4) ? CP_TO_DMG_EQUIV2 : 0;
+    if (a >= 5) out.push(["Pick Axe 5A", PICK_AXE_5A + pickCpBonus, PICK_AXE_5A]);
+    else if (a === 4) out.push(["Pick Axe 4A", PICK_AXE_4A + pickCpBonus, PICK_AXE_4A]);
+    else if (a === 3) out.push(["Pick Axe 3A", PICK_AXE_3A + pickCpBonus, PICK_AXE_3A]);
+    if (b >= 5) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE]);
+    if (c >= 4) out.push(["Smelting Time", SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, SMELTING_TIME_UNDEFENDABLE]);
+    if (a >= 1 && b >= 1 && c >= 2) out.push(["A Good Haul", A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG]);
+    const armoredBonus = armorCount2 >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
+    if (hasStraight3(dice, 5)) out.push(["Armored Up L", ARMORED_UP_LARGE + armoredBonus, ARMORED_UP_LARGE + armoredBonus]);
+    if (hasStraight3(dice, 4)) out.push(["Armored Up S", ARMORED_UP_SMALL + armoredBonus, ARMORED_UP_SMALL + armoredBonus]);
+    if (c >= 5) out.push(["Final Touches!", FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, FINAL_TOUCHES_VALUE]);
+    out.push(["Whiff", WHIFF_VALUE2, WHIFF_VALUE2]);
+    return out;
+  }
+  function bestAbilityValue3(dice, armorCount2) {
+    return Math.max(...getCandidates3(dice, armorCount2).map(([, v]) => v));
+  }
+  function bestAbilityName3(dice, armorCount2) {
+    const cands = getCandidates3(dice, armorCount2);
+    return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
+  }
+  function buildAbilityBoard3(dice, armorCount2) {
+    const matchedSet = new Set(getCandidates3(dice, armorCount2).map(([name]) => name));
+    const armoredBonus = armorCount2 >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
+    return [
+      { name: "Final Touches! (CCCCC)", value: FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, baseDamage: FINAL_TOUCHES_VALUE, matched: matchedSet.has("Final Touches!") },
+      { name: "Smelting Time (CCCC)", value: SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, baseDamage: SMELTING_TIME_UNDEFENDABLE, matched: matchedSet.has("Smelting Time") },
+      { name: "Armored Up L (5-straight)", value: ARMORED_UP_LARGE + armoredBonus, baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has("Armored Up L") },
+      { name: "A Good Haul (ABCC)", value: A_GOOD_HAUL_DMG + MINE_VALUE, baseDamage: A_GOOD_HAUL_DMG, matched: matchedSet.has("A Good Haul") },
+      { name: "Armored Up S (4-straight)", value: ARMORED_UP_SMALL + armoredBonus, baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has("Armored Up S") },
+      { name: "Furnace (BBBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
+      { name: "Pick Axe 5A (AAAAA)", value: PICK_AXE_5A, baseDamage: PICK_AXE_5A, matched: matchedSet.has("Pick Axe 5A") },
+      { name: "Pick Axe 4A (AAAA)", value: PICK_AXE_4A, baseDamage: PICK_AXE_4A, matched: matchedSet.has("Pick Axe 4A") },
+      { name: "Pick Axe 3A (AAA)", value: PICK_AXE_3A, baseDamage: PICK_AXE_3A, matched: matchedSet.has("Pick Axe 3A") },
+      { name: "Whiff", value: WHIFF_VALUE2, baseDamage: WHIFF_VALUE2, matched: matchedSet.has("Whiff") }
+    ];
+  }
+
+  // src/characters/forgemaster/config.ts
+  var fmConfig = {
+    id: "fm",
+    faceToSymbol(face) {
+      return fmFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      return bestAbilityValue3(dice, state.armorCount);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName3(dice, state.armorCount);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard3(dice, state.armorCount);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates3(dice, state.armorCount);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      return `${Math.min(state.armorCount, 2)}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -1034,6 +1147,56 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/fm/hero.json
+  var hero_default3 = {
+    id: "fm",
+    name: "Forgemaster",
+    diceAnatomy: "AAABBC \u2014 faces 1-3 = Pick (A), 4-5 = Forge (B), 6 = Anvil (C). Verified die leaflet (V1).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    setupNotes: "Hero Setup (verified leaflet): 'If you have more than 1 opponent, begin the game with any one Gold Armor.' In 1v1 (this engine) the Forgemaster therefore starts with NO Armor.",
+    source: "Encoded 2026-07-04 from user's scans in characters/forge_master/ (board x3, Forging Info Card x2, leaflet rules clarifications x2, die anatomy, 3 distinct Ore cards). No strategy guide exists for this hero.",
+    tokens: [],
+    flags: [],
+    abilities: [
+      { id: "pick_axe_3a", boardName: "Pick Axe 3A (AAA)", dicePattern: "AAA", baseDamage: 5, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, notes: "Board: '3 Pick: Deal 5 dmg. 4: 6. 5: 7. On 4-of-a-kind (#'s), gain 1 CP.'", verified: true },
+      { id: "pick_axe_4a", boardName: "Pick Axe 4A (AAAA)", dicePattern: "AAAA", baseDamage: 6, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, verified: true },
+      { id: "pick_axe_5a", boardName: "Pick Axe 5A (AAAAA)", dicePattern: "AAAAA", baseDamage: 7, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, verified: true },
+      { id: "furnace", boardName: "Furnace (BBBBB)", dicePattern: "BBBBB", baseDamage: 5, defendable: true, bonusRoll: { diceCount: "1", addRolledValueAsDamage: true }, notes: "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' (5 Forge symbols.)", verified: true },
+      { id: "smelting_time", boardName: "Smelting Time (CCCC)", dicePattern: "CCCC", baseDamage: 9, defendable: false, cardDraw: 1, notes: "Board: 'Draw 1. Deal 9 undefendable dmg.' (4 Anvil symbols.)", verified: true },
+      { id: "a_good_haul", boardName: "A Good Haul (ABCC)", dicePattern: "ABCC (1 Pick, 1 Forge, 2 Anvil)", baseDamage: 8, defendable: true, minesDeck: true, revealAllMinedOre: true, notes: "Board: 'Mine your deck. You may reveal all ORE cards that are Mined in this way and place them on your Passive Ability, THE FORGE. Then deal 8 dmg.' Pattern confirmed by user 2026-07-04: Pick + Forge + 2 Anvil.", verified: true },
+      { id: "armored_up_s", boardName: "Armored Up S (4-straight)", dicePattern: "Small Straight (4 consecutive)", baseDamage: 7, defendable: true, thresholdBonusArmor: { armorAtLeast: 2, bonusDamage: 2 }, notes: "Board: 'If you have 2 Armor, add 2 dmg. SMALL STRAIGHT: Deal 7 dmg. LARGE STRAIGHT: Deal 10 dmg.'", verified: true },
+      { id: "armored_up_l", boardName: "Armored Up L (5-straight)", dicePattern: "Large Straight (5 consecutive)", baseDamage: 10, defendable: true, thresholdBonusArmor: { armorAtLeast: 2, bonusDamage: 2 }, verified: true },
+      { id: "final_touches", boardName: "Final Touches! (CCCCC)", dicePattern: "CCCCC", baseDamage: 14, defendable: false, searchOreToForge: 1, notes: "ULTIMATE. Board: 'Search your deck for any one ORE card. Place it on to your Passive Ability, THE FORGE, then shuffle your deck. Deal 14 dmg.' Leaflet clarification: 'If you have zero ORE cards in your deck, ignore the effect of placing one ORE card on THE FORGE (but still shuffle your deck).' Standard Ultimate convention: dice may be altered to prevent it, otherwise no opponent action until it completes \u2014 treated as undefendable.", verified: true }
+    ],
+    passives: [
+      { id: "the_forge", name: "The Forge", trigger: "Main Phase (passive holding area)", text: "During your Main Phase, you may place any number of ORE from your hand on to this Passive Ability. (Clarifications: ORE drawn normally is NOT auto-placed but can be placed there any time during your Main Phase; Scrap Effects can only be performed on ORE that is on THE FORGE; ORE on THE FORGE is revealed/public.)", verified: true },
+      { id: "the_mines", name: "The Mines", trigger: "Upkeep Phase (optional) + any time (once per turn, 3 CP)", text: "During your Upkeep Phase, you may Mine your deck. Once per turn, you may spend 3 CP at any time to draw 1 card.", verified: true },
+      { id: "mining", name: "Mining (keyword)", trigger: "Any effect that reads 'Mine your deck'", text: "Look at the top three cards of your deck: if any of them are ORE cards, reveal one of them to your opponent and place it on your Passive Ability, THE FORGE. Alternatively, you may choose to reveal none of these cards and gain 1 CP (allowed even if none of the top 3 are ORE). Each remaining card must be placed on the bottom of your deck in any order. You cannot play Instant Action cards from the looked-at cards (this is not drawing them).", verified: true },
+      { id: "crafting", name: "Crafting (keyword)", trigger: "Main Phase", text: "During your Main Phase, you may Craft Armor from your leaflet. You must have the required Blueprint ORE cards on THE FORGE, and the prerequisite Armor (if applicable) on any Hero Board. All ORE used goes to the bottom of your deck; the old Blueprint Armor returns to the leaflet; place the new Armor on yourself (or a teammate \u2014 N/A in 1v1). You may not Craft an Armor whose token is not available on the leaflet.", verified: true },
+      { id: "scrap", name: "Scrap (keyword)", trigger: "Any time", text: "At any time, choose an ORE card from your Passive Ability, THE FORGE, and perform its Scrap Effect. Scrapped ORE goes to the discard pile (unlike Crafted/unrevealed Mined ORE, which goes to the bottom of the deck).", verified: true }
+    ],
+    defense: {
+      name: "Masterwork",
+      diceCount: "1",
+      text: "Defense Roll 1 die: On Pick, Mine your deck. On Forge, double the effect of one Armor. On Anvil, double the effect of up to two different Armor. (Armor effects themselves trigger from being Attacked \u2014 see armors.)",
+      verified: true
+    },
+    cards: [
+      { id: "gold-ore", name: "Gold Ore", kind: "ore", cpCost: null, count: 9, text: "Scrap Effect: Heal 1 or gain 1 CP. Then discard this card.", effect: null, scrapOptions: [{ heal: 1 }, { cpGain: 1 }], verified: true },
+      { id: "diamond-ore", name: "Diamond Ore", kind: "ore", cpCost: null, count: 6, text: "Scrap Effect: You may re-roll 1 of your dice or gain 1 CP. Then discard this card.", effect: null, scrapOptions: [{ rerollOwnDie: true }, { cpGain: 1 }], verified: true },
+      { id: "ultimanium-ore", name: "Ultimanium Ore", kind: "ore", cpCost: null, count: 1, text: "Scrap Effect: Change the value of one of your dice to a 6 or draw 2. Then discard this card.", effect: null, scrapOptions: [{ setOwnDieTo: 6 }, { cardDraw: 2 }], verified: true }
+    ],
+    armors: [
+      { id: "gold_helmet", name: "Gold Helmet", slot: "helmet", tier: 1, blueprint: { ore: { "gold-ore": 2 } }, effectText: "Whenever you are Attacked with normal damage, you may deal 1 dmg back to your Attacker.", verified: true },
+      { id: "diamond_helmet", name: "Diamond Helmet", slot: "helmet", tier: 2, blueprint: { ore: { "diamond-ore": 2 }, requiresArmorId: "gold_helmet" }, effectText: "Whenever you are Attacked with normal damage, you may deal 2 dmg back to your Attacker.", verified: true },
+      { id: "ultimanium_helmet", name: "Ultimanium Helmet", slot: "helmet", tier: 3, blueprint: { ore: { "ultimanium-ore": 1 }, requiresArmorId: "diamond_helmet" }, effectText: "Whenever you are Attacked with normal damage, you may deal 3 dmg back to your Attacker.", verified: true },
+      { id: "gold_shield", name: "Gold Shield", slot: "shield", tier: 1, blueprint: { ore: { "gold-ore": 2 } }, effectText: "Whenever you are Attacked with normal damage, you may prevent 1 dmg.", verified: true },
+      { id: "diamond_shield", name: "Diamond Shield", slot: "shield", tier: 2, blueprint: { ore: { "diamond-ore": 2 }, requiresArmorId: "gold_shield" }, effectText: "Whenever you are Attacked with normal damage, you may prevent 2 dmg.", verified: true },
+      { id: "ultimanium_shield", name: "Ultimanium Shield", slot: "shield", tier: 3, blueprint: { ore: { "ultimanium-ore": 1 }, requiresArmorId: "diamond_shield" }, effectText: "Whenever you are Attacked with any type of damage (except an Ultimate), prevent 2 dmg. (Leaflet clarification: works against normal, undefendable and pure dmg; NOT against an Ultimate or collateral dmg.)", verified: true }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -1061,9 +1224,10 @@ var Game = (() => {
   // src/sim/data/load.ts
   var hhHero = hero_default;
   var bwHero = hero_default2;
+  var fmHero = hero_default3;
   var commonCards = common_cards_default;
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const base = hero.abilities.find((a) => a.boardName === boardName);
@@ -1095,7 +1259,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -1131,7 +1295,7 @@ var Game = (() => {
   function createInitialHHTokens(hasHead2) {
     return { ...emptyBag(), head: hasHead2 ? 1 : 0 };
   }
-  function hasNumberMatch(dice, ofAKind) {
+  function hasNumberMatch2(dice, ofAKind) {
     const counts = /* @__PURE__ */ new Map();
     for (const face of dice) counts.set(face, (counts.get(face) ?? 0) + 1);
     for (const n of counts.values()) if (n >= ofAKind) return true;
@@ -1331,6 +1495,84 @@ var Game = (() => {
     return upgradesInPlay.length >= 5 ? 1 : 0;
   }
 
+  // src/sim/hero/fm.rules.ts
+  function createInitialFMTokens() {
+    return emptyBag();
+  }
+  var ORE_RANK = { "ultimanium-ore": 3, "diamond-ore": 2, "gold-ore": 1 };
+  function isOre(cardId) {
+    return cardId in ORE_RANK;
+  }
+  function armorCount(p) {
+    return (p.armor.helmet > 0 ? 1 : 0) + (p.armor.shield > 0 ? 1 : 0);
+  }
+  function mine(self, revealAll = false) {
+    const top = self.deck.splice(0, Math.min(3, self.deck.length));
+    const ores = top.filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a]);
+    const revealed = revealAll ? ores : ores.slice(0, 1);
+    for (const id of revealed) top.splice(top.indexOf(id), 1);
+    self.forge.push(...revealed);
+    self.deck.push(...top);
+    const cpGained = revealed.length === 0 ? 1 : 0;
+    self.cp += cpGained;
+    return { revealed, cpGained };
+  }
+  function tutorOreToForge(self, rng) {
+    const best = self.deck.filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a])[0] ?? null;
+    if (best) {
+      self.deck.splice(self.deck.indexOf(best), 1);
+      self.forge.push(best);
+    }
+    for (let i = self.deck.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [self.deck[i], self.deck[j]] = [self.deck[j], self.deck[i]];
+    }
+    return best;
+  }
+  function craftOnce(self) {
+    const armors = (fmHero.armors ?? []).slice().sort((a, b) => b.tier - a.tier || (a.slot === "shield" ? -1 : 1));
+    for (const a of armors) {
+      const cur = self.armor[a.slot];
+      if (cur >= a.tier) continue;
+      if (a.tier > 1 && cur !== a.tier - 1) continue;
+      const need = Object.entries(a.blueprint.ore);
+      if (!need.every(([oreId, n]) => self.forge.filter((x) => x === oreId).length >= n)) continue;
+      for (const [oreId, n] of need) {
+        for (let k = 0; k < n; k++) {
+          self.forge.splice(self.forge.indexOf(oreId), 1);
+          self.deck.push(oreId);
+        }
+      }
+      self.armor[a.slot] = a.tier;
+      return { armorId: a.id, slot: a.slot, tier: a.tier };
+    }
+    return null;
+  }
+  var HELMET_COUNTER = [0, 1, 2, 3];
+  var SHIELD_PREVENT = [0, 1, 2, 2];
+  function armorEffects(self, kind, doubling = {}) {
+    if (kind === "ultimate") return { prevented: 0, counter: 0 };
+    let prevented = 0, counter = 0;
+    if (kind === "normal" && self.armor.helmet > 0) {
+      counter = HELMET_COUNTER[self.armor.helmet] * (doubling.helmet ? 2 : 1);
+    }
+    if (self.armor.shield > 0 && (kind === "normal" || self.armor.shield >= 3)) {
+      prevented = SHIELD_PREVENT[self.armor.shield] * (doubling.shield ? 2 : 1);
+    }
+    return { prevented, counter };
+  }
+  function rollMasterworkDie(rng) {
+    return rollDie(rng);
+  }
+  function masterworkOutcome(face, self) {
+    if (face <= 3) return { mines: true, doubling: {} };
+    if (face <= 5) {
+      if (self.armor.shield > 0) return { mines: false, doubling: { shield: true } };
+      return { mines: false, doubling: { helmet: self.armor.helmet > 0 } };
+    }
+    return { mines: false, doubling: { helmet: self.armor.helmet > 0, shield: self.armor.shield > 0 } };
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
@@ -1339,6 +1581,9 @@ var Game = (() => {
     if (player.heroId === "hh") {
       const t = player.tokens;
       return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay };
+    }
+    if (player.heroId === "fm") {
+      return { armorCount: armorCount(player), upgradeIds: player.upgradesInPlay };
     }
     return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay };
   }
@@ -1397,6 +1642,10 @@ var Game = (() => {
         opp.tokens.head = 1;
         log(state, playerIdx, "upkeep", "Gave the Haunted Head to the opponent");
       }
+    }
+    if (self.heroId === "fm") {
+      const r = mine(self);
+      log(state, playerIdx, "upkeep", `The Mines: mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
     }
     const tb = tickTimeBombsUpkeep(self, rng);
     if (tb.rolls.length > 0) {
@@ -1667,6 +1916,18 @@ var Game = (() => {
   }
   function playMainPhase(state, playerIdx, phase, policies, rng) {
     const oppIdx = 1 - playerIdx;
+    const self = state.players[playerIdx];
+    if (self.heroId === "fm") {
+      const ores = self.hand.filter(isOre);
+      if (ores.length) {
+        self.hand = self.hand.filter((id) => !isOre(id));
+        self.forge.push(...ores);
+        log(state, playerIdx, phase, `The Forge: placed ${ores.join(",")} from hand`);
+      }
+      for (let c = craftOnce(self); c; c = craftOnce(self)) {
+        log(state, playerIdx, phase, `Crafted ${c.armorId} (tier ${c.tier} ${c.slot})`);
+      }
+    }
     resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: "mainPhase", phase }, rng, policies, enumerateWindowActions, applyWindowAction);
   }
   var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble"];
@@ -1930,7 +2191,9 @@ var Game = (() => {
     const policy = policies[defenderIdx];
     let hallowedUpgraded = false;
     let defenseDice;
-    if (defender.heroId === "bw") {
+    if (defender.heroId === "fm") {
+      defenseDice = [rollMasterworkDie(rng)];
+    } else if (defender.heroId === "bw") {
       defenseDice = rollSabotageDice(defender, rng, policy, state, defenderIdx, defender.upgradesInPlay.includes("sabotage-ii"));
     } else {
       hallowedUpgraded = defender.upgradesInPlay.includes("hallowed-reckoning-ii");
@@ -1950,7 +2213,19 @@ var Game = (() => {
     const attacker = state.players[attackerIdx];
     const defender = state.players[defenderIdx];
     let damagePrevented = 0;
-    if (defender.heroId === "bw") {
+    if (defender.heroId === "fm") {
+      const face = finalDefenseDice[0];
+      const out = masterworkOutcome(face, defender);
+      if (out.mines) {
+        const r = mine(defender);
+        log(state, defenderIdx, "defense", `Masterwork (Pick): mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
+      }
+      const eff = armorEffects(defender, "normal", out.doubling);
+      damagePrevented = eff.prevented;
+      if (eff.counter > 0) queueDamage(state, attackerIdx, eff.counter);
+      const doubled = [out.doubling.helmet ? "helmet" : "", out.doubling.shield ? "shield" : ""].filter(Boolean).join("+");
+      log(state, defenderIdx, "defense", `Masterwork: face ${face}, prevented ${eff.prevented}, ${eff.counter} dmg back${doubled ? ` (doubled ${doubled})` : ""}`);
+    } else if (defender.heroId === "bw") {
       const r = countSabotage(finalDefenseDice);
       damagePrevented = r.damagePrevented;
       if (r.damageToAttacker > 0) queueDamage(state, attackerIdx, r.damageToAttacker);
@@ -2139,7 +2414,7 @@ var Game = (() => {
     }
     if (data.numberMatchBonus) {
       const ofAKind = self.upgradesInPlay.includes("cleave-ii") ? 3 : data.numberMatchBonus.ofAKind;
-      if (hasNumberMatch(dice, ofAKind)) {
+      if (hasNumberMatch2(dice, ofAKind)) {
         if (data.numberMatchBonus.tokensGranted?.dreadful) grantDreadful(self, data.numberMatchBonus.tokensGranted.dreadful);
         log(state, playerIdx, "resolveAttack", `${name}: ${ofAKind}-of-a-kind bonus triggered`);
       }
@@ -2149,10 +2424,7 @@ var Game = (() => {
     undefendableOverride = modified.undefendable;
     if (dmg <= 0) log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
     else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies);
-    else {
-      queueDamage(state, 1 - playerIdx, dmg);
-      flushDamage(state);
-    }
+    else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Dreadful Charge"));
     if (tokens.head > 0 && data.cardDrawIfHasHead) {
       drawCards(self, 1, rng);
       log(state, playerIdx, "resolveAttack", `${name}: drew 1 card (Haunted Head)`);
@@ -2160,6 +2432,50 @@ var Game = (() => {
     if (data.cardDraw) {
       drawCards(self, data.cardDraw, rng);
       log(state, playerIdx, "resolveAttack", `${name}: drew ${data.cardDraw} card(s)`);
+    }
+  }
+  function applyFMAbility(state, playerIdx, name, dice, rng, policies) {
+    const policy = policies[playerIdx];
+    const self = state.players[playerIdx];
+    const data = resolvedAbilityByBoardName(heroTemplateFor("fm"), name, self.upgradesInPlay);
+    if (!data) {
+      log(state, playerIdx, "resolveAttack", `Unknown ability "${name}" \u2014 no data, skipped`);
+      return;
+    }
+    let dmg = data.baseDamage ?? 0;
+    if (data.thresholdBonusArmor && armorCount(self) >= data.thresholdBonusArmor.armorAtLeast) {
+      dmg += data.thresholdBonusArmor.bonusDamage;
+      log(state, playerIdx, "resolveAttack", `${name}: +${data.thresholdBonusArmor.bonusDamage} dmg (${data.thresholdBonusArmor.armorAtLeast} Armor)`);
+    }
+    if (data.bonusRoll?.addRolledValueAsDamage) {
+      const b = rollDie(rng);
+      dmg += b;
+      log(state, playerIdx, "resolveAttack", `${name} bonus roll: +${b} dmg`);
+    }
+    if (data.numberMatchBonus?.cpGain && hasNumberMatch2(dice, data.numberMatchBonus.ofAKind)) {
+      grantCp(self, data.numberMatchBonus.cpGain);
+      log(state, playerIdx, "resolveAttack", `${name}: ${data.numberMatchBonus.ofAKind}-of-a-kind bonus, +${data.numberMatchBonus.cpGain} CP`);
+    }
+    if (data.minesDeck) {
+      const r = mine(self, !!data.revealAllMinedOre);
+      log(state, playerIdx, "resolveAttack", `${name}: mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
+    }
+    if (data.searchOreToForge) {
+      const t = tutorOreToForge(self, rng);
+      log(state, playerIdx, "resolveAttack", `${name}: ${t ? `tutored ${t} to The Forge` : "no ORE left in deck"}, deck shuffled`);
+    }
+    if (data.cardDraw) {
+      drawCards(self, data.cardDraw, rng);
+      log(state, playerIdx, "resolveAttack", `${name}: drew ${data.cardDraw} card(s)`);
+    }
+    const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: !(data.defendable ?? true) }, rng);
+    dmg = modified.dmg;
+    if (dmg <= 0) {
+      log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
+    } else if ((data.defendable ?? true) && !modified.undefendable) {
+      resolveDefense(state, playerIdx, dmg, rng, policies);
+    } else {
+      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Final Touches"));
     }
   }
   function applyBWAbility(state, playerIdx, name, rng, policies) {
@@ -2188,13 +2504,10 @@ var Game = (() => {
     if (dmg <= 0) {
       log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
     } else if (data.defendable ?? true) {
-      if (modified.undefendable) {
-        queueDamage(state, 1 - playerIdx, dmg);
-        flushDamage(state);
-      } else resolveDefense(state, playerIdx, dmg, rng, policies);
+      if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false);
+      else resolveDefense(state, playerIdx, dmg, rng, policies);
     } else {
-      queueDamage(state, 1 - playerIdx, dmg);
-      flushDamage(state);
+      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"));
     }
     const bwGains = [];
     if (data.cpGain) {
@@ -2254,6 +2567,19 @@ var Game = (() => {
     self.deck = remaining;
     return found;
   }
+  function queueAttackDamageVsArmor(state, attackerIdx, dmg, isUltimate) {
+    const defenderIdx = 1 - attackerIdx;
+    const defender = state.players[defenderIdx];
+    if (defender.heroId === "fm" && dmg > 0) {
+      const eff = armorEffects(defender, isUltimate ? "ultimate" : "undefendable");
+      if (eff.prevented > 0) {
+        log(state, defenderIdx, "defense", `Ultimanium Shield: prevented ${Math.min(eff.prevented, dmg)} (undefendable attack)`);
+        dmg = Math.max(0, dmg - eff.prevented);
+      }
+    }
+    queueDamage(state, defenderIdx, dmg);
+    flushDamage(state);
+  }
   function resolveAbilityPhase(state, playerIdx, dice, rng, policies) {
     const policy = policies[playerIdx];
     const self = state.players[playerIdx];
@@ -2268,6 +2594,7 @@ var Game = (() => {
     const chosenName = candidates.length === 1 ? candidates[0].name : policy.chooseAbility(state, playerIdx, candidates);
     log(state, playerIdx, "resolveAttack", `Chose ability: ${chosenName}`);
     if (self.heroId === "hh") applyHHAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "fm") applyFMAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function playEndOfTurn(state, playerIdx) {
@@ -2308,7 +2635,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
@@ -2325,7 +2652,11 @@ var Game = (() => {
       upgradesPlayedThisTurn: 0,
       grimPursuitBonusUsedThisTurn: false,
       covertOpsUsedThisTurn: false,
-      grimPursuitRerollUsedThisTurn: false
+      grimPursuitRerollUsedThisTurn: false,
+      // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
+      // "begin with any one Gold Armor" only applies with more than 1 opponent).
+      forge: [],
+      armor: { helmet: 0, shield: 0 }
     };
   }
   function createInitialGameState(heroA, heroB, rng) {
@@ -2634,7 +2965,7 @@ var Game = (() => {
       deckSize: deck.length
     };
   }
-  var ENCODINGS = { hh: buildHeroEncoding("hh"), bw: buildHeroEncoding("bw") };
+  var ENCODINGS = { hh: buildHeroEncoding("hh"), bw: buildHeroEncoding("bw"), fm: buildHeroEncoding("fm") };
   var UPGRADE_ONEHOT_SIZE = 8;
   var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize);
   function encodeUpgradesInPlay(p) {

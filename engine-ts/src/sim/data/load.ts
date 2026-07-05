@@ -8,13 +8,11 @@ import commonCardsJson from './common-cards.json'
 
 export const hhHero = hhHeroJson as unknown as HeroTemplate
 export const bwHero = bwHeroJson as unknown as HeroTemplate
-// Forgemaster: data layer only for now — heroTemplateFor still dispatches 'hh'|'bw' until
-// the sim rules (Mine/Forge/Craft/Scrap/Armor) are wired (see characters/forge_master/README).
 export const fmHero = fmHeroJson as unknown as HeroTemplate
 export const commonCards = commonCardsJson as unknown as CommonCardsTemplate
 
-export function heroTemplateFor(heroId: 'hh' | 'bw'): HeroTemplate {
-  return heroId === 'hh' ? hhHero : bwHero
+export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm'): HeroTemplate {
+  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : bwHero
 }
 
 // Searches both the hero's base abilities and every card's altAbility (e.g. Cleave II's

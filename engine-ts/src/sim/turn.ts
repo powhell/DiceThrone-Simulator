@@ -5,6 +5,7 @@ import { hasHead, TRANSFERABLE_TOKENS, countToken } from './tokens.js'
 import { resolveResponseWindow } from './decision.js'
 import type { HHState } from '../characters/horseman/config.js'
 import type { BWState } from '../characters/black_widow/config.js'
+import type { FMState } from '../characters/forgemaster/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -15,6 +16,7 @@ import type { CardTemplate, HeroTemplate } from './data/schema.js'
 import { heroTemplateFor, resolvedAbilityByBoardName, cardById } from './data/load.js'
 import * as hh from './hero/hh.rules.js'
 import * as bw from './hero/bw.rules.js'
+import * as fm from './hero/fm.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -24,10 +26,13 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 
 // Exported for the interactive UI driver (interactive.ts) and the RL roll-manipulation scorer
 // (valueGreedyPolicy), which rolls a candidate's modified dice forward via completeOffensiveRoll.
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState {
   if (player.heroId === 'hh') {
     const t = player.tokens
     return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay }
+  }
+  if (player.heroId === 'fm') {
+    return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay }
   }
   // opponent.timeBombs is on PlayerState directly (Time Bomb is hero-agnostic — it's
   // inflicted BY Black Widow but stacks on whichever opponent she's hitting).
@@ -104,6 +109,14 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
       opp.tokens.head = 1
       log(state, playerIdx, 'upkeep', 'Gave the Haunted Head to the opponent')
     }
+  }
+
+  if (self.heroId === 'fm') {
+    // The Mines (vérifié board): "During your Upkeep Phase, you may Mine your deck."
+    // v1 auto-heuristique : toujours miner (gratuit — Ore vers la Forge ou +1 CP).
+    // TODO(user): décision de Policy (et le "3 CP -> pioche 1, 1x/tour" pas encore modélisé).
+    const r = fm.mine(self)
+    log(state, playerIdx, 'upkeep', `The Mines: mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
   }
 
   // Time Bombs tick at the start of ANY carrier's turn, whatever their hero. They're inflicted on
@@ -458,6 +471,23 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
   // options here (enumerateWindowActions gates the turn-only plays on state.activePlayerIdx), so a
   // scripted greedy opponent just passes — behaviour for greedy is unchanged.
   const oppIdx = (1 - playerIdx) as 0 | 1
+  const self = state.players[playerIdx]
+  if (self.heroId === 'fm') {
+    // The Forge (vérifié board): "During your Main Phase, you may place any number of ORE from
+    // your hand on to this Passive Ability." v1 auto : tout Ore en main va sur la Forge (en main
+    // il est mort — ni jouable ni utile, sauf vente à 1 CP que l'heuristique ne préfère jamais).
+    const ores = self.hand.filter(fm.isOre)
+    if (ores.length) {
+      self.hand = self.hand.filter(id => !fm.isOre(id))
+      self.forge.push(...ores)
+      log(state, playerIdx, phase, `The Forge: placed ${ores.join(',')} from hand`)
+    }
+    // Crafting (vérifié Forging Info Card) : v1 auto-greedy, crafte tant qu'un blueprint passe.
+    // TODO(user): décision de Policy (craft vs garder l'Ore pour le Scrap).
+    for (let c = fm.craftOnce(self); c; c = fm.craftOnce(self)) {
+      log(state, playerIdx, phase, `Crafted ${c.armorId} (tier ${c.tier} ${c.slot})`)
+    }
+  }
   resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: 'mainPhase', phase }, rng, policies, enumerateWindowActions, applyWindowAction)
 }
 
@@ -785,7 +815,11 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // not baked into the roll. Active player (the attacker) has priority.
   let hallowedUpgraded = false
   let defenseDice: number[]
-  if (defender.heroId === 'bw') {
+  if (defender.heroId === 'fm') {
+    // Masterwork (vérifié board) : Defense Roll 1 dé — résolu sur le dé FINAL après la
+    // fenêtre d'altération, comme les autres défenses.
+    defenseDice = [fm.rollMasterworkDie(rng)]
+  } else if (defender.heroId === 'bw') {
     defenseDice = bw.rollSabotageDice(defender, rng, policy, state, defenderIdx, defender.upgradesInPlay.includes('sabotage-ii'))
   } else {
     hallowedUpgraded = defender.upgradesInPlay.includes('hallowed-reckoning-ii')
@@ -820,7 +854,21 @@ export function finalizeDefenseRoll(
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
-  if (defender.heroId === 'bw') {
+  if (defender.heroId === 'fm') {
+    const face = finalDefenseDice[0]
+    const out = fm.masterworkOutcome(face, defender)
+    if (out.mines) {
+      const r = fm.mine(defender)
+      log(state, defenderIdx, 'defense', `Masterwork (Pick): mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
+    }
+    // Les armures s'activent sur toute Attaque à dégâts normaux ; Masterwork double
+    // éventuellement leur effet (Forge = une, Anvil = jusqu'à deux différentes).
+    const eff = fm.armorEffects(defender, 'normal', out.doubling)
+    damagePrevented = eff.prevented
+    if (eff.counter > 0) queueDamage(state, attackerIdx, eff.counter)
+    const doubled = [out.doubling.helmet ? 'helmet' : '', out.doubling.shield ? 'shield' : ''].filter(Boolean).join('+')
+    log(state, defenderIdx, 'defense', `Masterwork: face ${face}, prevented ${eff.prevented}, ${eff.counter} dmg back${doubled ? ` (doubled ${doubled})` : ''}`)
+  } else if (defender.heroId === 'bw') {
     const r = bw.countSabotage(finalDefenseDice)
     damagePrevented = r.damagePrevented
     if (r.damageToAttacker > 0) queueDamage(state, attackerIdx, r.damageToAttacker)
@@ -1081,7 +1129,7 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   // Theoretical on HH (every ability deals dmg) but guarded uniformly with applyBWAbility.
   if (dmg <= 0) log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
   else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies)
-  else { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
+  else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Dreadful Charge'))
 
   if (tokens.head > 0 && data.cardDrawIfHasHead) {
     drawCards(self, 1, rng)
@@ -1090,6 +1138,53 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   if (data.cardDraw) {
     drawCards(self, data.cardDraw, rng)
     log(state, playerIdx, 'resolveAttack', `${name}: drew ${data.cardDraw} card(s)`)
+  }
+}
+
+// Forgemaster : résolution d'attaque depuis les données vérifiées (fm/hero.json). Ordre des
+// textes imprimés respecté : Mine / tutor AVANT les dégâts ("Mine your deck... Then deal 8").
+function applyFMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const policy = policies[playerIdx]
+  const self = state.players[playerIdx]
+  const data = resolvedAbilityByBoardName(heroTemplateFor('fm'), name, self.upgradesInPlay)
+  if (!data) { log(state, playerIdx, 'resolveAttack', `Unknown ability "${name}" — no data, skipped`); return }
+
+  let dmg = data.baseDamage ?? 0
+  if (data.thresholdBonusArmor && fm.armorCount(self) >= data.thresholdBonusArmor.armorAtLeast) {
+    dmg += data.thresholdBonusArmor.bonusDamage
+    log(state, playerIdx, 'resolveAttack', `${name}: +${data.thresholdBonusArmor.bonusDamage} dmg (${data.thresholdBonusArmor.armorAtLeast} Armor)`)
+  }
+  if (data.bonusRoll?.addRolledValueAsDamage) {
+    const b = rollDie(rng)
+    dmg += b
+    log(state, playerIdx, 'resolveAttack', `${name} bonus roll: +${b} dmg`)
+  }
+  if (data.numberMatchBonus?.cpGain && hh.hasNumberMatch(dice, data.numberMatchBonus.ofAKind)) {
+    grantCp(self, data.numberMatchBonus.cpGain)
+    log(state, playerIdx, 'resolveAttack', `${name}: ${data.numberMatchBonus.ofAKind}-of-a-kind bonus, +${data.numberMatchBonus.cpGain} CP`)
+  }
+  if (data.minesDeck) {
+    const r = fm.mine(self, !!data.revealAllMinedOre)
+    log(state, playerIdx, 'resolveAttack', `${name}: mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
+  }
+  if (data.searchOreToForge) {
+    const t = fm.tutorOreToForge(self, rng)
+    log(state, playerIdx, 'resolveAttack', `${name}: ${t ? `tutored ${t} to The Forge` : 'no ORE left in deck'}, deck shuffled`)
+  }
+  if (data.cardDraw) {
+    drawCards(self, data.cardDraw, rng)
+    log(state, playerIdx, 'resolveAttack', `${name}: drew ${data.cardDraw} card(s)`)
+  }
+
+  const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: !(data.defendable ?? true) }, rng)
+  dmg = modified.dmg
+
+  if (dmg <= 0) {
+    log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
+  } else if ((data.defendable ?? true) && !modified.undefendable) {
+    resolveDefense(state, playerIdx, dmg, rng, policies)
+  } else {
+    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Final Touches'))
   }
 }
 
@@ -1124,10 +1219,10 @@ function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: R
   if (dmg <= 0) {
     log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
   } else if (data.defendable ?? true) {
-    if (modified.undefendable) { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
+    if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false)
     else resolveDefense(state, playerIdx, dmg, rng, policies)
   } else {
-    queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state)
+    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"))
   }
 
   // Logged (was silent — same visibility complaint as HH's token gains).
@@ -1198,6 +1293,23 @@ function searchDeckForUpgrades(state: GameState, playerIdx: 0 | 1, count: number
   return found
 }
 
+// Queue+flush attack damage that bypasses the defense roll (undefendable/ultimate), letting a
+// Forgemaster defender's Ultimanium Shield prevent 2 first (verified leaflet: works vs normal,
+// undefendable and pure dmg; NOT vs an Ultimate or collateral).
+function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: number, isUltimate: boolean): void {
+  const defenderIdx = (1 - attackerIdx) as 0 | 1
+  const defender = state.players[defenderIdx]
+  if (defender.heroId === 'fm' && dmg > 0) {
+    const eff = fm.armorEffects(defender, isUltimate ? 'ultimate' : 'undefendable')
+    if (eff.prevented > 0) {
+      log(state, defenderIdx, 'defense', `Ultimanium Shield: prevented ${Math.min(eff.prevented, dmg)} (undefendable attack)`)
+      dmg = Math.max(0, dmg - eff.prevented)
+    }
+  }
+  queueDamage(state, defenderIdx, dmg)
+  flushDamage(state)
+}
+
 export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
   const policy = policies[playerIdx]
   const self = state.players[playerIdx]
@@ -1215,6 +1327,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   log(state, playerIdx, 'resolveAttack', `Chose ability: ${chosenName}`)
 
   if (self.heroId === 'hh') applyHHAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'fm') applyFMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 

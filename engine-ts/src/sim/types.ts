@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw'
+export type HeroId = 'hh' | 'bw' | 'fm'
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -44,6 +44,13 @@ export interface PlayerState {
   // Reset to false each own-turn upkeep. Grim Pursuit mode (a) — "an additional Roll Attempt
   // during your Offensive Roll Phase" — is likewise once per turn (same verified token def).
   grimPursuitRerollUsedThisTurn: boolean
+  // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
+  // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
+  // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be
+  // transferred/removed by generic token cards (verified leaflet: "may not be removed or
+  // transferred by any means except as a result of this Hero's effects").
+  forge: string[]
+  armor: { helmet: number; shield: number }
 }
 
 // Verified order (official rulebook, characters/rules/Turn Phases.png, 2026-07-01):
