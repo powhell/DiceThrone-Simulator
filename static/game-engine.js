@@ -2147,7 +2147,8 @@ var Game = (() => {
     const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: undefendableOverride }, rng);
     dmg = modified.dmg;
     undefendableOverride = modified.undefendable;
-    if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies);
+    if (dmg <= 0) log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
+    else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies);
     else {
       queueDamage(state, 1 - playerIdx, dmg);
       flushDamage(state);
@@ -2184,7 +2185,9 @@ var Game = (() => {
     }
     const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: !(data.defendable ?? true) }, rng);
     dmg = modified.dmg;
-    if (data.defendable ?? true) {
+    if (dmg <= 0) {
+      log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
+    } else if (data.defendable ?? true) {
       if (modified.undefendable) {
         queueDamage(state, 1 - playerIdx, dmg);
         flushDamage(state);

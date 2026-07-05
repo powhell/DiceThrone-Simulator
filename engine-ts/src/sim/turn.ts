@@ -1076,7 +1076,11 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   dmg = modified.dmg
   undefendableOverride = modified.undefendable
 
-  if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies)
+  // 0 damage = no Attack to defend (user-caught on BW's Infiltrate: the defender was rolling
+  // Hallowed Reckoning against a pure-utility ability, farming counter-dmg/Dreadful for free).
+  // Theoretical on HH (every ability deals dmg) but guarded uniformly with applyBWAbility.
+  if (dmg <= 0) log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
+  else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies)
   else { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
 
   if (tokens.head > 0 && data.cardDrawIfHasHead) {
@@ -1113,7 +1117,13 @@ function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: R
   const modified = applyAttackModifiers(state, playerIdx, policy, { dmg, undefendable: !(data.defendable ?? true) }, rng)
   dmg = modified.dmg
 
-  if (data.defendable ?? true) {
+  // 0 damage = no Attack to defend (user-caught: Infiltrate deals no dmg — pure utility.
+  // Rolling a defense against it was both wrong per the rules and an exploit: HH's Hallowed
+  // Reckoning farmed counter-damage + Dreadful off a harmless ability). Attack modifiers ran
+  // above, so a pumped 0-dmg ability (e.g. +3 Cranial Assist) still gets defended normally.
+  if (dmg <= 0) {
+    log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
+  } else if (data.defendable ?? true) {
     if (modified.undefendable) { queueDamage(state, (1 - playerIdx) as 0 | 1, dmg); flushDamage(state) }
     else resolveDefense(state, playerIdx, dmg, rng, policies)
   } else {

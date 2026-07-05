@@ -832,7 +832,16 @@
     aiDice = (g.def && g.def.finalDice) ? g.def.finalDice.slice() : null;
     if (r.attack.abilityName === null) log(`L'IA rate son attaque (aucune habileté formée).`);
     else log(`⚔️ L'IA t'attaque avec <b>${formatAbility(aiHero, r.attack.abilityName).name}</b>` +
-      (r.attack.defendable ? ` (${r.attack.incomingDamage} de base, hors riders/bonus).` : ` — <b>indéfendable</b>.`));
+      (r.attack.incomingDamage === 0 ? ` — <b>0 dégât</b> (utilitaire) : rien à défendre.`
+        : r.attack.defendable ? ` (${r.attack.incomingDamage} de base, hors riders/bonus).` : ` — <b>indéfendable</b>.`));
+    // 0 dégât de base (Infiltrate...) : pas d'attaque à défendre, pas de pause "Lancer ta
+    // défense" (le moteur n'ouvrira pas de jet ; si l'IA gonfle à >0 avec un modificateur,
+    // aiDefenseStep re-proposera quand même la fenêtre — le probe décide).
+    if (r.attack.abilityName !== null && r.attack.incomingDamage === 0) {
+      $('turntag').textContent = 'L\'IA joue son tour…';
+      renderAll();
+      return aiDefenseStep();
+    }
     // Click-to-roll pacing: YOU press the button that rolls your defense (reported: invisible).
     phase='defarm';
     $('turntag').textContent = 'Défense — l\'IA t\'attaque';
