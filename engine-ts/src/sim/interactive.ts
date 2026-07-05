@@ -139,16 +139,21 @@ export function humanAttack(g: HumanGame, dice: number[], abilityName: string, g
 
 // The attack-modifier cards the human could arm for the attack being chosen (hand + CP +
 // per-card conditions, same filter the engine applies at resolution time).
-export function humanAttackModifierOptions(g: HumanGame): string[] {
+// grimPursuitIncoming : l'UI le passe à true quand une des habiletés candidates ACCORDE des
+// Grim Pursuit avant les dégâts (Ride Down : "Gain 3 GP. Then deal 6") — au moment du choix,
+// les jetons n'existent pas encore, mais le moteur les aura accordés quand Unescapable se
+// résout (user-caught : Ride Down II + Unescapable refusé à 0 jeton).
+export function humanAttackModifierOptions(g: HumanGame, grimPursuitIncoming = false): string[] {
   const self = g.state.players[g.humanIdx]
   const hero = heroTemplateFor(self.heroId)
   return ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves'].filter(id => {
     if (!self.hand.includes(id)) return false
     const card = cardById(hero, id)
     if (!card || self.cp < (card.cpCost ?? 0)) return false
-    // 0 Grim Pursuit : Unescapable reste proposable si Thundering Hooves (armable dans la même
-    // fenêtre, résolu en premier côté moteur) peut convertir du CP en GP (combo user-caught).
+    // 0 Grim Pursuit : Unescapable reste proposable si des GP arrivent dans la même fenêtre —
+    // via Thundering Hooves (résolu en premier) ou via l'habileté choisie elle-même.
     if (id === 'unescapable' && self.tokens.grimPursuit < 1
+      && !grimPursuitIncoming
       && !(self.hand.includes('thundering-hooves') && self.cp >= 2)) return false
     return true
   })

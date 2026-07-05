@@ -604,12 +604,13 @@
       // Shown only when it can actually fire: you hold a token, OR one of the candidate
       // abilities grants Grim Pursuit BEFORE damage (Ride Down...). At turn 1 with 0 tokens
       // and no granting candidate, the button was pure noise (user-caught).
-      const gpPossible = you.tokens.grimPursuit > 0
-        || (amSel.has('thundering-hooves') && you.cp > 0) // CP->GP conversion lands BEFORE the spend
-        || cands.some(cd => {
+      const gpFromCandidate = cands.some(cd => {
         try { const d = G.resolvedAbilityByBoardName(G.heroTemplateFor(HUMAN), cd.name, you.upgradesInPlay);
               return !!(d && d.tokensGrantedToSelf && d.tokensGrantedToSelf.grimPursuit); } catch (e) { return false; }
       });
+      const gpPossible = you.tokens.grimPursuit > 0
+        || (amSel.has('thundering-hooves') && you.cp > 0) // CP->GP conversion lands BEFORE the spend
+        || gpFromCandidate;
       if (cands.length && gpPossible && !you.grimPursuitBonusUsedThisTurn) {
         const hint = you.tokens.grimPursuit>0 ? '' : " — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)";
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
@@ -624,7 +625,7 @@
           'subversion': 'Subversion! : +2 dégâts, +1/upgrade posée ce tour · 1 CP',
           'thundering-hooves': 'Thundering Hooves! : CP → Grim Pursuit (jusqu\'à 3) · 0 CP',
         };
-        for (const id of G.humanAttackModifierOptions(g)) {
+        for (const id of G.humanAttackModifierOptions(g, gpFromCandidate)) {
           if (id==='thundering-hooves' && you.cp===0) continue; // rien à convertir
 
           c.appendChild(btn(`${amSel.has(id)?'✅ ':''}${AM_LABEL[id]||id}`, amSel.has(id)?'primary':'',
@@ -1208,6 +1209,19 @@
 
   // ---------- boot ----------
   $('title').innerHTML = `${humanHero.name} <span class="vs">contre</span> ${aiHero.name}`;
+  // Sélecteurs de persos visibles dans la barre du haut (nouvelle partie au changement).
+  (function(){
+    const mast = document.querySelector('.mast');
+    const box = document.createElement('span');
+    const opt = (v,cur)=>['hh','bw','fm'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>
+      <label style="font-size:11px;color:var(--muted)"> IA <select id="pick-ai" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('ai',AI_HERO)}</select></label>`;
+    mast.appendChild(box);
+    const go = ()=>{ const me=document.getElementById('pick-me').value, ai2=document.getElementById('pick-ai').value;
+      if (me!==HUMAN || ai2!==AI_HERO) location.href = `play.html?me=${me}&ai=${ai2}`; };
+    document.getElementById('pick-me').onchange = go;
+    document.getElementById('pick-ai').onchange = go;
+  })();
   (function(){
     const tag = $('turntag');
     const tg = document.createElement('button');

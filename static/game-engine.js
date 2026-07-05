@@ -2789,14 +2789,14 @@ var Game = (() => {
     const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);
   }
-  function humanAttackModifierOptions(g) {
+  function humanAttackModifierOptions(g, grimPursuitIncoming = false) {
     const self = g.state.players[g.humanIdx];
     const hero = heroTemplateFor(self.heroId);
     return ["unescapable", "cranial-assist", "subversion", "thundering-hooves"].filter((id) => {
       if (!self.hand.includes(id)) return false;
       const card = cardById(hero, id);
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
-      if (id === "unescapable" && self.tokens.grimPursuit < 1 && !(self.hand.includes("thundering-hooves") && self.cp >= 2)) return false;
+      if (id === "unescapable" && self.tokens.grimPursuit < 1 && !grimPursuitIncoming && !(self.hand.includes("thundering-hooves") && self.cp >= 2)) return false;
       return true;
     });
   }
