@@ -5,6 +5,7 @@ import {
 } from './abilities.js'
 
 export interface BWState {
+  defenseTax?: number // voir HHState.defenseTax
   upgrades: number
   tbOnOpp: number
   // ids of Hero Upgrade cards in play (self.upgradesInPlay) — needed to know WHICH upgrades
@@ -19,21 +20,21 @@ export const bwConfig: CharacterConfig<BWState> = {
     return bwFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
+    return bestAbilityValue(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
+    return bestAbilityName(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
-    return buildAbilityBoard(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
+    return buildAbilityBoard(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
   },
   hasMatchedAbility(dice, state) {
-    const cands = getCandidates(dice, state.upgrades, state.tbOnOpp, state.upgradeIds)
+    const cands = getCandidates(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
     return cands.some(([name]) => name !== 'Whiff')
   },
   stateKey(state) {
     const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(',')
-    return `${state.upgrades}|${state.tbOnOpp}|${upgradeIds}`
+    return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgradeIds}`
   },
   directDamageByName(state) {
     return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds)

@@ -26,17 +26,37 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 
 // Exported for the interactive UI driver (interactive.ts) and the RL roll-manipulation scorer
 // (valueGreedyPolicy), which rolls a candidate's modified dice forward via completeOffensiveRoll.
+// Perte moyenne d'une attaque DEFENDABLE contre CET adversaire, dans SON etat actuel :
+// prevention attendue + contre-degats attendus de sa defense (esperances des regles
+// verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
+// indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
+export function defenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'bw') {
+    // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
+    return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
+  }
+  if (opponent.heroId === 'hh') {
+    // Hallowed Reckoning : min(1+Dreadful, 5) des - contre 0.5/de, prevenus E[floor(B/2)]
+    const dice = Math.min(1 + opponent.tokens.dreadful, 5)
+    const PREV = [0, 0, 0.11, 0.26, 0.42, 0.58]
+    return 0.5 * dice + PREV[dice]
+  }
+  // fm : contre casque + prevention bouclier, x1.33 pour le doublement Masterwork attendu
+  const HELM = [0, 1, 2, 3], SHIELD = [0, 1, 2, 2]
+  return (HELM[opponent.armor.helmet] + SHIELD[opponent.armor.shield]) * 1.33
+}
+
 export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState {
   if (player.heroId === 'hh') {
     const t = player.tokens
-    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay }
+    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
   }
   if (player.heroId === 'fm') {
-    return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay }
+    return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
   }
   // opponent.timeBombs is on PlayerState directly (Time Bomb is hero-agnostic — it's
   // inflicted BY Black Widow but stacks on whichever opponent she's hitting).
-  return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay }
+  return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
 }
 
 export function checkGameOver(state: GameState): boolean {

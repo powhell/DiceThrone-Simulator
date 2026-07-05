@@ -61,9 +61,13 @@ export function getCandidates(
   upgrades: number,
   tbOnOpp: number,
   upgradeIds: string[] = [],
+  defenseTax = 0,
 ): Array<[string, number, number]> {
   const { A: a, B: b, C: c } = classify(dice)
   const out: Array<[string, number, number]> = []
+  // Prime "indéfendable" — voir horseman/abilities.ts (user-caught). Taxe seulement les
+  // attaques défendables À DÉGÂTS (une attaque 0 dégât n'ouvre pas de défense).
+  const tax = defenseTax
   const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0
   const has = (id: string) => upgradeIds.includes(id)
 
@@ -87,13 +91,13 @@ export function getCandidates(
   const batonStrikeUpgraded = has('baton-strike-ii')
   if (b >= 5) {
     const dmg = batonStrikeUpgraded ? BATON_STRIKE_5B_UPGRADED : BATON_STRIKE_5B
-    out.push(['Baton Strike 5B', dmg + rrt, dmg])
+    out.push(['Baton Strike 5B', dmg + rrt - tax, dmg])
   } else if (b === 4) {
     const dmg = batonStrikeUpgraded ? BATON_STRIKE_4B_UPGRADED : BATON_STRIKE_4B
-    out.push(['Baton Strike 4B', dmg + rrt, dmg])
+    out.push(['Baton Strike 4B', dmg + rrt - tax, dmg])
   } else if (b === 3) {
     const dmg = batonStrikeUpgraded ? BATON_STRIKE_3B_UPGRADED : BATON_STRIKE_3B
-    out.push(['Baton Strike 3B', dmg + rrt, dmg])
+    out.push(['Baton Strike 3B', dmg + rrt - tax, dmg])
   }
 
   if (a >= 2 && b >= 1 && c >= 1) {
@@ -105,14 +109,14 @@ export function getCandidates(
   if (b >= 3 && a >= 2) {
     const gauntletsDmg = has('widows-gauntlets-ii') ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG
     const val = gauntletsDmg + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt
-    out.push(["Widow's Gauntlets", val, gauntletsDmg])
+    out.push(["Widow's Gauntlets", val - tax, gauntletsDmg])
   }
 
   if (hasStraight(dice, 4)) {
     const hackedDmg = has('hacked-ii') ? HACKED_BASE_DMG_UPGRADED : HACKED_BASE_DMG
     const thresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0
     const tb = tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED)
-    out.push(['Hacked', hackedDmg + thresh + tb + rrt, hackedDmg])
+    out.push(['Hacked', hackedDmg + thresh + tb + rrt - tax, hackedDmg])
   }
 
   if (c >= 4) {
@@ -127,7 +131,7 @@ export function getCandidates(
   if (hasStraight(dice, 5)) {
     const rider = vengeanceRiderEV(upgrades, tbOnOpp)
     const agility = VENGEANCE_AGILITY_GAIN * AGILITY_VALUE
-    out.push(['Vengeance', VENGEANCE_BASE_DMG + rider + agility + rrt, VENGEANCE_BASE_DMG])
+    out.push(['Vengeance', VENGEANCE_BASE_DMG + rider + agility + rrt - tax, VENGEANCE_BASE_DMG])
   }
 
   if (c >= 5) {
@@ -139,12 +143,12 @@ export function getCandidates(
   return out
 }
 
-export function bestAbilityValue(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = []): number {
-  return Math.max(...getCandidates(dice, upgrades, tbOnOpp, upgradeIds).map(([, v]) => v))
+export function bestAbilityValue(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = [], defenseTax = 0): number {
+  return Math.max(...getCandidates(dice, upgrades, tbOnOpp, upgradeIds, defenseTax).map(([, v]) => v))
 }
 
-export function bestAbilityName(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = []): string {
-  const cands = getCandidates(dice, upgrades, tbOnOpp, upgradeIds)
+export function bestAbilityName(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = [], defenseTax = 0): string {
+  const cands = getCandidates(dice, upgrades, tbOnOpp, upgradeIds, defenseTax)
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
@@ -179,8 +183,9 @@ export function directDamageByName(upgrades: number, _tbOnOpp: number, upgradeId
   }
 }
 
-export function buildAbilityBoard(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = []): AbilityEntry[] {
-  const matched = new Set(getCandidates(dice, upgrades, tbOnOpp, upgradeIds).map(([n]) => n))
+export function buildAbilityBoard(dice: number[], upgrades: number, tbOnOpp: number, upgradeIds: string[] = [], defenseTax = 0): AbilityEntry[] {
+  const matched = new Set(getCandidates(dice, upgrades, tbOnOpp, upgradeIds, defenseTax).map(([n]) => n))
+  const tax = defenseTax
   const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0
   const has = (id: string) => upgradeIds.includes(id)
 
@@ -219,13 +224,13 @@ export function buildAbilityBoard(dice: number[], upgrades: number, tbOnOpp: num
   const entries: AbilityEntry[] = [
     { name: "Widow's Bite (CCCCC)",      value: biteVal,                  baseDamage: WIDOWS_BITE_BASE_DMG,   matched: matched.has("Widow's Bite") },
     { name: 'Grapple (CCCC)',            value: grappleVal,               baseDamage: grappleDmg,             matched: matched.has('Grapple') },
-    { name: "Widow's Gauntlets (BBBAA)", value: gauntletsVal,             baseDamage: gauntletsDmg,           matched: matched.has("Widow's Gauntlets") },
-    { name: 'Vengeance (5-straight)',    value: vengeanceVal,             baseDamage: VENGEANCE_BASE_DMG,     matched: matched.has('Vengeance') },
-    { name: 'Hacked (4-straight)',       value: hackedVal,                baseDamage: hackedDmg,              matched: matched.has('Hacked') },
+    { name: "Widow's Gauntlets (BBBAA)", value: gauntletsVal - tax,             baseDamage: gauntletsDmg,           matched: matched.has("Widow's Gauntlets") },
+    { name: 'Vengeance (5-straight)',    value: vengeanceVal - tax,             baseDamage: VENGEANCE_BASE_DMG,     matched: matched.has('Vengeance') },
+    { name: 'Hacked (4-straight)',       value: hackedVal - tax,                baseDamage: hackedDmg,              matched: matched.has('Hacked') },
     { name: 'Infiltrate (AABC)',         value: infiltrateVal,            baseDamage: INFILTRATE_BASE_DMG,    matched: matched.has('Infiltrate') },
-    { name: 'Baton Strike 5B (BBBBB)',   value: batonStrike5Dmg + rrt,    baseDamage: batonStrike5Dmg,        matched: matched.has('Baton Strike 5B') },
-    { name: 'Baton Strike 4B (BBBB)',    value: batonStrike4Dmg + rrt,    baseDamage: batonStrike4Dmg,        matched: matched.has('Baton Strike 4B') },
-    { name: 'Baton Strike 3B (BBB)',     value: batonStrike3Dmg + rrt,    baseDamage: batonStrike3Dmg,        matched: matched.has('Baton Strike 3B') },
+    { name: 'Baton Strike 5B (BBBBB)',   value: batonStrike5Dmg + rrt - tax,    baseDamage: batonStrike5Dmg,        matched: matched.has('Baton Strike 5B') },
+    { name: 'Baton Strike 4B (BBBB)',    value: batonStrike4Dmg + rrt - tax,    baseDamage: batonStrike4Dmg,        matched: matched.has('Baton Strike 4B') },
+    { name: 'Baton Strike 3B (BBB)',     value: batonStrike3Dmg + rrt - tax,    baseDamage: batonStrike3Dmg,        matched: matched.has('Baton Strike 3B') },
     { name: 'Whiff',                     value: WHIFF_VALUE,              baseDamage: WHIFF_VALUE,            matched: matched.has('Whiff') },
   ]
 

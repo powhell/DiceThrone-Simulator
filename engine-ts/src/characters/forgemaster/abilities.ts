@@ -50,47 +50,50 @@ function hasNumberMatch(dice: number[], ofAKind: number): boolean {
 export function getCandidates(
   dice: number[],
   armorCount: number,
+  defenseTax = 0,
 ): Array<[string, number, number]> {
+  const tax = defenseTax // prime indefendable - voir horseman/abilities.ts
   const { A: a, B: b, C: c } = classify(dice)
   const out: Array<[string, number, number]> = []
   // Pick Axe : +1 CP sur carré de mêmes # (déterministe une fois les dés connus)
   const pickCpBonus = hasNumberMatch(dice, 4) ? CP_TO_DMG_EQUIV : 0
-  if (a >= 5) out.push(['Pick Axe 5A', PICK_AXE_5A + pickCpBonus, PICK_AXE_5A])
-  else if (a === 4) out.push(['Pick Axe 4A', PICK_AXE_4A + pickCpBonus, PICK_AXE_4A])
-  else if (a === 3) out.push(['Pick Axe 3A', PICK_AXE_3A + pickCpBonus, PICK_AXE_3A])
-  if (b >= 4) out.push(['Furnace', FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE])
+  if (a >= 5) out.push(['Pick Axe 5A', PICK_AXE_5A + pickCpBonus - tax, PICK_AXE_5A])
+  else if (a === 4) out.push(['Pick Axe 4A', PICK_AXE_4A + pickCpBonus - tax, PICK_AXE_4A])
+  else if (a === 3) out.push(['Pick Axe 3A', PICK_AXE_3A + pickCpBonus - tax, PICK_AXE_3A])
+  if (b >= 4) out.push(['Furnace', FURNACE_BASE + FURNACE_BONUS_ROLL_EV - tax, FURNACE_BASE])
   if (c >= 4) out.push(['Smelting Time', SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE, SMELTING_TIME_UNDEFENDABLE])
-  if (a >= 1 && b >= 1 && c >= 2) out.push(['A Good Haul', A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG])
+  if (a >= 1 && b >= 1 && c >= 2) out.push(['A Good Haul', A_GOOD_HAUL_DMG + MINE_VALUE - tax, A_GOOD_HAUL_DMG])
   const armoredBonus = armorCount >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0
-  if (hasStraight(dice, 5)) out.push(['Armored Up L', ARMORED_UP_LARGE + armoredBonus, ARMORED_UP_LARGE + armoredBonus])
-  if (hasStraight(dice, 4)) out.push(['Armored Up S', ARMORED_UP_SMALL + armoredBonus, ARMORED_UP_SMALL + armoredBonus])
+  if (hasStraight(dice, 5)) out.push(['Armored Up L', ARMORED_UP_LARGE + armoredBonus - tax, ARMORED_UP_LARGE + armoredBonus])
+  if (hasStraight(dice, 4)) out.push(['Armored Up S', ARMORED_UP_SMALL + armoredBonus - tax, ARMORED_UP_SMALL + armoredBonus])
   if (c >= 5) out.push(['Final Touches!', FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, FINAL_TOUCHES_VALUE])
   out.push(['Whiff', WHIFF_VALUE, WHIFF_VALUE])
   return out
 }
 
-export function bestAbilityValue(dice: number[], armorCount: number): number {
-  return Math.max(...getCandidates(dice, armorCount).map(([, v]) => v))
+export function bestAbilityValue(dice: number[], armorCount: number, defenseTax = 0): number {
+  return Math.max(...getCandidates(dice, armorCount, defenseTax).map(([, v]) => v))
 }
 
-export function bestAbilityName(dice: number[], armorCount: number): string {
-  const cands = getCandidates(dice, armorCount)
+export function bestAbilityName(dice: number[], armorCount: number, defenseTax = 0): string {
+  const cands = getCandidates(dice, armorCount, defenseTax)
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
-export function buildAbilityBoard(dice: number[], armorCount: number): AbilityEntry[] {
-  const matchedSet = new Set(getCandidates(dice, armorCount).map(([name]) => name))
+export function buildAbilityBoard(dice: number[], armorCount: number, defenseTax = 0): AbilityEntry[] {
+  const matchedSet = new Set(getCandidates(dice, armorCount, defenseTax).map(([name]) => name))
+  const tax = defenseTax
   const armoredBonus = armorCount >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0
   return [
     { name: 'Final Touches! (CCCCC)',     value: FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE,              baseDamage: FINAL_TOUCHES_VALUE,        matched: matchedSet.has('Final Touches!') },
     { name: 'Smelting Time (CCCC)',       value: SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE,       baseDamage: SMELTING_TIME_UNDEFENDABLE, matched: matchedSet.has('Smelting Time') },
-    { name: 'Armored Up L (5-straight)',  value: ARMORED_UP_LARGE + armoredBonus,                    baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has('Armored Up L') },
-    { name: 'A Good Haul (ABCC)',         value: A_GOOD_HAUL_DMG + MINE_VALUE,                       baseDamage: A_GOOD_HAUL_DMG,            matched: matchedSet.has('A Good Haul') },
-    { name: 'Armored Up S (4-straight)',  value: ARMORED_UP_SMALL + armoredBonus,                    baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has('Armored Up S') },
-    { name: 'Furnace (BBBB)',             value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV,               baseDamage: FURNACE_BASE,               matched: matchedSet.has('Furnace') },
-    { name: 'Pick Axe 5A (AAAAA)',        value: PICK_AXE_5A,                                        baseDamage: PICK_AXE_5A,                matched: matchedSet.has('Pick Axe 5A') },
-    { name: 'Pick Axe 4A (AAAA)',         value: PICK_AXE_4A,                                        baseDamage: PICK_AXE_4A,                matched: matchedSet.has('Pick Axe 4A') },
-    { name: 'Pick Axe 3A (AAA)',          value: PICK_AXE_3A,                                        baseDamage: PICK_AXE_3A,                matched: matchedSet.has('Pick Axe 3A') },
+    { name: 'Armored Up L (5-straight)',  value: ARMORED_UP_LARGE + armoredBonus - tax,                    baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has('Armored Up L') },
+    { name: 'A Good Haul (ABCC)',         value: A_GOOD_HAUL_DMG + MINE_VALUE - tax,                       baseDamage: A_GOOD_HAUL_DMG,            matched: matchedSet.has('A Good Haul') },
+    { name: 'Armored Up S (4-straight)',  value: ARMORED_UP_SMALL + armoredBonus - tax,                    baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has('Armored Up S') },
+    { name: 'Furnace (BBBB)',             value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV - tax,               baseDamage: FURNACE_BASE,               matched: matchedSet.has('Furnace') },
+    { name: 'Pick Axe 5A (AAAAA)',        value: PICK_AXE_5A - tax,                                        baseDamage: PICK_AXE_5A,                matched: matchedSet.has('Pick Axe 5A') },
+    { name: 'Pick Axe 4A (AAAA)',         value: PICK_AXE_4A - tax,                                        baseDamage: PICK_AXE_4A,                matched: matchedSet.has('Pick Axe 4A') },
+    { name: 'Pick Axe 3A (AAA)',          value: PICK_AXE_3A - tax,                                        baseDamage: PICK_AXE_3A,                matched: matchedSet.has('Pick Axe 3A') },
     { name: 'Whiff',                      value: WHIFF_VALUE,                                        baseDamage: WHIFF_VALUE,                matched: matchedSet.has('Whiff') },
   ]
 }

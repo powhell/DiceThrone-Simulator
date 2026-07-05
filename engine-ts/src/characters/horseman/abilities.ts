@@ -50,10 +50,15 @@ export function getCandidates(
   dreadful: number,
   hasHead: boolean,
   upgradeIds: string[] = [],
+  defenseTax = 0,
 ): Array<[string, number, number]> {
   const { A: a, B: b, C: c } = classify(dice)
   const out: Array<[string, number, number]> = []
   const has = (id: string) => upgradeIds.includes(id)
+  // Prime "indéfendable" (user-caught) : une attaque DÉFENDABLE paie la défense adverse
+  // (prévention attendue + contre-dégâts attendus = defenseTax, calculée sur l'état RÉEL de
+  // l'adversaire par oracleStateFor). Les indéfendables (Reap, Horrify, ults...) y échappent.
+  const tax = defenseTax
 
   if (has('cleave-ii') && a >= 2 && b >= 1 && c >= 1) {
     const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG
@@ -72,7 +77,7 @@ export function getCandidates(
   }
   if (has('horrify-ii') && c >= 3) {
     const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG
-    out.push(['Spooky', val, SPOOKY_DMG])
+    out.push(['Spooky', val - tax, SPOOKY_DMG])
   }
 
   if (c >= 5) {
@@ -90,18 +95,18 @@ export function getCandidates(
   if (a >= 3 && c >= 2) {
     const base = has('spectral-assault-ii') ? SPECTRAL_ASSAULT_BASE_UPGRADED : SPECTRAL_ASSAULT_BASE
     const val = base + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL
-    out.push(['Spectral Assault', val, base])
+    out.push(['Spectral Assault', val - tax, base])
   }
   const cleaveUpgraded = has('cleave-ii')
   if (a >= 5) {
     const dmg = cleaveUpgraded ? CLEAVE_5A_UPGRADED : CLEAVE_5A
-    out.push(['Cleave 5A', dmg, dmg])
+    out.push(['Cleave 5A', dmg - tax, dmg])
   } else if (a === 4) {
     const dmg = cleaveUpgraded ? CLEAVE_4A_UPGRADED : CLEAVE_4A
-    out.push(['Cleave 4A', dmg, dmg])
+    out.push(['Cleave 4A', dmg - tax, dmg])
   } else if (a === 3) {
     const dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A
-    out.push(['Cleave 3A', dmg, dmg])
+    out.push(['Cleave 3A', dmg - tax, dmg])
   }
   // Verified board pattern: AAABB = 3 Axes + 2 Horseshoes. The old `a >= 2 && b >= 2` was a
   // pre-verification leftover that let AABBB (2 Axes + 3 Horseshoes) activate Ride Down —
@@ -110,7 +115,7 @@ export function getCandidates(
   if (a >= 3 && b >= 2) {
     const grimPursuit = has('ride-down-ii') ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT
     const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG
-    out.push(['Ride Down', val, RIDE_DOWN_BASE])
+    out.push(['Ride Down', val - tax, RIDE_DOWN_BASE])
   }
   if (b >= 3 && c >= 1) {
     const dmg = has('reap-ii') ? REAP_UNDEFENDABLE_UPGRADED : REAP_UNDEFENDABLE
@@ -123,12 +128,12 @@ export function getCandidates(
     const dmg = sowUpgraded ? SOW_LARGE_DMG_UPGRADED : SOW_LARGE_DMG
     const dreadfulGiven = sowUpgraded ? SOW_LARGE_DREADFUL_UPGRADED : SOW_LARGE_DREADFUL
     const val = dmg + dreadfulValueOfGaining(dreadful, dreadfulGiven)
-    out.push(['Sow Despair L', val, dmg])
+    out.push(['Sow Despair L', val - tax, dmg])
   }
   if (hasStraight(dice, 4)) {
     const dreadfulGiven = sowUpgraded ? SOW_SMALL_DREADFUL_UPGRADED : SOW_SMALL_DREADFUL
     const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, dreadfulGiven)
-    out.push(['Sow Despair S', val, SOW_SMALL_DMG])
+    out.push(['Sow Despair S', val - tax, SOW_SMALL_DMG])
   }
 
   const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG
@@ -136,17 +141,18 @@ export function getCandidates(
   return out
 }
 
-export function bestAbilityValue(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = []): number {
-  return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds).map(([, v]) => v))
+export function bestAbilityValue(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): number {
+  return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([, v]) => v))
 }
 
-export function bestAbilityName(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = []): string {
-  const cands = getCandidates(dice, dreadful, hasHead, upgradeIds)
+export function bestAbilityName(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): string {
+  const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax)
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
-export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = []): AbilityEntry[] {
-  const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds).map(([name]) => name))
+export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): AbilityEntry[] {
+  const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([name]) => name))
+  const tax = defenseTax
   const has = (id: string) => upgradeIds.includes(id)
 
   const cleaveUpgraded = has('cleave-ii')
@@ -183,14 +189,14 @@ export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boo
   const entries: AbilityEntry[] = [
     { name: 'Dreadful Charge (CCCCC)', value: DREADFUL_CHARGE_VALUE + dc,         baseDamage: DREADFUL_CHARGE_VALUE,       matched: matchedSet.has('Dreadful Charge') },
     { name: 'Horrify (CCCC)',          value: horrifyVal,                            baseDamage: HORRIFY_BASE_UNDEFENDABLE,    matched: matchedSet.has('Horrify') },
-    { name: 'Spectral Assault (AAACC)',value: saVal,                               baseDamage: spectralAssaultBase,         matched: matchedSet.has('Spectral Assault') },
-    { name: 'Cleave 5A (AAAAA)',       value: cleave5Dmg,                          baseDamage: cleave5Dmg,                  matched: matchedSet.has('Cleave 5A') },
-    { name: 'Cleave 4A (AAAA)',        value: cleave4Dmg,                          baseDamage: cleave4Dmg,                  matched: matchedSet.has('Cleave 4A') },
-    { name: 'Cleave 3A (AAA)',         value: cleave3Dmg,                          baseDamage: cleave3Dmg,                  matched: matchedSet.has('Cleave 3A') },
-    { name: 'Ride Down (AAABB)',       value: rdVal,                               baseDamage: RIDE_DOWN_BASE,              matched: matchedSet.has('Ride Down') },
+    { name: 'Spectral Assault (AAACC)',value: saVal - tax,                               baseDamage: spectralAssaultBase,         matched: matchedSet.has('Spectral Assault') },
+    { name: 'Cleave 5A (AAAAA)',       value: cleave5Dmg - tax,                          baseDamage: cleave5Dmg,                  matched: matchedSet.has('Cleave 5A') },
+    { name: 'Cleave 4A (AAAA)',        value: cleave4Dmg - tax,                          baseDamage: cleave4Dmg,                  matched: matchedSet.has('Cleave 4A') },
+    { name: 'Cleave 3A (AAA)',         value: cleave3Dmg - tax,                          baseDamage: cleave3Dmg,                  matched: matchedSet.has('Cleave 3A') },
+    { name: 'Ride Down (AAABB)',       value: rdVal - tax,                               baseDamage: RIDE_DOWN_BASE,              matched: matchedSet.has('Ride Down') },
     { name: 'Reap (BBBC)',             value: reapVal,                             baseDamage: reapDmg,                     matched: matchedSet.has('Reap') },
-    { name: 'Sow Despair L (5-straight)', value: sowLVal,                          baseDamage: sowLDmg,                     matched: matchedSet.has('Sow Despair L') },
-    { name: 'Sow Despair S (4-straight)', value: sowSVal,                          baseDamage: SOW_SMALL_DMG,               matched: matchedSet.has('Sow Despair S') },
+    { name: 'Sow Despair L (5-straight)', value: sowLVal - tax,                          baseDamage: sowLDmg,                     matched: matchedSet.has('Sow Despair L') },
+    { name: 'Sow Despair S (4-straight)', value: sowSVal - tax,                          baseDamage: SOW_SMALL_DMG,               matched: matchedSet.has('Sow Despair S') },
     { name: 'Whiff',                   value: whiffVal,                            baseDamage: whiffVal,                    matched: matchedSet.has('Whiff') },
   ]
 
@@ -207,7 +213,7 @@ export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boo
     entries.push({ name: 'Haunted Strike (AACC)', value: HAUNTED_STRIKE_DMG, baseDamage: HAUNTED_STRIKE_DMG, matched: matchedSet.has('Haunted Strike') })
   }
   if (has('horrify-ii')) {
-    entries.push({ name: 'Spooky (CCC)', value: spookyVal, baseDamage: SPOOKY_DMG, matched: matchedSet.has('Spooky') })
+    entries.push({ name: 'Spooky (CCC)', value: spookyVal - tax, baseDamage: SPOOKY_DMG, matched: matchedSet.has('Spooky') })
   }
 
   return entries

@@ -7,6 +7,7 @@ import {
 // (Armored Up: +2 si 2 Armor). Le contenu de la Forge influe sur le craft, pas sur la garde.
 // upgradeIds gardé pour l'interface commune (fm n'a aucune carte upgrade — toujours vide).
 export interface FMState {
+  defenseTax?: number // voir HHState.defenseTax
   armorCount: number
   upgradeIds?: string[]
 }
@@ -17,19 +18,19 @@ export const fmConfig: CharacterConfig<FMState> = {
     return fmFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.armorCount)
+    return bestAbilityValue(dice, state.armorCount, state.defenseTax ?? 0)
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.armorCount)
+    return bestAbilityName(dice, state.armorCount, state.defenseTax ?? 0)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
-    return buildAbilityBoard(dice, state.armorCount)
+    return buildAbilityBoard(dice, state.armorCount, state.defenseTax ?? 0)
   },
   hasMatchedAbility(dice, state) {
-    const cands = getCandidates(dice, state.armorCount)
+    const cands = getCandidates(dice, state.armorCount, state.defenseTax ?? 0)
     return cands.some(([name]) => name !== 'Whiff')
   },
   stateKey(state) {
-    return `${Math.min(state.armorCount, 2)}` // au-delà de 2, plus aucun effet sur l'EV
+    return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}`
   },
 }

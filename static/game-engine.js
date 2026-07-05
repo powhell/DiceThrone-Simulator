@@ -410,10 +410,11 @@ var Game = (() => {
     }
     return false;
   }
-  function getCandidates(dice, dreadful, hasHead2, upgradeIds = []) {
+  function getCandidates(dice, dreadful, hasHead2, upgradeIds = [], defenseTax = 0) {
     const { A: a, B: b, C: c } = classify(dice);
     const out = [];
     const has = (id) => upgradeIds.includes(id);
+    const tax = defenseTax;
     if (has("cleave-ii") && a >= 2 && b >= 1 && c >= 1) {
       const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
       out.push(["Ghostly Charge", val, GHOSTLY_CHARGE_DMG]);
@@ -431,7 +432,7 @@ var Game = (() => {
     }
     if (has("horrify-ii") && c >= 3) {
       const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
-      out.push(["Spooky", val, SPOOKY_DMG]);
+      out.push(["Spooky", val - tax, SPOOKY_DMG]);
     }
     if (c >= 5) {
       const base = DREADFUL_CHARGE_VALUE;
@@ -448,23 +449,23 @@ var Game = (() => {
     if (a >= 3 && c >= 2) {
       const base = has("spectral-assault-ii") ? SPECTRAL_ASSAULT_BASE_UPGRADED : SPECTRAL_ASSAULT_BASE;
       const val = base + dreadful * SPECTRAL_ASSAULT_PER_DREADFUL;
-      out.push(["Spectral Assault", val, base]);
+      out.push(["Spectral Assault", val - tax, base]);
     }
     const cleaveUpgraded = has("cleave-ii");
     if (a >= 5) {
       const dmg = cleaveUpgraded ? CLEAVE_5A_UPGRADED : CLEAVE_5A;
-      out.push(["Cleave 5A", dmg, dmg]);
+      out.push(["Cleave 5A", dmg - tax, dmg]);
     } else if (a === 4) {
       const dmg = cleaveUpgraded ? CLEAVE_4A_UPGRADED : CLEAVE_4A;
-      out.push(["Cleave 4A", dmg, dmg]);
+      out.push(["Cleave 4A", dmg - tax, dmg]);
     } else if (a === 3) {
       const dmg = cleaveUpgraded ? CLEAVE_3A_UPGRADED : CLEAVE_3A;
-      out.push(["Cleave 3A", dmg, dmg]);
+      out.push(["Cleave 3A", dmg - tax, dmg]);
     }
     if (a >= 3 && b >= 2) {
       const grimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
       const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG;
-      out.push(["Ride Down", val, RIDE_DOWN_BASE]);
+      out.push(["Ride Down", val - tax, RIDE_DOWN_BASE]);
     }
     if (b >= 3 && c >= 1) {
       const dmg = has("reap-ii") ? REAP_UNDEFENDABLE_UPGRADED : REAP_UNDEFENDABLE;
@@ -477,26 +478,27 @@ var Game = (() => {
       const dmg = sowUpgraded ? SOW_LARGE_DMG_UPGRADED : SOW_LARGE_DMG;
       const dreadfulGiven = sowUpgraded ? SOW_LARGE_DREADFUL_UPGRADED : SOW_LARGE_DREADFUL;
       const val = dmg + dreadfulValueOfGaining(dreadful, dreadfulGiven);
-      out.push(["Sow Despair L", val, dmg]);
+      out.push(["Sow Despair L", val - tax, dmg]);
     }
     if (hasStraight(dice, 4)) {
       const dreadfulGiven = sowUpgraded ? SOW_SMALL_DREADFUL_UPGRADED : SOW_SMALL_DREADFUL;
       const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, dreadfulGiven);
-      out.push(["Sow Despair S", val, SOW_SMALL_DMG]);
+      out.push(["Sow Despair S", val - tax, SOW_SMALL_DMG]);
     }
     const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG;
     out.push(["Whiff", whiffVal, whiffVal]);
     return out;
   }
-  function bestAbilityValue(dice, dreadful, hasHead2, upgradeIds = []) {
-    return Math.max(...getCandidates(dice, dreadful, hasHead2, upgradeIds).map(([, v]) => v));
+  function bestAbilityValue(dice, dreadful, hasHead2, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates(dice, dreadful, hasHead2, upgradeIds, defenseTax).map(([, v]) => v));
   }
-  function bestAbilityName(dice, dreadful, hasHead2, upgradeIds = []) {
-    const cands = getCandidates(dice, dreadful, hasHead2, upgradeIds);
+  function bestAbilityName(dice, dreadful, hasHead2, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates(dice, dreadful, hasHead2, upgradeIds, defenseTax);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function buildAbilityBoard(dice, dreadful, hasHead2, upgradeIds = []) {
-    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead2, upgradeIds).map(([name]) => name));
+  function buildAbilityBoard(dice, dreadful, hasHead2, upgradeIds = [], defenseTax = 0) {
+    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead2, upgradeIds, defenseTax).map(([name]) => name));
+    const tax = defenseTax;
     const has = (id) => upgradeIds.includes(id);
     const cleaveUpgraded = has("cleave-ii");
     const sowUpgraded = has("sow-despair-ii");
@@ -529,14 +531,14 @@ var Game = (() => {
     const entries = [
       { name: "Dreadful Charge (CCCCC)", value: DREADFUL_CHARGE_VALUE + dc, baseDamage: DREADFUL_CHARGE_VALUE, matched: matchedSet.has("Dreadful Charge") },
       { name: "Horrify (CCCC)", value: horrifyVal, baseDamage: HORRIFY_BASE_UNDEFENDABLE, matched: matchedSet.has("Horrify") },
-      { name: "Spectral Assault (AAACC)", value: saVal, baseDamage: spectralAssaultBase, matched: matchedSet.has("Spectral Assault") },
-      { name: "Cleave 5A (AAAAA)", value: cleave5Dmg, baseDamage: cleave5Dmg, matched: matchedSet.has("Cleave 5A") },
-      { name: "Cleave 4A (AAAA)", value: cleave4Dmg, baseDamage: cleave4Dmg, matched: matchedSet.has("Cleave 4A") },
-      { name: "Cleave 3A (AAA)", value: cleave3Dmg, baseDamage: cleave3Dmg, matched: matchedSet.has("Cleave 3A") },
-      { name: "Ride Down (AAABB)", value: rdVal, baseDamage: RIDE_DOWN_BASE, matched: matchedSet.has("Ride Down") },
+      { name: "Spectral Assault (AAACC)", value: saVal - tax, baseDamage: spectralAssaultBase, matched: matchedSet.has("Spectral Assault") },
+      { name: "Cleave 5A (AAAAA)", value: cleave5Dmg - tax, baseDamage: cleave5Dmg, matched: matchedSet.has("Cleave 5A") },
+      { name: "Cleave 4A (AAAA)", value: cleave4Dmg - tax, baseDamage: cleave4Dmg, matched: matchedSet.has("Cleave 4A") },
+      { name: "Cleave 3A (AAA)", value: cleave3Dmg - tax, baseDamage: cleave3Dmg, matched: matchedSet.has("Cleave 3A") },
+      { name: "Ride Down (AAABB)", value: rdVal - tax, baseDamage: RIDE_DOWN_BASE, matched: matchedSet.has("Ride Down") },
       { name: "Reap (BBBC)", value: reapVal, baseDamage: reapDmg, matched: matchedSet.has("Reap") },
-      { name: "Sow Despair L (5-straight)", value: sowLVal, baseDamage: sowLDmg, matched: matchedSet.has("Sow Despair L") },
-      { name: "Sow Despair S (4-straight)", value: sowSVal, baseDamage: SOW_SMALL_DMG, matched: matchedSet.has("Sow Despair S") },
+      { name: "Sow Despair L (5-straight)", value: sowLVal - tax, baseDamage: sowLDmg, matched: matchedSet.has("Sow Despair L") },
+      { name: "Sow Despair S (4-straight)", value: sowSVal - tax, baseDamage: SOW_SMALL_DMG, matched: matchedSet.has("Sow Despair S") },
       { name: "Whiff", value: whiffVal, baseDamage: whiffVal, matched: matchedSet.has("Whiff") }
     ];
     if (has("cleave-ii")) {
@@ -552,7 +554,7 @@ var Game = (() => {
       entries.push({ name: "Haunted Strike (AACC)", value: HAUNTED_STRIKE_DMG, baseDamage: HAUNTED_STRIKE_DMG, matched: matchedSet.has("Haunted Strike") });
     }
     if (has("horrify-ii")) {
-      entries.push({ name: "Spooky (CCC)", value: spookyVal, baseDamage: SPOOKY_DMG, matched: matchedSet.has("Spooky") });
+      entries.push({ name: "Spooky (CCC)", value: spookyVal - tax, baseDamage: SPOOKY_DMG, matched: matchedSet.has("Spooky") });
     }
     return entries;
   }
@@ -564,21 +566,21 @@ var Game = (() => {
       return hhFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds);
+      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds);
+      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds);
+      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds);
+      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
       const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${upgrades}`;
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgrades}`;
     }
   };
 
@@ -672,9 +674,10 @@ var Game = (() => {
     const covertOpsEV = (1 - pFewerThanTwoC) * COVERT_OPS_VALUE;
     return riderDmg + tbEV + covertOpsEV;
   }
-  function getCandidates2(dice, upgrades, tbOnOpp, upgradeIds = []) {
+  function getCandidates2(dice, upgrades, tbOnOpp, upgradeIds = [], defenseTax = 0) {
     const { A: a, B: b, C: c } = classify2(dice);
     const out = [];
+    const tax = defenseTax;
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     if (has("widows-gauntlets-ii") && a >= 2 && b >= 2) {
@@ -696,13 +699,13 @@ var Game = (() => {
     const batonStrikeUpgraded = has("baton-strike-ii");
     if (b >= 5) {
       const dmg = batonStrikeUpgraded ? BATON_STRIKE_5B_UPGRADED : BATON_STRIKE_5B;
-      out.push(["Baton Strike 5B", dmg + rrt, dmg]);
+      out.push(["Baton Strike 5B", dmg + rrt - tax, dmg]);
     } else if (b === 4) {
       const dmg = batonStrikeUpgraded ? BATON_STRIKE_4B_UPGRADED : BATON_STRIKE_4B;
-      out.push(["Baton Strike 4B", dmg + rrt, dmg]);
+      out.push(["Baton Strike 4B", dmg + rrt - tax, dmg]);
     } else if (b === 3) {
       const dmg = batonStrikeUpgraded ? BATON_STRIKE_3B_UPGRADED : BATON_STRIKE_3B;
-      out.push(["Baton Strike 3B", dmg + rrt, dmg]);
+      out.push(["Baton Strike 3B", dmg + rrt - tax, dmg]);
     }
     if (a >= 2 && b >= 1 && c >= 1) {
       const tb = tbGainValue(upgrades, tbOnOpp, INFILTRATE_TB_INFLICTED);
@@ -712,13 +715,13 @@ var Game = (() => {
     if (b >= 3 && a >= 2) {
       const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
       const val = gauntletsDmg + upgrades + GAUNTLETS_CP_GAIN * CP_TO_DMG_EQUIV + rrt;
-      out.push(["Widow's Gauntlets", val, gauntletsDmg]);
+      out.push(["Widow's Gauntlets", val - tax, gauntletsDmg]);
     }
     if (hasStraight2(dice, 4)) {
       const hackedDmg = has("hacked-ii") ? HACKED_BASE_DMG_UPGRADED : HACKED_BASE_DMG;
       const thresh = upgrades >= HACKED_THRESHOLD_UPGRADES ? HACKED_THRESHOLD_BONUS : 0;
       const tb = tbGainValue(upgrades, tbOnOpp, HACKED_TB_INFLICTED);
-      out.push(["Hacked", hackedDmg + thresh + tb + rrt, hackedDmg]);
+      out.push(["Hacked", hackedDmg + thresh + tb + rrt - tax, hackedDmg]);
     }
     if (c >= 4) {
       const grappleUpgraded = has("grapple-ii");
@@ -730,7 +733,7 @@ var Game = (() => {
     if (hasStraight2(dice, 5)) {
       const rider = vengeanceRiderEV(upgrades, tbOnOpp);
       const agility = VENGEANCE_AGILITY_GAIN * AGILITY_VALUE;
-      out.push(["Vengeance", VENGEANCE_BASE_DMG + rider + agility + rrt, VENGEANCE_BASE_DMG]);
+      out.push(["Vengeance", VENGEANCE_BASE_DMG + rider + agility + rrt - tax, VENGEANCE_BASE_DMG]);
     }
     if (c >= 5) {
       const tb = tbGainValue(upgrades, tbOnOpp, WIDOWS_BITE_TB_INFLICTED);
@@ -739,11 +742,11 @@ var Game = (() => {
     out.push(["Whiff", WHIFF_VALUE, WHIFF_VALUE]);
     return out;
   }
-  function bestAbilityValue2(dice, upgrades, tbOnOpp, upgradeIds = []) {
-    return Math.max(...getCandidates2(dice, upgrades, tbOnOpp, upgradeIds).map(([, v]) => v));
+  function bestAbilityValue2(dice, upgrades, tbOnOpp, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates2(dice, upgrades, tbOnOpp, upgradeIds, defenseTax).map(([, v]) => v));
   }
-  function bestAbilityName2(dice, upgrades, tbOnOpp, upgradeIds = []) {
-    const cands = getCandidates2(dice, upgrades, tbOnOpp, upgradeIds);
+  function bestAbilityName2(dice, upgrades, tbOnOpp, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates2(dice, upgrades, tbOnOpp, upgradeIds, defenseTax);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
   function directDamageByName(upgrades, _tbOnOpp, upgradeIds = []) {
@@ -772,8 +775,9 @@ var Game = (() => {
       "Subvert": SUBVERT_DMG + rrt
     };
   }
-  function buildAbilityBoard2(dice, upgrades, tbOnOpp, upgradeIds = []) {
-    const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp, upgradeIds).map(([n]) => n));
+  function buildAbilityBoard2(dice, upgrades, tbOnOpp, upgradeIds = [], defenseTax = 0) {
+    const matched = new Set(getCandidates2(dice, upgrades, tbOnOpp, upgradeIds, defenseTax).map(([n]) => n));
+    const tax = defenseTax;
     const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     const batonStrikeUpgraded = has("baton-strike-ii");
@@ -798,13 +802,13 @@ var Game = (() => {
     const entries = [
       { name: "Widow's Bite (CCCCC)", value: biteVal, baseDamage: WIDOWS_BITE_BASE_DMG, matched: matched.has("Widow's Bite") },
       { name: "Grapple (CCCC)", value: grappleVal, baseDamage: grappleDmg, matched: matched.has("Grapple") },
-      { name: "Widow's Gauntlets (BBBAA)", value: gauntletsVal, baseDamage: gauntletsDmg, matched: matched.has("Widow's Gauntlets") },
-      { name: "Vengeance (5-straight)", value: vengeanceVal, baseDamage: VENGEANCE_BASE_DMG, matched: matched.has("Vengeance") },
-      { name: "Hacked (4-straight)", value: hackedVal, baseDamage: hackedDmg, matched: matched.has("Hacked") },
+      { name: "Widow's Gauntlets (BBBAA)", value: gauntletsVal - tax, baseDamage: gauntletsDmg, matched: matched.has("Widow's Gauntlets") },
+      { name: "Vengeance (5-straight)", value: vengeanceVal - tax, baseDamage: VENGEANCE_BASE_DMG, matched: matched.has("Vengeance") },
+      { name: "Hacked (4-straight)", value: hackedVal - tax, baseDamage: hackedDmg, matched: matched.has("Hacked") },
       { name: "Infiltrate (AABC)", value: infiltrateVal, baseDamage: INFILTRATE_BASE_DMG, matched: matched.has("Infiltrate") },
-      { name: "Baton Strike 5B (BBBBB)", value: batonStrike5Dmg + rrt, baseDamage: batonStrike5Dmg, matched: matched.has("Baton Strike 5B") },
-      { name: "Baton Strike 4B (BBBB)", value: batonStrike4Dmg + rrt, baseDamage: batonStrike4Dmg, matched: matched.has("Baton Strike 4B") },
-      { name: "Baton Strike 3B (BBB)", value: batonStrike3Dmg + rrt, baseDamage: batonStrike3Dmg, matched: matched.has("Baton Strike 3B") },
+      { name: "Baton Strike 5B (BBBBB)", value: batonStrike5Dmg + rrt - tax, baseDamage: batonStrike5Dmg, matched: matched.has("Baton Strike 5B") },
+      { name: "Baton Strike 4B (BBBB)", value: batonStrike4Dmg + rrt - tax, baseDamage: batonStrike4Dmg, matched: matched.has("Baton Strike 4B") },
+      { name: "Baton Strike 3B (BBB)", value: batonStrike3Dmg + rrt - tax, baseDamage: batonStrike3Dmg, matched: matched.has("Baton Strike 3B") },
       { name: "Whiff", value: WHIFF_VALUE, baseDamage: WHIFF_VALUE, matched: matched.has("Whiff") }
     ];
     if (has("widows-gauntlets-ii")) {
@@ -829,21 +833,21 @@ var Game = (() => {
       return bwFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
+      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
+      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
+      return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds);
+      const cands = getCandidates2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
       const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.upgrades}|${state.tbOnOpp}|${upgradeIds}`;
+      return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgradeIds}`;
     },
     directDamageByName(state) {
       return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds);
@@ -898,43 +902,45 @@ var Game = (() => {
     for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
     return [...counts.values()].some((n) => n >= ofAKind);
   }
-  function getCandidates3(dice, armorCount2) {
+  function getCandidates3(dice, armorCount2, defenseTax = 0) {
+    const tax = defenseTax;
     const { A: a, B: b, C: c } = classify3(dice);
     const out = [];
     const pickCpBonus = hasNumberMatch(dice, 4) ? CP_TO_DMG_EQUIV2 : 0;
-    if (a >= 5) out.push(["Pick Axe 5A", PICK_AXE_5A + pickCpBonus, PICK_AXE_5A]);
-    else if (a === 4) out.push(["Pick Axe 4A", PICK_AXE_4A + pickCpBonus, PICK_AXE_4A]);
-    else if (a === 3) out.push(["Pick Axe 3A", PICK_AXE_3A + pickCpBonus, PICK_AXE_3A]);
-    if (b >= 4) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE]);
+    if (a >= 5) out.push(["Pick Axe 5A", PICK_AXE_5A + pickCpBonus - tax, PICK_AXE_5A]);
+    else if (a === 4) out.push(["Pick Axe 4A", PICK_AXE_4A + pickCpBonus - tax, PICK_AXE_4A]);
+    else if (a === 3) out.push(["Pick Axe 3A", PICK_AXE_3A + pickCpBonus - tax, PICK_AXE_3A]);
+    if (b >= 4) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV - tax, FURNACE_BASE]);
     if (c >= 4) out.push(["Smelting Time", SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, SMELTING_TIME_UNDEFENDABLE]);
-    if (a >= 1 && b >= 1 && c >= 2) out.push(["A Good Haul", A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG]);
+    if (a >= 1 && b >= 1 && c >= 2) out.push(["A Good Haul", A_GOOD_HAUL_DMG + MINE_VALUE - tax, A_GOOD_HAUL_DMG]);
     const armoredBonus = armorCount2 >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
-    if (hasStraight3(dice, 5)) out.push(["Armored Up L", ARMORED_UP_LARGE + armoredBonus, ARMORED_UP_LARGE + armoredBonus]);
-    if (hasStraight3(dice, 4)) out.push(["Armored Up S", ARMORED_UP_SMALL + armoredBonus, ARMORED_UP_SMALL + armoredBonus]);
+    if (hasStraight3(dice, 5)) out.push(["Armored Up L", ARMORED_UP_LARGE + armoredBonus - tax, ARMORED_UP_LARGE + armoredBonus]);
+    if (hasStraight3(dice, 4)) out.push(["Armored Up S", ARMORED_UP_SMALL + armoredBonus - tax, ARMORED_UP_SMALL + armoredBonus]);
     if (c >= 5) out.push(["Final Touches!", FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, FINAL_TOUCHES_VALUE]);
     out.push(["Whiff", WHIFF_VALUE2, WHIFF_VALUE2]);
     return out;
   }
-  function bestAbilityValue3(dice, armorCount2) {
-    return Math.max(...getCandidates3(dice, armorCount2).map(([, v]) => v));
+  function bestAbilityValue3(dice, armorCount2, defenseTax = 0) {
+    return Math.max(...getCandidates3(dice, armorCount2, defenseTax).map(([, v]) => v));
   }
-  function bestAbilityName3(dice, armorCount2) {
-    const cands = getCandidates3(dice, armorCount2);
+  function bestAbilityName3(dice, armorCount2, defenseTax = 0) {
+    const cands = getCandidates3(dice, armorCount2, defenseTax);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function buildAbilityBoard3(dice, armorCount2) {
-    const matchedSet = new Set(getCandidates3(dice, armorCount2).map(([name]) => name));
+  function buildAbilityBoard3(dice, armorCount2, defenseTax = 0) {
+    const matchedSet = new Set(getCandidates3(dice, armorCount2, defenseTax).map(([name]) => name));
+    const tax = defenseTax;
     const armoredBonus = armorCount2 >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
     return [
       { name: "Final Touches! (CCCCC)", value: FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, baseDamage: FINAL_TOUCHES_VALUE, matched: matchedSet.has("Final Touches!") },
       { name: "Smelting Time (CCCC)", value: SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, baseDamage: SMELTING_TIME_UNDEFENDABLE, matched: matchedSet.has("Smelting Time") },
-      { name: "Armored Up L (5-straight)", value: ARMORED_UP_LARGE + armoredBonus, baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has("Armored Up L") },
-      { name: "A Good Haul (ABCC)", value: A_GOOD_HAUL_DMG + MINE_VALUE, baseDamage: A_GOOD_HAUL_DMG, matched: matchedSet.has("A Good Haul") },
-      { name: "Armored Up S (4-straight)", value: ARMORED_UP_SMALL + armoredBonus, baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has("Armored Up S") },
-      { name: "Furnace (BBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
-      { name: "Pick Axe 5A (AAAAA)", value: PICK_AXE_5A, baseDamage: PICK_AXE_5A, matched: matchedSet.has("Pick Axe 5A") },
-      { name: "Pick Axe 4A (AAAA)", value: PICK_AXE_4A, baseDamage: PICK_AXE_4A, matched: matchedSet.has("Pick Axe 4A") },
-      { name: "Pick Axe 3A (AAA)", value: PICK_AXE_3A, baseDamage: PICK_AXE_3A, matched: matchedSet.has("Pick Axe 3A") },
+      { name: "Armored Up L (5-straight)", value: ARMORED_UP_LARGE + armoredBonus - tax, baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has("Armored Up L") },
+      { name: "A Good Haul (ABCC)", value: A_GOOD_HAUL_DMG + MINE_VALUE - tax, baseDamage: A_GOOD_HAUL_DMG, matched: matchedSet.has("A Good Haul") },
+      { name: "Armored Up S (4-straight)", value: ARMORED_UP_SMALL + armoredBonus - tax, baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has("Armored Up S") },
+      { name: "Furnace (BBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV - tax, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
+      { name: "Pick Axe 5A (AAAAA)", value: PICK_AXE_5A - tax, baseDamage: PICK_AXE_5A, matched: matchedSet.has("Pick Axe 5A") },
+      { name: "Pick Axe 4A (AAAA)", value: PICK_AXE_4A - tax, baseDamage: PICK_AXE_4A, matched: matchedSet.has("Pick Axe 4A") },
+      { name: "Pick Axe 3A (AAA)", value: PICK_AXE_3A - tax, baseDamage: PICK_AXE_3A, matched: matchedSet.has("Pick Axe 3A") },
       { name: "Whiff", value: WHIFF_VALUE2, baseDamage: WHIFF_VALUE2, matched: matchedSet.has("Whiff") }
     ];
   }
@@ -946,20 +952,20 @@ var Game = (() => {
       return fmFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue3(dice, state.armorCount);
+      return bestAbilityValue3(dice, state.armorCount, state.defenseTax ?? 0);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName3(dice, state.armorCount);
+      return bestAbilityName3(dice, state.armorCount, state.defenseTax ?? 0);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard3(dice, state.armorCount);
+      return buildAbilityBoard3(dice, state.armorCount, state.defenseTax ?? 0);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates3(dice, state.armorCount);
+      const cands = getCandidates3(dice, state.armorCount, state.defenseTax ?? 0);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      return `${Math.min(state.armorCount, 2)}`;
+      return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}`;
     }
   };
 
@@ -1609,15 +1615,27 @@ var Game = (() => {
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
   }
+  function defenseTaxFor(opponent) {
+    if (opponent.heroId === "bw") {
+      return opponent.upgradesInPlay.includes("sabotage-ii") ? 2.67 : 2;
+    }
+    if (opponent.heroId === "hh") {
+      const dice = Math.min(1 + opponent.tokens.dreadful, 5);
+      const PREV = [0, 0, 0.11, 0.26, 0.42, 0.58];
+      return 0.5 * dice + PREV[dice];
+    }
+    const HELM = [0, 1, 2, 3], SHIELD = [0, 1, 2, 2];
+    return (HELM[opponent.armor.helmet] + SHIELD[opponent.armor.shield]) * 1.33;
+  }
   function oracleStateFor(player, opponent) {
     if (player.heroId === "hh") {
       const t = player.tokens;
-      return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay };
+      return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) };
     }
     if (player.heroId === "fm") {
-      return { armorCount: armorCount(player), upgradeIds: player.upgradesInPlay };
+      return { armorCount: armorCount(player), upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) };
     }
-    return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay };
+    return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) };
   }
   function checkGameOver(state) {
     const [p0, p1] = state.players;
@@ -3078,7 +3096,7 @@ var Game = (() => {
   }
   var ENCODINGS = { hh: buildHeroEncoding("hh"), bw: buildHeroEncoding("bw"), fm: buildHeroEncoding("fm") };
   var UPGRADE_ONEHOT_SIZE = 8;
-  var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize);
+  var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize, ENCODINGS.fm.deckSize);
   function encodeUpgradesInPlay(p) {
     const enc = ENCODINGS[p.heroId];
     const out = new Array(UPGRADE_ONEHOT_SIZE).fill(0);
@@ -3101,6 +3119,7 @@ var Game = (() => {
     const deckSize = ENCODINGS[p.heroId].deckSize;
     const isHH = p.heroId === "hh" ? 1 : 0;
     const isBW = p.heroId === "bw" ? 1 : 0;
+    const isFM = p.heroId === "fm" ? 1 : 0;
     return [
       p.hp / MAX_HP,
       p.cp / CP_CAP,
@@ -3112,6 +3131,14 @@ var Game = (() => {
       p.upgradesPlayedThisTurn / MAX_UPGRADES_PLAYED_PER_TURN,
       isHH,
       isBW,
+      isFM,
+      // Forgemaster : la Forge et les armures sont SON état stratégique central — sans ces
+      // features le réseau ne peut pas valoriser un état fm (zéro pour les autres héros).
+      p.forge.filter((id) => id === "gold-ore").length / 9,
+      p.forge.filter((id) => id === "diamond-ore").length / 6,
+      p.forge.filter((id) => id === "ultimanium-ore").length,
+      p.armor.helmet / 3,
+      p.armor.shield / 3,
       // Tokens read straight from the generic bag for BOTH heroes (v2: un-gated). Cross-player
       // token transfer cards mean any player can end up holding any bag token; gating by hero
       // hid that from the network.
@@ -3133,7 +3160,7 @@ var Game = (() => {
       ...encodePlayer(opp)
     ];
   }
-  var PLAYER_BLOCK_SIZE = 15 + UPGRADE_ONEHOT_SIZE;
+  var PLAYER_BLOCK_SIZE = 21 + UPGRADE_ONEHOT_SIZE;
   var FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE;
 
   // src/sim/rl/lookahead.ts
