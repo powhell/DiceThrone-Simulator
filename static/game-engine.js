@@ -2144,6 +2144,19 @@ var Game = (() => {
         }
         for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: "playInstant", cardId: id });
         for (const cardId of player.hand) options.push({ kind: "sellCard", cardId });
+        if (player.heroId === "fm") {
+          const seen = /* @__PURE__ */ new Set();
+          for (const oreId of player.forge) {
+            if (seen.has(oreId)) continue;
+            if (player.forge.filter((o) => o === oreId).length < 3) continue;
+            seen.add(oreId);
+            if (oreId === "gold-ore") {
+              options.push({ kind: "scrapOre", oreId, choice: "cp" });
+              options.push({ kind: "scrapOre", oreId, choice: "heal" });
+            } else if (oreId === "diamond-ore") options.push({ kind: "scrapOre", oreId, choice: "cp" });
+            else if (oreId === "ultimanium-ore") options.push({ kind: "scrapOre", oreId, choice: "draw2" });
+          }
+        }
         pushCrossPlayerOptions(state, canAfford, options);
       }
     } else if (ctx.windowType === "defense") {
@@ -2209,6 +2222,19 @@ var Game = (() => {
     if (action.kind === "playInstant") {
       const card = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId);
       if (card) playActionCard(state, playerIdx, ctx.phase ?? "main2", card, rng);
+      return;
+    }
+    if (action.kind === "scrapOre") {
+      const self = state.players[playerIdx];
+      const a = action;
+      const i = self.forge.indexOf(a.oreId);
+      if (i < 0) return;
+      if (a.choice === "heal") self.hp = Math.min(self.hp + 1, 60);
+      else if (a.choice === "cp") grantCp(self, 1);
+      else drawCards(self, 2, rng);
+      self.forge.splice(i, 1);
+      self.discard.push(a.oreId);
+      log(state, playerIdx, ctx.phase ?? "main1", `Scrap: ${a.oreId} -> ${a.choice}`);
       return;
     }
     if (action.kind === "sellCard") {

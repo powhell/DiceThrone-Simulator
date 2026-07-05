@@ -657,6 +657,21 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
       // Selling: any hand card may be sold for 1 CP during your Main Phases (user-confirmed
       // official rule — the Discard-phase sale is only the forced version of the same exchange).
       for (const cardId of player.hand) options.push({ kind: 'sellCard', cardId })
+      // Scrap (fm, verifie leaflet) : gold -> soin 1 OU +1 CP ; diamond -> +1 CP ;
+      // ultimanium -> pioche 2. Audit 2026-07-05 : l'IA ne scrappait JAMAIS (humain seul).
+      if (player.heroId === 'fm') {
+        const seen = new Set<string>()
+        for (const oreId of player.forge) {
+          if (seen.has(oreId)) continue
+          // Surplus seulement : un craft coute 2 ore — on ne propose pas de scraper du
+          // minerai utile (le reseau sur-scrappait : 99 scraps/8 parties au premier essai).
+          if (player.forge.filter(o => o === oreId).length < 3) continue
+          seen.add(oreId)
+          if (oreId === 'gold-ore') { options.push({ kind: 'scrapOre', oreId, choice: 'cp' } as any); options.push({ kind: 'scrapOre', oreId, choice: 'heal' } as any) }
+          else if (oreId === 'diamond-ore') options.push({ kind: 'scrapOre', oreId, choice: 'cp' } as any)
+          else if (oreId === 'ultimanium-ore') options.push({ kind: 'scrapOre', oreId, choice: 'draw2' } as any)
+        }
+      }
       pushCrossPlayerOptions(state, canAfford, options)
     }
   } else if (ctx.windowType === 'defense') {
@@ -740,6 +755,19 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'playInstant') {
     const card = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId)
     if (card) playActionCard(state, playerIdx, ctx.phase ?? 'main2', card, rng)
+    return
+  }
+  if ((action as any).kind === 'scrapOre') {
+    const self = state.players[playerIdx]
+    const a = action as any
+    const i = self.forge.indexOf(a.oreId)
+    if (i < 0) return
+    if (a.choice === 'heal') self.hp = Math.min(self.hp + 1, 60) // 50 + cap soin 10 (règle vérifiée)
+    else if (a.choice === 'cp') grantCp(self, 1)
+    else drawCards(self, 2, rng)
+    self.forge.splice(i, 1)
+    self.discard.push(a.oreId)
+    log(state, playerIdx, ctx.phase ?? 'main1', `Scrap: ${a.oreId} -> ${a.choice}`)
     return
   }
   if (action.kind === 'sellCard') {
