@@ -2812,7 +2812,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : bwConfig;
     const r = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp));
     const top = r.topOptions[0];
     return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv, topOptions: r.topOptions };

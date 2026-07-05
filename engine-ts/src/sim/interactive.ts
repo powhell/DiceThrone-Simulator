@@ -30,6 +30,7 @@ import { createInitialGameState } from './match.js'
 import { heroTemplateFor, cardById } from './data/load.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
+import { fmConfig } from '../characters/forgemaster/config.js'
 import * as core from '../core/evaluator.js'
 
 export interface HumanGame {
@@ -182,7 +183,7 @@ export function humanKeepAdvice(
 ): { kept: number[]; ev: number; keepAllEv: number; topOptions: core.KeepOption[] } {
   const self = g.state.players[g.humanIdx]
   const opp = g.state.players[g.aiIdx]
-  const cfg: any = self.heroId === 'hh' ? hhConfig : bwConfig
+  const cfg: any = self.heroId === 'hh' ? hhConfig : self.heroId === 'fm' ? fmConfig : bwConfig
   const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp) as any)
   const top = r.topOptions[0]
   // topOptions: the full ranked keep table (kept dice, EV, per-ability landing odds) so the UI

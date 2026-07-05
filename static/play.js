@@ -19,7 +19,11 @@
     // Black Widow — Eye (Espionnage), Batons (Bâtons), Spider (Veuve)
     eye:'<g class="glyph"><path d="M6 32c9-13 43-13 52 0-9 13-43 13-52 0z"/><g fill="#2c1e46"><circle cx="32" cy="32" r="9"/></g><circle cx="32" cy="32" r="4.3"/></g>',
     baton:'<g class="glyph"><rect x="11" y="28.5" width="42" height="7" rx="3.5" transform="rotate(-37 32 32)"/><rect x="11" y="28.5" width="42" height="7" rx="3.5" transform="rotate(37 32 32)"/></g>',
-    spider:'<g class="glyph"><ellipse cx="32" cy="37" rx="8.5" ry="10.5"/><circle cx="32" cy="23" r="5.5"/><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M25 31L11 23M24 37H8M25 43L11 51M39 31l14-8M40 37h16M39 43l14 8"/></g></g>'
+    spider:'<g class="glyph"><ellipse cx="32" cy="37" rx="8.5" ry="10.5"/><circle cx="32" cy="23" r="5.5"/><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M25 31L11 23M24 37H8M25 43L11 51M39 31l14-8M40 37h16M39 43l14 8"/></g></g>',
+    // Forgemaster — Pick (pioche), Forge (marteau de forge), Anvil (enclume + éclat)
+    pick:'<g class="glyph"><rect x="29.5" y="16" width="5" height="36" rx="2.5" transform="rotate(30 32 34)"/><path d="M14 22c10-8 26-8 36 0-4 3-7 6-8 9-9-6-11-6-20 0-1-3-4-6-8-9z"/></g>',
+    forgehammer:'<g class="glyph"><rect x="29" y="24" width="6" height="28" rx="3" transform="rotate(38 32 38)"/><rect x="17" y="12" width="26" height="14" rx="4" transform="rotate(38 30 19)"/><path d="M44 44l3 3-2 5-5-2 1-4z"/><path d="M50 38l2 2-1 3-3-1z"/></g>',
+    anvil:'<g class="glyph"><path d="M12 26h40c-2 6-8 9-14 10v6c4 1 7 3 8 7H18c1-4 4-6 8-7v-6c-8-1-12-4-14-10z"/><path d="M40 10l4 6-6-1 2 7-7-5 1 6-6-8 8 1-3-6z"/></g>'
   };
   const CLSCOL = { A:'#f3ede2', B:'#3fb6e8', C:'#ef6b2b' };
   function symIcon(hero, cls){ return `<svg class="msym" viewBox="0 0 64 64" style="color:${(hero.col||CLSCOL)[cls]}" aria-hidden="true">${hero.sym[cls]}</svg>`; }
@@ -46,13 +50,22 @@
     bw: { name:'Black Widow', crest:'BW', cls:v=>v<=2?'A':v<=5?'B':'C',
       sym:{A:GLYPH.eye,B:GLYPH.baton,C:GLYPH.spider}, symName:{A:'Espionnage',B:'Bâtons',C:'Veuve'},
       col:{A:'#9fc93c',B:'#56bcd8',C:'#e2211f'} },
+    // Couleurs du dé fm d'après le leaflet V1 : pioche bleu clair, marteau orange, enclume blanc
+    fm: { name:'Forgemaster', crest:'FM', cls:v=>v<=3?'A':v<=5?'B':'C',
+      sym:{A:GLYPH.pick,B:GLYPH.forgehammer,C:GLYPH.anvil}, symName:{A:'Pioche',B:'Forge',C:'Enclume'},
+      col:{A:'#a9d6e8',B:'#f0a03a',C:'#f3ede2'} },
   };
 
   // ---- game state ----
-  const HUMAN = 'hh', AI_HERO = 'bw';
+  // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
+  const _q = new URLSearchParams(location.search);
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm') ? v : dflt;
+  const HUMAN = _pick(_q.get('me'), 'hh');
+  const AI_HERO = _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   let ai;
-  if (window.AI_WEIGHTS) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
-  else ai = G.greedyHighestDamagePolicy;
+  const fmInvolved = HUMAN==='fm' || AI_HERO==='fm';
+  if (window.AI_WEIGHTS && !fmInvolved) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
+  else ai = G.greedyHighestDamagePolicy; // fm : le réseau n'est pas encore entraîné avec lui
 
   // Stateful (snapshotable) rng so interactive defense can clone+replay the AI's attack deterministically.
   const rng = G.mulberry32Stateful((Date.now() % 2147483647) || 1);
@@ -89,18 +102,23 @@
 
   // Quels plans (attaques) la garde du DP vise — approximation lisible : pour chaque pattern
   // HH, combien de dés manquent par rapport aux dés gardés.
+  // Plans de garde par héros : [nom, besoin en A, B, C] (les suites sont gérées à part).
+  const PLAN_PATTERNS = {
+    hh: [['Ride Down',3,2,0],['Reap',0,3,1],['Cleave',3,0,0],['Spectral Assault',3,0,2],['Horrify',0,0,4]],
+    fm: [['Pick Axe',3,0,0],['Furnace',0,5,0],['A Good Haul',1,1,2],['Smelting Time',0,0,4]],
+    bw: [['Baton Strike',0,3,0],['Infiltrate',2,1,1],["Widow's Gauntlets",2,3,0],['Grapple',0,0,4]],
+  };
   function planHint(kept){
-    const a=kept.filter(v=>v<=3).length, b=kept.filter(v=>v>=4&&v<=5).length, c=kept.filter(v=>v===6).length;
+    const heroCls = humanHero.cls;
+    const a=kept.filter(v=>heroCls(v)==='A').length, b=kept.filter(v=>heroCls(v)==='B').length, c=kept.filter(v=>heroCls(v)==='C').length;
     const uniq=[...new Set(kept)].sort((x,y)=>x-y);
     const plans=[];
     const need=(na,nb,nc)=>Math.max(0,na-a)+Math.max(0,nb-b)+Math.max(0,nc-c);
-    plans.push(['Ride Down', need(3,2,0)]); plans.push(['Reap', need(0,3,1)]);
-    plans.push(['Cleave', need(3,0,0)]); plans.push(['Spectral Assault', need(3,0,2)]);
-    plans.push(['Horrify', need(0,0,4)]);
+    for (const [nm,na,nb,nc] of (PLAN_PATTERNS[HUMAN]||[])) plans.push([nm, need(na,nb,nc)]);
     // suites : plus longue fenetre consécutive couverte
     let bestRun=0;
     for(let s0=1;s0<=3;s0++){ let run=0; for(let v=s0;v<s0+4;v++) if(uniq.includes(v)) run++; bestRun=Math.max(bestRun,run); }
-    plans.push(['Suite (Sow Despair)', 4-bestRun]);
+    plans.push([HUMAN==='fm' ? 'Suite (Armored Up)' : HUMAN==='bw' ? 'Suite (Hacked)' : 'Suite (Sow Despair)', 4-bestRun]);
     plans.sort((x,y)=>x[1]-y[1]);
     const top=plans.filter(pl=>pl[1]<=5-kept.length).slice(0,2);
     if(!top.length) return '';
@@ -136,6 +154,16 @@
     if (t.covertOps)   out.push(`<span class="tok covert"><span class="dot"></span><b>Covert</b> ${t.covertOps}</span>`);
     if (t.head)        out.push(`<span class="tok head"><span class="dot" style="background:var(--gold)"></span><b>Haunted Head</b></span>`);
     (p.timeBombs || []).forEach(pos => out.push(`<span class="tok bomb"><span class="dot"></span><b>Time Bomb</b> ${pos}</span>`));
+    if (p.heroId === 'fm') {
+      const ORE_SHORT = { 'gold-ore':'Or', 'diamond-ore':'Diamant', 'ultimanium-ore':'Ultimanium' };
+      const counts = {};
+      (p.forge||[]).forEach(id => counts[id]=(counts[id]||0)+1);
+      const forge = Object.entries(counts).map(([id,n])=>`${n}× ${ORE_SHORT[id]||id}`).join(' · ');
+      out.push(`<span class="tok" style="border-color:#7a5c1f"><b>⚒️ Forge</b> ${forge||'vide'}</span>`);
+      const TIER = ['—','Gold','Diamond','Ultimanium'];
+      if (p.armor.helmet>0) out.push(`<span class="tok"><b>🪖 ${TIER[p.armor.helmet]}</b></span>`);
+      if (p.armor.shield>0) out.push(`<span class="tok"><b>🛡 ${TIER[p.armor.shield]}</b></span>`);
+    }
     return out.join('');
   }
   function renderFighter(elId, idx, def, isHuman) {
@@ -162,7 +190,7 @@
     const c = hero.cls(d.v);
     return `<button class="die${d.kept?' kept':''}${interactive?'':' disabled'}" data-cls="${c}" data-i="${i}"
       aria-label="Dé ${i+1}: ${hero.symName[c]} (${d.v})">
-      <svg viewBox="0 0 64 64" aria-hidden="true">${hero.sym[c]}</svg><span class="pip">${d.v}</span></button>`;
+      <svg viewBox="0 0 64 64" aria-hidden="true" style="color:${(hero.col||{})[c]||'currentColor'}">${hero.sym[c]}</svg><span class="pip">${d.v}</span></button>`;
   }
   // While the AI attacks you, the tray shows ITS dice (BW symbols) instead of your stale ones —
   // set to an array of values during the AI's attack, null otherwise.
@@ -275,6 +303,12 @@
   // What a defense roll DOES, die by die, from the verified defense rules — so the outcome is
   // readable on the board instead of buried in the journal (reported).
   function defenseExplain(heroId, vals){
+    if (heroId==='fm'){
+      const v=vals[0];
+      return v<=3 ? "→ Pioche : Mine ton deck (Ore → Forge ou +1 CP)"
+        : v<=5 ? "→ Forge : double l'effet d'UNE armure sur cette attaque"
+        : "→ Enclume : double jusqu'à 2 armures différentes";
+    }
     if (heroId==='hh'){
       const a=vals.filter(v=>v<=3).length, b=vals.filter(v=>v>=4&&v<=5).length, cc=vals.filter(v=>v===6).length;
       return `→ ${a} contre-dégât(s) (Haches) · ${Math.floor(b/2)} dégât(s) prévenu(s) (par paire de Fers) · +${cc} Dreadful (Frayeurs)`;
@@ -381,6 +415,12 @@
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
   // II-aware ("je ne vois toujours pas sur le board la défense", reported).
   function defBoxHTML(heroKey, p){
+    if (heroKey==='fm'){
+      return `<div class="defbox"><b>🛡️ Masterwork</b><br>
+        Lance 1 dé :<br>
+        Pioche = Mine ton deck · Forge = double l'effet d'UNE armure · Enclume = double jusqu'à 2 armures<br>
+        (Casque = contre-dégâts 1/2/3 · Bouclier = prévient 1/2 · bouclier Ultimanium : prévient 2 même l'indéfendable, sauf Ultimate)</div>`;
+    }
     if (heroKey==='hh'){
       const up = p.upgradesInPlay.includes('hallowed-reckoning-ii');
       return `<div class="defbox"><b>🛡️ Hallowed Reckoning${up?' II':''}</b><br>
@@ -670,6 +710,7 @@
         .replace(/1 per Dreadful token, up to 5 total/,'1 dé/Dreadful, max 5')
         .replace(/(\d+) \((\d+) with ([^)]+)\)/,'$1 dés ($2 avec $3)');
       const det = [];
+      if (br.addRolledValueAsDamage) det.push('+valeur du dé en dégâts');
       for (const [sym,d] of Object.entries(br.perSymbolDamage||{})) det.push(`+${d} dégât/${hero.symName[sym]||sym}`);
       if (br.undefendableOnSymbolPair) det.push(`2 ${hero.symName[br.undefendableOnSymbolPair]}s = indéfendable`);
       for (const [sym,t] of Object.entries(br.perSymbolTokens||{})) det.push(`+${t.amount} ${tokenFr[t.token]||t.token}/${hero.symName[sym]||sym}`);
@@ -678,7 +719,17 @@
     if (a.numberMatchBonus) {
       // Cleave II lowers the number-match threshold 4-of-a-kind -> 3 (engine special-case).
       const three = heroKey==='hh' && p.upgradesInPlay.includes('cleave-ii');
-      out.push(`+${Object.values(a.numberMatchBonus.tokensGranted)[0]||1} Dreadful (${three?'brelan':'carré'} de mêmes #)`);
+      const kind = three?'brelan':'carré';
+      if (a.numberMatchBonus.cpGain) out.push(`+${a.numberMatchBonus.cpGain} CP (${kind} de mêmes #)`);
+      const tg = Object.values(a.numberMatchBonus.tokensGranted||{})[0];
+      if (tg) out.push(`+${tg} Dreadful (${kind} de mêmes #)`);
+    }
+    // Forgemaster
+    if (a.minesDeck) out.push(a.revealAllMinedOre ? 'Mine (TOUS les Ore trouvés → Forge)' : 'Mine ton deck');
+    if (a.searchOreToForge) out.push(`va chercher ${a.searchOreToForge} Ore du deck → Forge`);
+    if (a.thresholdBonusArmor) {
+      const cur = (p.armor?((p.armor.helmet>0?1:0)+(p.armor.shield>0?1:0)):0);
+      out.push(`+${a.thresholdBonusArmor.bonusDamage} dégâts si ≥${a.thresholdBonusArmor.armorAtLeast} armures${cur>=a.thresholdBonusArmor.armorAtLeast?' ✔':''}`);
     }
     if (a.bonusDamagePerUpgrade) out.push(`+${a.bonusDamagePerUpgrade} dégât/upgrade (${p.upgradesInPlay.length} en jeu)`);
     if (a.thresholdBonus) out.push(`+${a.thresholdBonus.bonusDamage} dégâts si ≥${a.thresholdBonus.upgradesAtLeast} upgrades${p.upgradesInPlay.length>=a.thresholdBonus.upgradesAtLeast?' ✔':''}`);
@@ -824,7 +875,7 @@
     G.endHumanTurn(g);
     renderAll();
     if (g.state.gameOver) return end();
-    $('turntag').textContent = 'L\'IA (Black Widow) joue…';
+    $('turntag').textContent = `L'IA (${aiHero.name}) joue…`;
     setTimeout(aiTurn, 550);
   }
   // The AI's turn, decomposed so YOU defend interactively when it attacks (see interactive.ts).
@@ -896,7 +947,7 @@
         `${countered>0?` · tu renvoies ${countered} dégât(s)`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
     renderAll();                                   // shows your Hallowed/Sabotage roll + damage in the log
     if (g.state.gameOver) return end();
-    $('turntag').textContent = 'L\'IA (Black Widow) termine son tour…';
+    $('turntag').textContent = `L'IA (${aiHero.name}) termine son tour…`;
     setTimeout(()=>{
       G.finishAiTurn(g); pendingAttackInfo = null; aiDice = null; renderAll();
       if (g.state.gameOver) return end();
@@ -959,7 +1010,7 @@
     // HH Upkeep = Headless Mayhem: Terrorize (needs >=4 Dreadful) OR move the Haunted Head OR
     // nothing. Offer the prompt whenever ANY real choice exists.
     const canGiveHead = you.heroId==='hh' && you.tokens.head > 0;
-    if (G.humanCanTerrorize(g) || canGiveHead) {
+    if (you.heroId==='hh' && (G.humanCanTerrorize(g) || canGiveHead)) {
       phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
     }
     else doBeginTurn(undefined);
@@ -1085,6 +1136,23 @@
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> — jet bonus : +${m[2]} dégâts${m[3]==='true'?' · devient <b>indéfendable</b>':''}${+m[4]?` · +${m[4]} Grim Pursuit`:''}`;
     if ((m = msg.match(/^Time Bomb upkeep: (?:rolls \[([\d,]+)\], )?(\d+) self-dmg(?:, (\d+) defused)?/)))
       return `💣 Time Bomb à l'Upkeep${m[1]?` — jet ${m[1]}`:''} : ${m[2]} dégât(s)${m[3]&&+m[3]?` · ${m[3]} désamorcée(s)`:''}`;
+    if ((m = msg.match(/^The Mines: mined — revealed (.+) to The Forge/)))
+      return `⛏️ <b>The Mines</b> : mine — révèle <b>${m[1]}</b> → la Forge`;
+    if (/^The Mines: mined — no reveal/.test(msg)) return `⛏️ <b>The Mines</b> : mine — rien révélé, +1 CP`;
+    if ((m = msg.match(/^The Forge: placed (.+) from hand/))) return `⚒️ <b>The Forge</b> : pose ${m[1]} depuis la main`;
+    if ((m = msg.match(/^Crafted (\w+) \(tier (\d) (helmet|shield)\)/)))
+      return `🛠️ <b>Craft</b> : ${m[1].replace(/_/g,' ')} (${m[3]==='helmet'?'casque':'bouclier'} tier ${m[2]})`;
+    if ((m = msg.match(/^Masterwork \(Pick\): mined — revealed (.+) to The Forge/)))
+      return `🛡️ <b>Masterwork</b> (Pioche) : mine — révèle <b>${m[1]}</b> → la Forge`;
+    if (/^Masterwork \(Pick\): mined — no reveal/.test(msg)) return `🛡️ <b>Masterwork</b> (Pioche) : mine — rien révélé, +1 CP`;
+    if ((m = msg.match(/^Masterwork: face (\d), prevented (\d+), (\d+) dmg back(?: \(doubled ([^)]+)\))?/)))
+      return `🛡️ <b>Masterwork</b> : dé ${m[1]} — ${m[2]} prévenu(s) · ${m[3]} contre-dégât(s)${m[4]?` · <b>doublé ${m[4].replace('helmet','casque').replace('shield','bouclier').replace('+',' + ')}</b>`:''}`;
+    if ((m = msg.match(/^Ultimanium Shield: prevented (\d+)/)))
+      return `🛡️ <b>Bouclier Ultimanium</b> : ${m[1]} prévenu(s) sur une attaque indéfendable`;
+    if ((m = msg.match(/^(.+?): tutored (.+) to The Forge, deck shuffled/)))
+      return `<b>${m[1].replace(/\s*\([A-C5-]+\)$/,'')}</b> : va chercher <b>${m[2]}</b> → la Forge (deck mélangé)`;
+    if ((m = msg.match(/^(.+?): mined — revealed (.+) to The Forge/)))
+      return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> : mine — révèle <b>${m[2]}</b> → la Forge`;
     if ((m = msg.match(/^Defense dice: ([\d,]+)/)))
       return `🛡️ Dés de défense : <b>${diceWords(isHuman?humanHero:aiHero, m[1])}</b> (${m[1]})`;
     if ((m = msg.match(/^Agility spent: rolled (\d+), (halved damage|no effect)/)))
@@ -1129,6 +1197,9 @@
       {name:'Reap',req:'BBBC',dmg:'3 ·+Dread'},{name:'Sow Despair',req:'suite 4',dmg:'7–9'},
       {name:'Horrify',req:'CCCC',dmg:'6 ·+3 Dread'},{name:'Spectral Assault',req:'AAACC',dmg:'8 +jet'},
       {name:'Dreadful Charge',req:'CCCCC',dmg:'14 · ULT'} ],
+    fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBBB',dmg:'5 +1d6'},
+      {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
+      {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
     bw:[ {name:'Baton Strike',req:'BBB',dmg:'5–7'},{name:'Infiltrate',req:'AABC',dmg:'+Bomb'},
       {name:'Widow\'s Gauntlets',req:'BBBAA',dmg:'6 ·+CP'},{name:'Hacked',req:'suite 4',dmg:'5 ·+Bomb'},
       {name:'Grapple',req:'CCCC',dmg:'6 indéf.'},{name:'Vengeance',req:'suite 5',dmg:'7 +jet'},
@@ -1151,13 +1222,15 @@
   const aiNote = document.getElementById('ai-note');
   if (aiNote) aiNote.textContent = usingNet
     ? 'Adversaire : réseau entraîné par self-play.'
-    : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
+    : fmInvolved
+      ? 'Adversaire : IA scriptée (le réseau n\'est pas encore entraîné avec le Forgemaster).'
+      : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
   if (g.humanIdx === 0) {
     addLog('<span class="t">Départ</span>Tu commences la partie.');
     startHumanTurn();
   } else {
-    addLog('<span class="t">Départ</span>L\'IA commence — tu joues second (Cavalier : +1 Dreadful).');
-    $('turntag').textContent = 'L\'IA (Black Widow) commence…';
+    addLog(`<span class="t">Départ</span>L'IA commence — tu joues second${HUMAN==='hh'?' (Cavalier : +1 Dreadful)':''}.`);
+    $('turntag').textContent = `L'IA (${aiHero.name}) commence…`;
     renderFighters();
     setTimeout(aiTurn, 500);
   }
