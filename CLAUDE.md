@@ -44,7 +44,7 @@ Browser (static/index.html)
 - State space: ~6^5 dice × 3 roll counts × 6 dreadful values × 2 head locations ≈ 279K unique states
 
 **Game model** (`constants.py`):
-All Headless Horseman abilities are encoded as numeric damage equivalents. Abilities require specific A/B/C symbol counts (dice faces 1-3=A, 4-5=B, 6=C). Dreadful tokens scale certain abilities; the **4th token** triggers "Terrorize" (3 dmg + 1 CP spike); the 5th token is near-worthless and hurts the defense. See `engine/dreadful.py` — `MARGINAL_VALUE = [3.0, 3.0, 3.0, 5.0, 0.5]`.
+All Headless Horseman abilities are encoded as numeric damage equivalents. Abilities require specific A/B/C symbol counts (dice faces 1-3=A, 4-5=B, 6=C). Dreadful tokens scale certain abilities; Terrorize is an Upkeep CHOICE at >=4 Dreadful. Marginal token values are EMPIRICALLY CALIBRATED (2026-07-05, 57.6k self-play games): `MARGINAL_VALUE = [1.9, 0.9, 0.9, 1.1, 0.0]` — see engine-ts/src/characters/horseman/dreadful.ts and calibration/.
 
 **UI** (`static/index.html`):
 Single-page vanilla JS app. Click dice to cycle face value, right-click to mark as kept. Calls `/eval` and renders top 5 keep strategies + ability board.
