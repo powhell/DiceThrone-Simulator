@@ -722,12 +722,9 @@
       const sel=[...aiAlterSel].sort((x,y)=>x-y);
       const show = G.humanAiAlterOptions(g).filter(o=>{
         if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
-        if (o.kind==='setDie') {
-          if (o.sets.length===1) return sel.length===1 && o.sets[0].dieIndex===sel[0];
-          return sel.length===2 && o.sets.every(s2=>sel.includes(s2.dieIndex)) && o.sets[0].value===o.sets[1].value;
-        }
+        if (o.kind==='setDie') return false; // remplacés par fullWildOptions (6 valeurs)
         return true; // instants & cie
-      });
+      }).concat(fullWildOptions(sel, aiDice||[]));
       show.slice(0,10).forEach(o=>c.appendChild(btn(actionLabel(o),'primary', ()=>{
         log(`Tu joues <b>${actionLabel(o)}</b> sur le jet de l'IA.`);
         aiDice = G.humanApplyAiAlter(g, o);
@@ -752,12 +749,9 @@
         if (o.kind==='pass') return false;
         if (o.kind==='rerollAll') return true;
         if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
-        if (o.kind==='setDie') {
-          if (o.sets.length===1) return sel.length===1 && o.sets[0].dieIndex===sel[0];
-          return sel.length===2 && o.sets.every(s2=>sel.includes(s2.dieIndex)) && o.sets[0].value===o.sets[1].value;
-        }
+        if (o.kind==='setDie') return false; // remplacés par fullWildOptions (6 valeurs)
         return true; // cards, instants, token moves — always visible
-      });
+      }).concat(fullWildOptions(sel, pendingDefense.defenseDice||[]));
       show.slice(0,10).forEach(o=>{
         if (o.kind==='rerollAll') {
           const n = defSel.size;
@@ -793,6 +787,24 @@
       if (inRoll) c.appendChild(btn(`${scrapMode&&scrapMode.oreId==='ultimanium-ore'?'✅ ':''}♻️ Scrap Ultimanium : un dé → 6 (clique-le)`, scrapMode&&scrapMode.oreId==='ultimanium-ore'?'primary':'', ()=>{
         scrapMode = scrapMode&&scrapMode.oreId==='ultimanium-ore' ? null : {oreId:'ultimanium-ore', mode:'set6'}; renderDice(false); renderControls(); }));
     }
+  }
+  // Le moteur n'énumère qu'un jeu réduit de valeurs (6 + majorité) dans les fenêtres —
+  // on synthétise les 6 valeurs complètes pour So Wild!/Twice As Wild! (user-caught :
+  // "Twice As Wild inutilisable, pas assez de choix"). applyWindowAction valide main+CP.
+  function fullWildOptions(sel, srcDice){
+    const you = g.state.players[g.humanIdx];
+    const hero = G.heroTemplateFor(HUMAN);
+    const ok = id => { const cd=G.cardById(hero,id); return cd && you.hand.includes(id) && you.cp >= (cd.cpCost||0); };
+    const out=[];
+    if (sel.length===1 && ok('so-wild')) {
+      for (let v=1;v<=6;v++) if (v!==srcDice[sel[0]])
+        out.push({kind:'setDie', cardId:'so-wild', sets:[{dieIndex:sel[0], value:v}]});
+    }
+    if (sel.length===2 && ok('twice-as-wild')) {
+      for (let v=1;v<=6;v++) if (!(srcDice[sel[0]]===v && srcDice[sel[1]]===v))
+        out.push({kind:'setDie', cardId:'twice-as-wild', sets:[{dieIndex:sel[0], value:v},{dieIndex:sel[1], value:v}]});
+    }
+    return out;
   }
   function alterLabel(a){ return actionLabel(a); }
   function mainLabel(a){ return actionLabel(a); }
