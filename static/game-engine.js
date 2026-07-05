@@ -57,9 +57,13 @@ var Game = (() => {
     humanAttack: () => humanAttack,
     humanAttackModifierOptions: () => humanAttackModifierOptions,
     humanCanTerrorize: () => humanCanTerrorize,
+    humanCraft: () => humanCraft,
+    humanCraftOptions: () => humanCraftOptions,
+    humanForgeOre: () => humanForgeOre,
     humanInstantOptions: () => humanInstantOptions,
     humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
+    humanMinePeek: () => humanMinePeek,
     humanPlayRollCard: () => humanPlayRollCard,
     humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
     matchedAbilities: () => matchedAbilities,
@@ -1508,16 +1512,28 @@ var Game = (() => {
   function armorCount(p) {
     return (p.armor.helmet > 0 ? 1 : 0) + (p.armor.shield > 0 ? 1 : 0);
   }
-  function mine(self, revealAll = false) {
+  function minePeek(self) {
+    return self.deck.slice(0, Math.min(3, self.deck.length));
+  }
+  function mineResolve(self, reveal) {
     const top = self.deck.splice(0, Math.min(3, self.deck.length));
-    const ores = top.filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a]);
-    const revealed = revealAll ? ores : ores.slice(0, 1);
-    for (const id of revealed) top.splice(top.indexOf(id), 1);
+    const revealed = [];
+    for (const id of reveal) {
+      const i = top.indexOf(id);
+      if (i >= 0 && isOre(id)) {
+        top.splice(i, 1);
+        revealed.push(id);
+      }
+    }
     self.forge.push(...revealed);
     self.deck.push(...top);
     const cpGained = revealed.length === 0 ? 1 : 0;
     self.cp += cpGained;
     return { revealed, cpGained };
+  }
+  function mine(self, revealAll = false) {
+    const ores = minePeek(self).filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a]);
+    return mineResolve(self, revealAll ? ores : ores.slice(0, 1));
   }
   function tutorOreToForge(self, rng) {
     const best = self.deck.filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a])[0] ?? null;
@@ -1531,24 +1547,33 @@ var Game = (() => {
     }
     return best;
   }
-  function craftOnce(self) {
-    const armors = (fmHero.armors ?? []).slice().sort((a, b) => b.tier - a.tier || (a.slot === "shield" ? -1 : 1));
-    for (const a of armors) {
+  function craftOptions(self) {
+    const out = [];
+    for (const a of fmHero.armors ?? []) {
       const cur = self.armor[a.slot];
       if (cur >= a.tier) continue;
       if (a.tier > 1 && cur !== a.tier - 1) continue;
       const need = Object.entries(a.blueprint.ore);
       if (!need.every(([oreId, n]) => self.forge.filter((x) => x === oreId).length >= n)) continue;
-      for (const [oreId, n] of need) {
-        for (let k = 0; k < n; k++) {
-          self.forge.splice(self.forge.indexOf(oreId), 1);
-          self.deck.push(oreId);
-        }
-      }
-      self.armor[a.slot] = a.tier;
-      return { armorId: a.id, slot: a.slot, tier: a.tier };
+      out.push({ armorId: a.id, name: a.name, slot: a.slot, tier: a.tier, ore: a.blueprint.ore });
     }
-    return null;
+    return out;
+  }
+  function craftSpecific(self, armorId) {
+    const opt = craftOptions(self).find((o) => o.armorId === armorId);
+    if (!opt) return null;
+    for (const [oreId, n] of Object.entries(opt.ore)) {
+      for (let k = 0; k < n; k++) {
+        self.forge.splice(self.forge.indexOf(oreId), 1);
+        self.deck.push(oreId);
+      }
+    }
+    self.armor[opt.slot] = opt.tier;
+    return { armorId: opt.armorId, slot: opt.slot, tier: opt.tier };
+  }
+  function craftOnce(self) {
+    const opts = craftOptions(self).sort((a, b) => b.tier - a.tier || (a.slot === "shield" ? -1 : 1));
+    return opts.length ? craftSpecific(self, opts[0].armorId) : null;
   }
   var HELMET_COUNTER = [0, 1, 2, 3];
   var SHIELD_PREVENT = [0, 1, 2, 2];
@@ -1648,8 +1673,14 @@ var Game = (() => {
       }
     }
     if (self.heroId === "fm") {
-      const r = mine(self);
-      log(state, playerIdx, "upkeep", `The Mines: mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
+      const top3 = minePeek(self);
+      const choice = policy.chooseFmMine?.(state, playerIdx, top3);
+      if (choice?.kind === "skip") {
+        log(state, playerIdx, "upkeep", "The Mines: chose not to mine");
+      } else {
+        const r = choice?.kind === "cp" ? mineResolve(self, []) : choice?.kind === "reveal" ? mineResolve(self, [choice.oreId]) : mine(self);
+        log(state, playerIdx, "upkeep", `The Mines: mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
+      }
     }
     const tb = tickTimeBombsUpkeep(self, rng);
     if (tb.rolls.length > 0) {
@@ -2734,9 +2765,32 @@ var Game = (() => {
     const humanIdx = humanFirst ? 0 : 1;
     return { state, humanIdx, aiIdx: 1 - humanIdx, ai, rng };
   }
-  function beginHumanTurn(g, mayhem) {
+  function humanMinePeek(g) {
+    return g.state.players[g.humanIdx].deck.slice(0, 3);
+  }
+  function humanForgeOre(g) {
+    const self = g.state.players[g.humanIdx];
+    const ores = self.hand.filter(isOre);
+    if (ores.length) {
+      self.hand = self.hand.filter((id) => !isOre(id));
+      self.forge.push(...ores);
+      g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "main1", message: `The Forge: placed ${ores.join(",")} from hand` });
+    }
+    return ores;
+  }
+  function humanCraftOptions(g) {
+    return craftOptions(g.state.players[g.humanIdx]);
+  }
+  function humanCraft(g, armorId) {
+    const r = craftSpecific(g.state.players[g.humanIdx], armorId);
+    if (r) g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "main1", message: `Crafted ${r.armorId} (tier ${r.tier} ${r.slot})` });
+    return r;
+  }
+  function beginHumanTurn(g, mayhem, fmMine) {
     g.state.turnNumber += 1;
-    const policy = mayhem ? { ...greedyHighestDamagePolicy, chooseHeadlessMayhem: () => mayhem } : greedyHighestDamagePolicy;
+    let policy = greedyHighestDamagePolicy;
+    if (mayhem) policy = { ...policy, chooseHeadlessMayhem: () => mayhem };
+    if (fmMine) policy = { ...policy, chooseFmMine: () => fmMine };
     playUpkeepPhase(g.state, g.humanIdx, g.rng, policy);
     if (g.state.gameOver) return;
     playIncomePhase(g.state, g.humanIdx, g.rng);

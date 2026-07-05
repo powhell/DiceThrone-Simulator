@@ -516,6 +516,20 @@
       s.textContent = a && a.abilityName ? `${formatAbility(aiHero,a.abilityName).name} arrive (${a.defendable?`~${a.incomingDamage} dégâts, défendable`:'indéfendable !'}) :` : 'Attaque entrante :';
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
+    } else if (phase==='upkeep' && HUMAN==='fm') {
+      const ORE_FR={'gold-ore':'Gold Ore','diamond-ore':'Diamond Ore','ultimanium-ore':'Ultimanium Ore'};
+      const top3 = G.humanMinePeek(g);
+      const hero = G.heroTemplateFor(HUMAN);
+      const names = top3.map(id => (ORE_FR[id] || (G.cardById(hero,id)||{}).name || id));
+      const s=document.createElement('span'); s.className='rolls';
+      s.textContent = `⛏️ The Mines — tu regardes : ${names.join(' · ')}. Choisis :`; c.appendChild(s);
+      const seen = new Set();
+      top3.forEach(id => {
+        if (!ORE_FR[id] || seen.has(id)) return; seen.add(id);
+        c.appendChild(btn(`Révéler ${ORE_FR[id]} → la Forge`,'primary', ()=>doBeginTurn(undefined,{kind:'reveal',oreId:id})));
+      });
+      c.appendChild(btn('Ne rien révéler (+1 CP)','', ()=>doBeginTurn(undefined,{kind:'cp'})));
+      c.appendChild(btn('Ne pas miner','gold', ()=>doBeginTurn(undefined,{kind:'skip'})));
     } else if (phase==='upkeep') {
       const canTz = G.humanCanTerrorize(g);
       const s=document.createElement('span'); s.className='rolls';
@@ -529,6 +543,18 @@
       // sellCard options (one per hand card) live on the cards themselves (renderHand), not here —
       // they'd flood this button row.
       const acts = usableOptions(G.humanMainOptions(g, phase)).filter(o=>o.kind!=='pass' && o.kind!=='sellCard');
+      if (HUMAN==='fm') {
+        const ORE_FR={'gold-ore':'Gold','diamond-ore':'Diamond','ultimanium-ore':'Ultimanium'};
+        const you2 = g.state.players[g.humanIdx];
+        const ores = you2.hand.filter(id=>ORE_FR[id]);
+        if (ores.length) c.appendChild(btn(`⚒️ Poser ${ores.length} Ore sur la Forge`,'primary', ()=>{
+          const placed = G.humanForgeOre(g); log(`⚒️ Tu poses <b>${placed.length} Ore</b> sur la Forge.`); renderAll(); }));
+        for (const o of G.humanCraftOptions(g).slice(0,4)) {
+          const cost = Object.entries(o.ore).map(([id,n])=>`${n} ${ORE_FR[id]||id}`).join(' + ');
+          c.appendChild(btn(`🛠️ Crafter ${o.name} (${cost}${o.tier>1?` + pièce tier ${o.tier-1}`:''})`,'primary', ()=>{
+            G.humanCraft(g, o.armorId); log(`🛠️ Tu craftes <b>${o.name}</b>.`); renderAll(); }));
+        }
+      }
       if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
@@ -1014,14 +1040,18 @@
     if (you.heroId==='hh' && (G.humanCanTerrorize(g) || canGiveHead)) {
       phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
     }
+    else if (you.heroId==='fm' && you.deck.length > 0) {
+      // The Mines : le choix (révéler quel Ore / +1 CP / ne pas miner) t'appartient.
+      phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
+    }
     else doBeginTurn(undefined);
   }
-  function doBeginTurn(mayhem){
+  function doBeginTurn(mayhem, fmMine){
     if (mayhem !== undefined) {
       try { coachNote('upkeep', mayhem, coach.chooseHeadlessMayhem(g.state, g.humanIdx, G.humanCanTerrorize(g))); } catch (e) {}
     }
     const logBefore = g.state.log.length;
-    G.beginHumanTurn(g, mayhem);
+    G.beginHumanTurn(g, mayhem, fmMine);
     aiDice = null;
     // Your upkeep Time Bomb roll happens inside beginHumanTurn — surface it loudly instead of
     // letting it drown in the journal (reported: "je ne vois pas quand je roule pour la bombe").
@@ -1140,6 +1170,7 @@
     if ((m = msg.match(/^The Mines: mined — revealed (.+) to The Forge/)))
       return `⛏️ <b>The Mines</b> : mine — révèle <b>${m[1]}</b> → la Forge`;
     if (/^The Mines: mined — no reveal/.test(msg)) return `⛏️ <b>The Mines</b> : mine — rien révélé, +1 CP`;
+    if (/^The Mines: chose not to mine/.test(msg)) return `⛏️ <b>The Mines</b> : tu choisis de ne pas miner`;
     if ((m = msg.match(/^The Forge: placed (.+) from hand/))) return `⚒️ <b>The Forge</b> : pose ${m[1]} depuis la main`;
     if ((m = msg.match(/^Crafted (\w+) \(tier (\d) (helmet|shield)\)/)))
       return `🛠️ <b>Craft</b> : ${m[1].replace(/_/g,' ')} (${m[3]==='helmet'?'casque':'bouclier'} tier ${m[2]})`;

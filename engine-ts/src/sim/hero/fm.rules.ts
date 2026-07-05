@@ -26,16 +26,32 @@ export function armorCount(p: PlayerState): number {
 // ORE cards that are Mined in this way").
 // Heuristique v1 : révéler le meilleur Ore trouvé (jamais préférer le CP à un Ore) ;
 // revealAll : tout Ore trouvé va sur la Forge.
-export function mine(self: PlayerState, revealAll = false): { revealed: string[]; cpGained: number } {
+export function minePeek(self: PlayerState): string[] {
+  return self.deck.slice(0, Math.min(3, self.deck.length))
+}
+
+// Résout un Mine avec un choix EXPLICITE : reveal = ids d'Ore à révéler (0..n parmi le top 3 ;
+// [] = "ne rien révéler, +1 CP" — légal même avec des Ore, règle vérifiée). Le reste va sous
+// le deck.
+export function mineResolve(self: PlayerState, reveal: string[]): { revealed: string[]; cpGained: number } {
   const top = self.deck.splice(0, Math.min(3, self.deck.length))
-  const ores = top.filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a])
-  const revealed = revealAll ? ores : ores.slice(0, 1)
-  for (const id of revealed) top.splice(top.indexOf(id), 1)
+  const revealed: string[] = []
+  for (const id of reveal) {
+    const i = top.indexOf(id)
+    if (i >= 0 && isOre(id)) { top.splice(i, 1); revealed.push(id) }
+  }
   self.forge.push(...revealed)
   self.deck.push(...top) // dessous du deck
   const cpGained = revealed.length === 0 ? 1 : 0
   self.cp += cpGained
   return { revealed, cpGained }
+}
+
+// Heuristique par défaut (IA / résolutions automatiques) : révéler le meilleur Ore trouvé —
+// jamais préférer le CP. revealAll = A Good Haul.
+export function mine(self: PlayerState, revealAll = false): { revealed: string[]; cpGained: number } {
+  const ores = minePeek(self).filter(isOre).sort((a, b) => ORE_RANK[b] - ORE_RANK[a])
+  return mineResolve(self, revealAll ? ores : ores.slice(0, 1))
 }
 
 // Final Touches! : cherche le meilleur Ore du deck -> Forge, puis shuffle (si aucun Ore :
@@ -57,25 +73,38 @@ export function tutorOreToForge(self: PlayerState, rng: RNG): string | null {
 // Crafting (Main Phase) : v1 auto-greedy — monte toujours la pièce la plus haute craftable,
 // bouclier avant casque à tier égal (la prévention protège les PV, le contre ne fait que
 // puncher). Ore consommés -> dessous du deck. Retourne l'armure craftée ou null.
-export function craftOnce(self: PlayerState): { armorId: string; slot: 'helmet' | 'shield'; tier: number } | null {
-  const armors = (fmHero.armors ?? []).slice().sort((a, b) => (b.tier - a.tier) || (a.slot === 'shield' ? -1 : 1))
-  for (const a of armors) {
+// Les armures CRAFTABLES maintenant (blueprint satisfait sur la Forge + chaîne respectée).
+export function craftOptions(self: PlayerState): Array<{ armorId: string; name: string; slot: 'helmet' | 'shield'; tier: number; ore: Record<string, number> }> {
+  const out: Array<{ armorId: string; name: string; slot: 'helmet' | 'shield'; tier: number; ore: Record<string, number> }> = []
+  for (const a of fmHero.armors ?? []) {
     const cur = self.armor[a.slot]
     if (cur >= a.tier) continue                        // déjà cette pièce (ou mieux)
     if (a.tier > 1 && cur !== a.tier - 1) continue     // chaîne : il faut la pièce du tier précédent
-    // blueprint : tous les Ore requis présents sur la Forge ?
     const need = Object.entries(a.blueprint.ore)
     if (!need.every(([oreId, n]) => self.forge.filter(x => x === oreId).length >= n)) continue
-    for (const [oreId, n] of need) {
-      for (let k = 0; k < n; k++) {
-        self.forge.splice(self.forge.indexOf(oreId), 1)
-        self.deck.push(oreId) // dessous du deck (règle vérifiée)
-      }
-    }
-    self.armor[a.slot] = a.tier
-    return { armorId: a.id, slot: a.slot, tier: a.tier }
+    out.push({ armorId: a.id, name: a.name, slot: a.slot, tier: a.tier, ore: a.blueprint.ore })
   }
-  return null
+  return out
+}
+
+// Crafte une armure précise (suppose craftOptions l'a listée). Ore -> dessous du deck.
+export function craftSpecific(self: PlayerState, armorId: string): { armorId: string; slot: 'helmet' | 'shield'; tier: number } | null {
+  const opt = craftOptions(self).find(o => o.armorId === armorId)
+  if (!opt) return null
+  for (const [oreId, n] of Object.entries(opt.ore)) {
+    for (let k = 0; k < n; k++) {
+      self.forge.splice(self.forge.indexOf(oreId), 1)
+      self.deck.push(oreId) // dessous du deck (règle vérifiée)
+    }
+  }
+  self.armor[opt.slot] = opt.tier
+  return { armorId: opt.armorId, slot: opt.slot, tier: opt.tier }
+}
+
+// Auto-greedy (IA/sim) : la pièce la plus haute craftable, bouclier avant casque à tier égal.
+export function craftOnce(self: PlayerState): { armorId: string; slot: 'helmet' | 'shield'; tier: number } | null {
+  const opts = craftOptions(self).sort((a, b) => (b.tier - a.tier) || (a.slot === 'shield' ? -1 : 1))
+  return opts.length ? craftSpecific(self, opts[0].armorId) : null
 }
 
 // Effets d'armure quand le porteur est Attaqué (leaflet ARMOR, vérifié) :

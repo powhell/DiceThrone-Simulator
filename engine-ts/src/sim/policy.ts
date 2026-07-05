@@ -25,6 +25,11 @@ export interface Policy {
   // Black Widow's Sabotage only for now (>=4 upgrades unlocks a reroll of all 3 dice).
   chooseSabotageReroll(state: GameState, defenderIdx: 0 | 1, dice: number[]): boolean
 
+  // Forgemaster only (The Mines, Upkeep) — OPTIONNEL. top3 = les 3 cartes regardées.
+  // 'skip' = ne pas miner ; 'cp' = ne rien révéler (+1 CP, légal même avec des Ore) ;
+  // 'reveal' = révéler cet Ore vers The Forge. Absent -> heuristique (meilleur Ore).
+  chooseFmMine?(state: GameState, playerIdx: 0 | 1, top3: string[]): { kind: 'skip' } | { kind: 'cp' } | { kind: 'reveal'; oreId: string }
+
   // Headless Horseman only, called during Upkeep Phase (Headless Mayhem passive).
   // 'terrorize' only offered when the player has >=4 Dreadful (see hh.rules.canTerrorize).
   // 'giveHead' only meaningful if the player currently holds their own Head.

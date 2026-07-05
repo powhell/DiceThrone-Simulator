@@ -28,6 +28,7 @@ import {
 import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
 import { heroTemplateFor, cardById } from './data/load.js'
+import { isOre as fmIsOre, craftOptions as fmCraftOptions, craftSpecific as fmCraftSpecific } from './hero/fm.rules.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
 import { fmConfig } from '../characters/forgemaster/config.js'
@@ -54,11 +55,43 @@ export function newHumanGame(humanHero: HeroId, aiHero: HeroId, ai: Policy, rng:
 
 // Upkeep + income. Mirrors the head of playTurn (upkeep -> income). v1 uses greedy's default for the
 // HH Headless-Mayhem sub-choice; a UI prompt can be wired later.
-export function beginHumanTurn(g: HumanGame, mayhem?: 'terrorize' | 'giveHead' | 'none'): void {
+export type FmMineChoice = { kind: 'skip' } | { kind: 'cp' } | { kind: 'reveal'; oreId: string }
+
+// Les 3 cartes que The Mines regardera à l'upkeep (l'UI les montre AVANT le choix — c'est le
+// "look" de la règle, privé au joueur).
+export function humanMinePeek(g: HumanGame): string[] {
+  return g.state.players[g.humanIdx].deck.slice(0, 3)
+}
+
+// The Forge (Main Phase) : pose TOUS les Ore de la main sur la Forge. Retourne les ids posés.
+export function humanForgeOre(g: HumanGame): string[] {
+  const self = g.state.players[g.humanIdx]
+  const ores = self.hand.filter(fmIsOre)
+  if (ores.length) {
+    self.hand = self.hand.filter(id => !fmIsOre(id))
+    self.forge.push(...ores)
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'main1', message: `The Forge: placed ${ores.join(',')} from hand` })
+  }
+  return ores
+}
+
+export function humanCraftOptions(g: HumanGame) {
+  return fmCraftOptions(g.state.players[g.humanIdx])
+}
+
+export function humanCraft(g: HumanGame, armorId: string) {
+  const r = fmCraftSpecific(g.state.players[g.humanIdx], armorId)
+  if (r) g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'main1', message: `Crafted ${r.armorId} (tier ${r.tier} ${r.slot})` })
+  return r
+}
+
+export function beginHumanTurn(g: HumanGame, mayhem?: 'terrorize' | 'giveHead' | 'none', fmMine?: FmMineChoice): void {
   g.state.turnNumber += 1
   // HH's Upkeep offers Headless Mayhem (Terrorize / move the Head / nothing). If the UI gathered the
-  // human's choice, inject it; otherwise fall back to greedy's default.
-  const policy = mayhem ? { ...greedyHighestDamagePolicy, chooseHeadlessMayhem: () => mayhem } : greedyHighestDamagePolicy
+  // human's choice, inject it; otherwise fall back to greedy's default. fm: idem pour The Mines.
+  let policy: Policy = greedyHighestDamagePolicy
+  if (mayhem) policy = { ...policy, chooseHeadlessMayhem: () => mayhem }
+  if (fmMine) policy = { ...policy, chooseFmMine: () => fmMine }
   playUpkeepPhase(g.state, g.humanIdx, g.rng, policy)
   if (g.state.gameOver) return
   playIncomePhase(g.state, g.humanIdx, g.rng)

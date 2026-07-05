@@ -112,11 +112,20 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   }
 
   if (self.heroId === 'fm') {
-    // The Mines (vérifié board): "During your Upkeep Phase, you may Mine your deck."
-    // v1 auto-heuristique : toujours miner (gratuit — Ore vers la Forge ou +1 CP).
-    // TODO(user): décision de Policy (et le "3 CP -> pioche 1, 1x/tour" pas encore modélisé).
-    const r = fm.mine(self)
-    log(state, playerIdx, 'upkeep', `The Mines: mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
+    // The Mines (vérifié board): "During your Upkeep Phase, you may Mine your deck." Le choix
+    // (révéler quel Ore / ne rien révéler pour +1 CP / ne pas miner) passe par le hook optionnel
+    // chooseFmMine — défaut : miner et révéler le meilleur Ore (jamais préférer le CP).
+    // TODO(user): le "3 CP -> pioche 1, 1x/tour" n'est pas encore modélisé.
+    const top3 = fm.minePeek(self)
+    const choice = policy.chooseFmMine?.(state, playerIdx, top3)
+    if (choice?.kind === 'skip') {
+      log(state, playerIdx, 'upkeep', 'The Mines: chose not to mine')
+    } else {
+      const r = choice?.kind === 'cp' ? fm.mineResolve(self, [])
+        : choice?.kind === 'reveal' ? fm.mineResolve(self, [choice.oreId])
+        : fm.mine(self)
+      log(state, playerIdx, 'upkeep', `The Mines: mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
+    }
   }
 
   // Time Bombs tick at the start of ANY carrier's turn, whatever their hero. They're inflicted on
