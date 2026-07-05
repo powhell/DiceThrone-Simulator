@@ -2,10 +2,11 @@ import type { GameState, HeroId, PlayerState } from './types.js'
 import type { Policy } from './policy.js'
 import type { RNG } from './rng.js'
 import { mulberry32, shuffle } from './rng.js'
-import { playTurn } from './turn.js'
+import { playTurn, playNaraxusTurn } from './turn.js'
 import { createInitialHHTokens } from './hero/hh.rules.js'
 import { createInitialBWTokens } from './hero/bw.rules.js'
 import { createInitialFMTokens } from './hero/fm.rules.js'
+import { createInitialNXTokens, NX_HP_BY_HEROES } from './hero/nx.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
@@ -29,12 +30,13 @@ export function buildFullDeck(heroId: HeroId): string[] {
 export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = true): PlayerState {
   let deck: string[] = []
   let hand: string[] = []
-  if (rng) {
+  if (rng && heroId !== 'nx') {
     deck = shuffle(buildFullDeck(heroId), rng)
     hand = deck.splice(0, STARTING_HAND_SIZE)
   }
   const tokens = heroId === 'hh' ? createInitialHHTokens(true)
     : heroId === 'fm' ? createInitialFMTokens()
+    : heroId === 'nx' ? createInitialNXTokens()
     : createInitialBWTokens()
   // Verified leaflet setup rule (HH "Hero Setup"): "Begin the game with the Haunted Head on
   // your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful." No
@@ -44,7 +46,8 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
   }
   return {
     heroId,
-    hp: STARTING_HP,
+    // Naraxus (boss) : 65 PV en 1v1 (65/65/70/75 selon 1-4 héros, planche vérifiée), 0 carte.
+    hp: heroId === 'nx' ? NX_HP_BY_HEROES[0] : STARTING_HP,
     cp: STARTING_CP,
     upgradesInPlay: [],
     hand,
@@ -57,6 +60,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     covertOpsUsedThisTurn: false,
     grimPursuitRerollUsedThisTurn: false,
     minesDrawUsedThisTurn: false,
+    hoardedDice: 0,
     // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
     // "begin with any one Gold Armor" only applies with more than 1 opponent).
     forge: [],
@@ -88,6 +92,25 @@ export interface MatchResult {
 // Hard cap guards against an infinite-loop bug in the state machine (real Dice Throne
 // matches don't run this long — hitting this is itself a signal something is broken).
 export const MAX_TURNS = 200
+
+// Match contre Naraxus (boss) : le boss (seat 1) joue TOUJOURS avant le heros (seat 0).
+// hoard : le choix Dragon's Hoard du heros ('draw' = pioche 1, 'cp' = +2 CP).
+export function runBossMatch(heroId: HeroId, seed: number, policy: Policy, hard = false, hoard: 'draw' | 'cp' = 'draw'): MatchResult {
+  const rng = mulberry32(seed)
+  const state = createInitialGameState(heroId, 'nx', rng)
+  state.bossHard = hard
+  const hero = state.players[0]
+  if (hoard === 'draw') { const c = hero.deck.shift(); if (c) hero.hand.push(c) }
+  else hero.cp += 2
+  const policies: [Policy, Policy] = [policy, policy]
+  while (!state.gameOver && state.turnNumber < MAX_TURNS) {
+    state.turnNumber += 1
+    playNaraxusTurn(state, 1, rng, policies)
+    if (state.gameOver) break
+    playTurn(state, 0, rng, policies)
+  }
+  return { winner: state.winner, turns: state.turnNumber, finalState: state }
+}
 
 export function runMatch(heroA: HeroId, heroB: HeroId, seed: number, policies: [Policy, Policy]): MatchResult {
   const rng = mulberry32(seed)

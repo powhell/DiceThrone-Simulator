@@ -17,6 +17,7 @@ import { heroTemplateFor, resolvedAbilityByBoardName, cardById } from './data/lo
 import * as hh from './hero/hh.rules.js'
 import * as bw from './hero/bw.rules.js'
 import * as fm from './hero/fm.rules.js'
+import * as nx from './hero/nx.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -34,6 +35,10 @@ export function defenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'bw') {
     // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
     return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
+  }
+  if (opponent.heroId === 'nx') {
+    // Dragon Scales : E[prevention] = (1 + 4x3 + 5)/6 = 3.0 (aucun contre-degat)
+    return 3.0
   }
   if (opponent.heroId === 'hh') {
     // Hallowed Reckoning : min(1+Dreadful, 5) des - contre 0.5/de, prevenus E[floor(B/2)]
@@ -110,6 +115,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
   self.minesDrawUsedThisTurn = false
+  self.hoardedDice = 0
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -168,7 +174,9 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
 // skips their first Income Phase entirely (no CP, no draw) — that's always player 0's turn 1,
 // since match.ts always gives the first turn to player 0.
 export function playIncomePhase(state: GameState, playerIdx: 0 | 1, rng: RNG): void {
-  if (playerIdx === 0 && state.turnNumber === 1) {
+  // Mode boss (planche verifiee) : le Start Player ne saute PAS son income, Naraxus joue premier.
+  const bossMode = state.players.some(p => p.heroId === 'nx')
+  if (!bossMode && playerIdx === 0 && state.turnNumber === 1) {
     log(state, playerIdx, 'income', 'Start Player skips their first Income Phase')
     return
   }
@@ -884,15 +892,22 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // not baked into the roll. Active player (the attacker) has priority.
   let hallowedUpgraded = false
   let defenseDice: number[]
-  if (defender.heroId === 'fm') {
-    // Masterwork (vérifié board) : Defense Roll 1 dé — résolu sur le dé FINAL après la
-    // fenêtre d'altération, comme les autres défenses.
+  if (defender.heroId === 'nx') {
+    defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
+  } else if (defender.heroId === 'fm') {
+    // Masterwork (verifie board) : Defense Roll 1 de - resolu sur le de FINAL apres la
+    // fenetre d'alteration, comme les autres defenses.
     defenseDice = [fm.rollMasterworkDie(rng)]
   } else if (defender.heroId === 'bw') {
     defenseDice = bw.rollSabotageDice(defender, rng, policy, state, defenderIdx, defender.upgradesInPlay.includes('sabotage-ii'))
   } else {
     hallowedUpgraded = defender.upgradesInPlay.includes('hallowed-reckoning-ii')
     defenseDice = hh.rollHallowedDice(defender, rng, hallowedUpgraded)
+  }
+  if (defender.hoardedDice > 0 && defenseDice.length > 1) {
+    // HOARDING (verifie) : le de vole est inutilisable pour la defense contre cette attaque.
+    defenseDice = defenseDice.slice(0, defenseDice.length - 1)
+    log(state, defenderIdx, 'defense', `Hoarding: -1 defense die (${defenseDice.length} left)`)
   }
   state.pendingRoll = { rollerIdx: defenderIdx, dice: defenseDice }
   // Stash the attack context the DRP4-6 tail needs but that isn't otherwise on the state
@@ -923,7 +938,10 @@ export function finalizeDefenseRoll(
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
-  if (defender.heroId === 'fm') {
+  if (defender.heroId === 'nx') {
+    damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
+    log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
+  } else if (defender.heroId === 'fm') {
     const face = finalDefenseDice[0]
     const out = fm.masterworkOutcome(face, defender, incomingDamage)
     if (out.mines) {
@@ -1402,6 +1420,7 @@ function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: num
 export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
   const policy = policies[playerIdx]
   const self = state.players[playerIdx]
+  if (self.heroId === 'nx') { resolveNaraxusAbility(state, playerIdx, dice, rng, policies); return }
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   const oState = oracleStateFor(self, opp)
 
@@ -1418,6 +1437,75 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   if (self.heroId === 'hh') applyHHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'fm') applyFMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
+}
+
+
+// --- Naraxus (boss) -------------------------------------------------------------------------
+// Resout l'attaque du boss depuis son/ses de(s) (hard : garde le plus haut). Planche verifiee.
+export function resolveNaraxusAbility(state: GameState, bossIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const boss = state.players[bossIdx]
+  const heroIdx = (1 - bossIdx) as 0 | 1
+  const hero = state.players[heroIdx]
+  const face = state.bossHard ? Math.max(...dice) : dice[0]
+  const info = nx.nxAttackInfo(face)
+  log(state, bossIdx, 'resolveAttack', `Naraxus: rolled [${dice.join(',')}] -> ${info.name} (${face})`)
+
+  const swoop = () => {
+    const removed = nx.removeRandomStatus(boss, rng)
+    if (removed) log(state, bossIdx, 'resolveAttack', `Swoop: removed ${removed} from Naraxus`)
+    boss.hp = Math.min(boss.hp + 4, nx.NX_HEAL_CAP)
+    log(state, bossIdx, 'resolveAttack', 'Swoop: healed 4')
+    queueAttackDamageVsArmor(state, bossIdx, 3, false) // 3 indefendables
+  }
+
+  if (face === 1) { swoop(); return }
+  if (face === 2) {
+    const milled = hero.deck.splice(0, Math.min(3, hero.deck.length))
+    hero.discard.push(...milled)
+    log(state, bossIdx, 'resolveAttack', `Ember Spark: milled ${milled.length} card(s) (${milled.join(',') || '-'})`)
+    resolveDefense(state, bossIdx, 8, rng, policies)
+    return
+  }
+  if (face === 3) {
+    const four = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)].sort((a, b) => b - a)
+    const dmg = four[0] + four[1]
+    log(state, bossIdx, 'resolveAttack', `Gashing Bite: rolled [${four.join(',')}] -> ${dmg} dmg`)
+    resolveDefense(state, bossIdx, dmg, rng, policies)
+    return
+  }
+  if (face === 4) {
+    hero.hoardedDice = 1 // rendu a la fin du tour du heros (reset a son upkeep)
+    log(state, bossIdx, 'resolveAttack', 'Hoarding: stole 1 die from the Active Hero (returned at end of their turn)')
+    resolveDefense(state, bossIdx, 9, rng, policies)
+    return
+  }
+  if (face === 5) {
+    // v1 : defausse auto de la carte au cout le plus bas (TODO : choix interactif du heros)
+    if (hero.hand.length) {
+      const heroT = heroTemplateFor(hero.heroId)
+      const pick = hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0]
+      hero.hand.splice(hero.hand.indexOf(pick), 1)
+      hero.discard.push(pick)
+      log(state, bossIdx, 'resolveAttack', `Thundering Roar: hero discarded ${pick}`)
+    }
+    queueAttackDamageVsArmor(state, bossIdx, 8, false) // 8 indefendables
+    return
+  }
+  // face 6 - Dragon's Might
+  resolveDefense(state, bossIdx, 10, rng, policies)
+  const trigger = rollDie(rng)
+  log(state, bossIdx, 'resolveAttack', `Dragon's Might: trigger roll ${trigger}${trigger >= 5 ? ' -> SWOOP!' : ''}`)
+  if (trigger >= 5) swoop()
+}
+
+// Tour complet du boss (simulations) : upkeep (Time Bombs) -> jet -> attaque.
+export function playNaraxusTurn(state: GameState, bossIdx: 0 | 1, rng: RNG, policies: [Policy, Policy]): void {
+  const boss = state.players[bossIdx]
+  const tb = bw.tickTimeBombsUpkeep(boss, rng)
+  if (tb.rolls.length > 0) log(state, bossIdx, 'upkeep', `Time Bomb upkeep: rolls [${tb.rolls.join(',')}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
+  if (checkGameOver(state)) return
+  const dice = state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)]
+  resolveNaraxusAbility(state, bossIdx, dice, rng, policies)
 }
 
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {

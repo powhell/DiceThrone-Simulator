@@ -3,7 +3,7 @@
 // the trained-network policy for the AI opponent, and the verified card/ability data for rendering.
 // Deliberately does NOT import trainCore/train* (those pull in node:fs) — only the pure game path.
 export {
-  createInitialGameState, createInitialPlayer, buildFullDeck, runMatch, MAX_TURNS,
+  createInitialGameState, createInitialPlayer, buildFullDeck, runMatch, runBossMatch, MAX_TURNS,
 } from './match.js'
 export {
   playTurn, enumerateWindowActions, applyWindowAction, resolveAbilityPhase,

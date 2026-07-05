@@ -93,6 +93,7 @@ var Game = (() => {
     runAiTurn: () => runAiTurn,
     runAiTurnUpToAlter: () => runAiTurnUpToAlter,
     runAiTurnUpToAttack: () => runAiTurnUpToAttack,
+    runBossMatch: () => runBossMatch,
     runMatch: () => runMatch,
     runOffensiveRoll: () => runOffensiveRoll,
     shuffle: () => shuffle,
@@ -1245,8 +1246,22 @@ var Game = (() => {
   var bwHero = hero_default2;
   var fmHero = hero_default3;
   var commonCards = common_cards_default;
+  var nxHero = {
+    id: "nx",
+    name: "Naraxus the Devourer",
+    diceAnatomy: "1 d\xE9 (2 en hard mode, garde le plus haut) \u2014 la face choisit son attaque.",
+    startingHp: 65,
+    cpIncomePerTurn: null,
+    source: "Planche Naraxus_Battle (scan user 2026-07-05), mode normal + hard v\xE9rifi\xE9s.",
+    tokens: [],
+    flags: [],
+    abilities: [],
+    passives: [],
+    defense: { name: "Dragon Scales", diceCount: "1", text: "Roll 1 die: on 1 prevent 1, on 2-5 prevent 3, on 6 prevent 5. Activates against any defendable dmg.", verified: true },
+    cards: []
+  };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const base = hero.abilities.find((a) => a.boardName === boardName);
@@ -1615,6 +1630,44 @@ var Game = (() => {
     return helmGain > shieldGain ? { mines: false, doubling: { helmet: true } } : { mines: false, doubling: { shield: true } };
   }
 
+  // src/sim/hero/nx.rules.ts
+  var NX_HP_BY_HEROES = [65, 65, 70, 75];
+  var NX_HEAL_CAP = 65;
+  function createInitialNXTokens() {
+    return emptyBag();
+  }
+  function nxAttackInfo(face) {
+    switch (face) {
+      case 1:
+        return { name: "Swoop", dmg: 3, defendable: false };
+      case 2:
+        return { name: "Ember Spark", dmg: 8, defendable: true };
+      case 3:
+        return { name: "Gashing Bite", dmg: 0, defendable: true };
+      case 4:
+        return { name: "Hoarding", dmg: 9, defendable: true };
+      case 5:
+        return { name: "Thundering Roar", dmg: 8, defendable: false };
+      default:
+        return { name: "Dragon's Might", dmg: 10, defendable: true };
+    }
+  }
+  function removeRandomStatus(self, rand) {
+    const pool = [];
+    for (const [k, v] of Object.entries(self.tokens)) if (v > 0 && k !== "head") pool.push(k);
+    for (let i = 0; i < self.timeBombs.length; i++) pool.push("timeBomb");
+    if (!pool.length) return null;
+    const pick = pool[Math.floor(rand() * pool.length)];
+    if (pick === "timeBomb") self.timeBombs.pop();
+    else self.tokens[pick] -= 1;
+    return pick;
+  }
+  function dragonScalesPrevent(face) {
+    if (face === 1) return 1;
+    if (face <= 5) return 3;
+    return 5;
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
@@ -1622,6 +1675,9 @@ var Game = (() => {
   function defenseTaxFor(opponent) {
     if (opponent.heroId === "bw") {
       return opponent.upgradesInPlay.includes("sabotage-ii") ? 2.67 : 2;
+    }
+    if (opponent.heroId === "nx") {
+      return 3;
     }
     if (opponent.heroId === "hh") {
       const dice = Math.min(1 + opponent.tokens.dreadful, 5);
@@ -1684,6 +1740,7 @@ var Game = (() => {
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
     self.minesDrawUsedThisTurn = false;
+    self.hoardedDice = 0;
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
@@ -1714,7 +1771,8 @@ var Game = (() => {
     }
   }
   function playIncomePhase(state, playerIdx, rng) {
-    if (playerIdx === 0 && state.turnNumber === 1) {
+    const bossMode = state.players.some((p) => p.heroId === "nx");
+    if (!bossMode && playerIdx === 0 && state.turnNumber === 1) {
       log(state, playerIdx, "income", "Start Player skips their first Income Phase");
       return;
     }
@@ -2291,13 +2349,19 @@ var Game = (() => {
     const policy = policies[defenderIdx];
     let hallowedUpgraded = false;
     let defenseDice;
-    if (defender.heroId === "fm") {
+    if (defender.heroId === "nx") {
+      defenseDice = [rollDie(rng)];
+    } else if (defender.heroId === "fm") {
       defenseDice = [rollMasterworkDie(rng)];
     } else if (defender.heroId === "bw") {
       defenseDice = rollSabotageDice(defender, rng, policy, state, defenderIdx, defender.upgradesInPlay.includes("sabotage-ii"));
     } else {
       hallowedUpgraded = defender.upgradesInPlay.includes("hallowed-reckoning-ii");
       defenseDice = rollHallowedDice(defender, rng, hallowedUpgraded);
+    }
+    if (defender.hoardedDice > 0 && defenseDice.length > 1) {
+      defenseDice = defenseDice.slice(0, defenseDice.length - 1);
+      log(state, defenderIdx, "defense", `Hoarding: -1 defense die (${defenseDice.length} left)`);
     }
     state.pendingRoll = { rollerIdx: defenderIdx, dice: defenseDice };
     state.pendingDefenseRoll = { attackerIdx, incomingDamage };
@@ -2313,7 +2377,10 @@ var Game = (() => {
     const attacker = state.players[attackerIdx];
     const defender = state.players[defenderIdx];
     let damagePrevented = 0;
-    if (defender.heroId === "fm") {
+    if (defender.heroId === "nx") {
+      damagePrevented = dragonScalesPrevent(finalDefenseDice[0]);
+      log(state, defenderIdx, "defense", `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`);
+    } else if (defender.heroId === "fm") {
       const face = finalDefenseDice[0];
       const out = masterworkOutcome(face, defender, incomingDamage);
       if (out.mines) {
@@ -2689,6 +2756,10 @@ var Game = (() => {
   function resolveAbilityPhase(state, playerIdx, dice, rng, policies) {
     const policy = policies[playerIdx];
     const self = state.players[playerIdx];
+    if (self.heroId === "nx") {
+      resolveNaraxusAbility(state, playerIdx, dice, rng, policies);
+      return;
+    }
     const opp = state.players[1 - playerIdx];
     const oState = oracleStateFor(self, opp);
     const candidates = resolveMatchedAbilities(self.heroId, dice, oState);
@@ -2702,6 +2773,68 @@ var Game = (() => {
     if (self.heroId === "hh") applyHHAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "fm") applyFMAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
+  }
+  function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
+    const boss = state.players[bossIdx];
+    const heroIdx = 1 - bossIdx;
+    const hero = state.players[heroIdx];
+    const face = state.bossHard ? Math.max(...dice) : dice[0];
+    const info = nxAttackInfo(face);
+    log(state, bossIdx, "resolveAttack", `Naraxus: rolled [${dice.join(",")}] -> ${info.name} (${face})`);
+    const swoop = () => {
+      const removed = removeRandomStatus(boss, rng);
+      if (removed) log(state, bossIdx, "resolveAttack", `Swoop: removed ${removed} from Naraxus`);
+      boss.hp = Math.min(boss.hp + 4, NX_HEAL_CAP);
+      log(state, bossIdx, "resolveAttack", "Swoop: healed 4");
+      queueAttackDamageVsArmor(state, bossIdx, 3, false);
+    };
+    if (face === 1) {
+      swoop();
+      return;
+    }
+    if (face === 2) {
+      const milled = hero.deck.splice(0, Math.min(3, hero.deck.length));
+      hero.discard.push(...milled);
+      log(state, bossIdx, "resolveAttack", `Ember Spark: milled ${milled.length} card(s) (${milled.join(",") || "-"})`);
+      resolveDefense(state, bossIdx, 8, rng, policies);
+      return;
+    }
+    if (face === 3) {
+      const four = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)].sort((a, b) => b - a);
+      const dmg = four[0] + four[1];
+      log(state, bossIdx, "resolveAttack", `Gashing Bite: rolled [${four.join(",")}] -> ${dmg} dmg`);
+      resolveDefense(state, bossIdx, dmg, rng, policies);
+      return;
+    }
+    if (face === 4) {
+      hero.hoardedDice = 1;
+      log(state, bossIdx, "resolveAttack", "Hoarding: stole 1 die from the Active Hero (returned at end of their turn)");
+      resolveDefense(state, bossIdx, 9, rng, policies);
+      return;
+    }
+    if (face === 5) {
+      if (hero.hand.length) {
+        const heroT = heroTemplateFor(hero.heroId);
+        const pick = hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0];
+        hero.hand.splice(hero.hand.indexOf(pick), 1);
+        hero.discard.push(pick);
+        log(state, bossIdx, "resolveAttack", `Thundering Roar: hero discarded ${pick}`);
+      }
+      queueAttackDamageVsArmor(state, bossIdx, 8, false);
+      return;
+    }
+    resolveDefense(state, bossIdx, 10, rng, policies);
+    const trigger = rollDie(rng);
+    log(state, bossIdx, "resolveAttack", `Dragon's Might: trigger roll ${trigger}${trigger >= 5 ? " -> SWOOP!" : ""}`);
+    if (trigger >= 5) swoop();
+  }
+  function playNaraxusTurn(state, bossIdx, rng, policies) {
+    const boss = state.players[bossIdx];
+    const tb = tickTimeBombsUpkeep(boss, rng);
+    if (tb.rolls.length > 0) log(state, bossIdx, "upkeep", `Time Bomb upkeep: rolls [${tb.rolls.join(",")}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`);
+    if (checkGameOver(state)) return;
+    const dice = state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)];
+    resolveNaraxusAbility(state, bossIdx, dice, rng, policies);
   }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
@@ -2737,17 +2870,18 @@ var Game = (() => {
   function createInitialPlayer(heroId, rng, isFirstPlayer = true) {
     let deck = [];
     let hand = [];
-    if (rng) {
+    if (rng && heroId !== "nx") {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
     return {
       heroId,
-      hp: STARTING_HP,
+      // Naraxus (boss) : 65 PV en 1v1 (65/65/70/75 selon 1-4 héros, planche vérifiée), 0 carte.
+      hp: heroId === "nx" ? NX_HP_BY_HEROES[0] : STARTING_HP,
       cp: STARTING_CP,
       upgradesInPlay: [],
       hand,
@@ -2760,6 +2894,7 @@ var Game = (() => {
       covertOpsUsedThisTurn: false,
       grimPursuitRerollUsedThisTurn: false,
       minesDrawUsedThisTurn: false,
+      hoardedDice: 0,
       // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
       // "begin with any one Gold Armor" only applies with more than 1 opponent).
       forge: [],
@@ -2781,6 +2916,24 @@ var Game = (() => {
     };
   }
   var MAX_TURNS = 200;
+  function runBossMatch(heroId, seed, policy, hard = false, hoard = "draw") {
+    const rng = mulberry32(seed);
+    const state = createInitialGameState(heroId, "nx", rng);
+    state.bossHard = hard;
+    const hero = state.players[0];
+    if (hoard === "draw") {
+      const c = hero.deck.shift();
+      if (c) hero.hand.push(c);
+    } else hero.cp += 2;
+    const policies = [policy, policy];
+    while (!state.gameOver && state.turnNumber < MAX_TURNS) {
+      state.turnNumber += 1;
+      playNaraxusTurn(state, 1, rng, policies);
+      if (state.gameOver) break;
+      playTurn(state, 0, rng, policies);
+    }
+    return { winner: state.winner, turns: state.turnNumber, finalState: state };
+  }
   function runMatch(heroA, heroB, seed, policies) {
     const rng = mulberry32(seed);
     const state = createInitialGameState(heroA, heroB, rng);
@@ -3181,7 +3334,7 @@ var Game = (() => {
   var UPGRADE_ONEHOT_SIZE = 8;
   var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize, ENCODINGS.fm.deckSize);
   function encodeUpgradesInPlay(p) {
-    const enc = ENCODINGS[p.heroId];
+    const enc = ENCODINGS[p.heroId] ?? ENCODINGS.hh;
     const out = new Array(UPGRADE_ONEHOT_SIZE).fill(0);
     for (const id of p.upgradesInPlay) {
       const idx = enc.upgradeIds.indexOf(id);
@@ -3190,7 +3343,7 @@ var Game = (() => {
     return out;
   }
   function encodeHand(p) {
-    const enc = ENCODINGS[p.heroId];
+    const enc = ENCODINGS[p.heroId] ?? ENCODINGS.hh;
     const out = new Array(HAND_ONEHOT_SIZE).fill(0);
     for (const id of p.hand) {
       const idx = enc.deckIndex.get(id);
@@ -3199,7 +3352,7 @@ var Game = (() => {
     return out;
   }
   function encodePlayer(p) {
-    const deckSize = ENCODINGS[p.heroId].deckSize;
+    const deckSize = (ENCODINGS[p.heroId] ?? ENCODINGS.hh).deckSize;
     const isHH = p.heroId === "hh" ? 1 : 0;
     const isBW = p.heroId === "bw" ? 1 : 0;
     const isFM = p.heroId === "fm" ? 1 : 0;

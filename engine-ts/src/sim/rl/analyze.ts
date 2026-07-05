@@ -35,6 +35,8 @@ const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'b
 // Everything the AI does while playing this hero, pooled across every matchup it appears in. Counts
 // are absolute; percentages/per-game rates are derived at report time from `slots` (number of
 // player-seats this hero occupied — a mirror game contributes 2 seats).
+type HeroStatsMap = Partial<Record<HeroId, HeroStats>> & Record<'hh' | 'bw' | 'fm', HeroStats>
+
 interface HeroStats {
   heroId: HeroId
   slots: number // player-seats occupied by this hero (denominator for per-game rates)
@@ -80,7 +82,7 @@ interface AnalysisReport {
   weightsPath: string
   gamesPerMatchup: number
   seed: number
-  hero: Record<HeroId, HeroStats>
+  hero: HeroStatsMap
   matchups: MatchupStats[]
 }
 
@@ -98,8 +100,10 @@ function cardIdOf(a: WindowAction): string | null {
 
 // Wraps the learned policy so every decision is recorded into the right hero's accumulator, keyed
 // by the deciding player's heroId (works for mirror games too — playerIdx tells us who decided).
-function makeSpy(base: Policy, statsByHero: Record<HeroId, HeroStats>): Policy {
-  const heroAt = (state: GameState, playerIdx: 0 | 1) => statsByHero[state.players[playerIdx].heroId]
+function makeSpy(base: Policy, statsByHero: HeroStatsMap): Policy {
+  // nx (boss) hors stats RL : renvoie un HeroStats jetable pour ne pas polluer les comptes.
+  const nxSink = emptyHeroStats('nx' as HeroId)
+  const heroAt = (state: GameState, playerIdx: 0 | 1) => statsByHero[state.players[playerIdx].heroId] ?? nxSink
 
   const spy: Policy = {
     ...base,
@@ -188,8 +192,8 @@ function makeSpy(base: Policy, statsByHero: Record<HeroId, HeroStats>): Policy {
   return spy
 }
 
-function analyzeNetwork(network: Network, gamesPerMatchup: number, seedBase: number): { hero: Record<HeroId, HeroStats>; matchups: MatchupStats[] } {
-  const statsByHero: Record<HeroId, HeroStats> = { hh: emptyHeroStats('hh'), bw: emptyHeroStats('bw'), fm: emptyHeroStats('fm') }
+function analyzeNetwork(network: Network, gamesPerMatchup: number, seedBase: number): { hero: HeroStatsMap; matchups: MatchupStats[] } {
+  const statsByHero: HeroStatsMap = { hh: emptyHeroStats('hh'), bw: emptyHeroStats('bw'), fm: emptyHeroStats('fm') }
   const policy = makeSpy(createValueGreedyPolicy(network), statsByHero)
   const matchups: MatchupStats[] = []
 
@@ -218,6 +222,7 @@ function analyzeNetwork(network: Network, gamesPerMatchup: number, seedBase: num
       // Attribute this game's damage to each hero's seat (dealt ≈ opponent's HP lost).
       for (const i of [0, 1] as const) {
         const h = statsByHero[state.players[i].heroId]
+        if (!h) continue // nx (boss) hors stats RL
         h.slots += 1
         h.damageTaken.push(lost[i])
         h.damageDealt.push(lost[(1 - i) as 0 | 1])

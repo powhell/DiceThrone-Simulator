@@ -11,8 +11,20 @@ export const bwHero = bwHeroJson as unknown as HeroTemplate
 export const fmHero = fmHeroJson as unknown as HeroTemplate
 export const commonCards = commonCardsJson as unknown as CommonCardsTemplate
 
-export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm'): HeroTemplate {
-  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : bwHero
+// Naraxus (boss) : template minimal construit en dur — pas de cartes, pas d'habiletés de
+// board au sens héros (ses 6 attaques vivent dans sim/hero/nx.rules.ts + turn.ts).
+export const nxHero: HeroTemplate = {
+  id: 'nx', name: 'Naraxus the Devourer',
+  diceAnatomy: '1 dé (2 en hard mode, garde le plus haut) — la face choisit son attaque.',
+  startingHp: 65, cpIncomePerTurn: null,
+  source: 'Planche Naraxus_Battle (scan user 2026-07-05), mode normal + hard vérifiés.',
+  tokens: [], flags: [], abilities: [], passives: [],
+  defense: { name: 'Dragon Scales', diceCount: '1', text: 'Roll 1 die: on 1 prevent 1, on 2-5 prevent 3, on 6 prevent 5. Activates against any defendable dmg.', verified: true },
+  cards: [],
+}
+
+export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'nx'): HeroTemplate {
+  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : heroId === 'nx' ? nxHero : bwHero
 }
 
 // Searches both the hero's base abilities and every card's altAbility (e.g. Cleave II's

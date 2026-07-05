@@ -45,7 +45,8 @@ function buildHeroEncoding(heroId: HeroId): HeroEncoding {
   }
 }
 
-const ENCODINGS: Record<HeroId, HeroEncoding> = { hh: buildHeroEncoding('hh'), bw: buildHeroEncoding('bw'), fm: buildHeroEncoding('fm') }
+// nx (boss) exclu : jamais encodé pour le réseau (pas dans le pool self-play)
+const ENCODINGS: Partial<Record<HeroId, HeroEncoding>> & Record<'hh' | 'bw' | 'fm', HeroEncoding> = { hh: buildHeroEncoding('hh'), bw: buildHeroEncoding('bw'), fm: buildHeroEncoding('fm') }
 
 // Both heroes' full decks must be the same size for the hand one-hot block to have a fixed
 // width. True today (14 hero cards + 17 common = 31 for both); if a future hero breaks this,
@@ -57,7 +58,7 @@ export const HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.dec
 // i-th upgrade card of THIS hero's kit is in play" — hero-dependent semantics, which the
 // network can disambiguate via the isHH/isBW flags in the same player block.
 function encodeUpgradesInPlay(p: PlayerState): number[] {
-  const enc = ENCODINGS[p.heroId]
+  const enc = ENCODINGS[p.heroId] ?? ENCODINGS.hh // nx (boss) jamais encodé en pratique
   const out = new Array<number>(UPGRADE_ONEHOT_SIZE).fill(0)
   for (const id of p.upgradesInPlay) {
     const idx = enc.upgradeIds.indexOf(id)
@@ -69,7 +70,7 @@ function encodeUpgradesInPlay(p: PlayerState): number[] {
 // One-hot over the hero's full deck: which exact cards this player is holding. Only ever
 // emitted for SELF (own hand is known information; the opponent's is hidden).
 function encodeHand(p: PlayerState): number[] {
-  const enc = ENCODINGS[p.heroId]
+  const enc = ENCODINGS[p.heroId] ?? ENCODINGS.hh
   const out = new Array<number>(HAND_ONEHOT_SIZE).fill(0)
   for (const id of p.hand) {
     const idx = enc.deckIndex.get(id)
@@ -80,7 +81,7 @@ function encodeHand(p: PlayerState): number[] {
 
 // Per-player fields shared by both self and opponent encodings.
 function encodePlayer(p: PlayerState): number[] {
-  const deckSize = ENCODINGS[p.heroId].deckSize
+  const deckSize = (ENCODINGS[p.heroId] ?? ENCODINGS.hh).deckSize
   const isHH = p.heroId === 'hh' ? 1 : 0
   const isBW = p.heroId === 'bw' ? 1 : 0
   const isFM = p.heroId === 'fm' ? 1 : 0

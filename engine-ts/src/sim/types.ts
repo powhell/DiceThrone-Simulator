@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm'
+export type HeroId = 'hh' | 'bw' | 'fm' | 'nx' // nx = Naraxus (boss, non jouable)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -47,6 +47,9 @@ export interface PlayerState {
   // Reset à l'upkeep. The Mines (fm) : "Once per turn, you may spend 3 CP at any time to
   // draw 1 card" — garde le 1x/tour.
   minesDrawUsedThisTurn: boolean
+  // Naraxus HOARDING : des voles au heros (reduit SA defense contre cette attaque et son
+  // tour entier - v1 : defense implementee, jet offensif a 5 des conserve, TODO fidele).
+  hoardedDice: number
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be
@@ -109,6 +112,8 @@ export interface GameState {
   // parameter). Lets the RL lookahead score a defense-roll alteration by cloning, applying it, then
   // running finalizeDefenseRoll. defenderIdx = 1 - attackerIdx. null outside that window.
   pendingDefenseRoll: { attackerIdx: 0 | 1; incomingDamage: number } | null
+  // Mode boss : Naraxus lance 2 dés d'attaque et prend le plus haut (hard mode, planche vérifiée).
+  bossHard?: boolean
 }
 
 export interface AbilityCandidate {
