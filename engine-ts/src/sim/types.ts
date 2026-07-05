@@ -158,6 +158,9 @@ export type WindowAction =
   // Black Widow's Covert Ops: spend 1 Covert Ops (once/turn, Main Phase) to put an Ability Upgrade
   // from hand into play for FREE (no CP). The key ramp toward the 4-/5-upgrade power thresholds.
   | { kind: 'covertOpsUpgrade'; cardId: string }
+  // Covert Ops mode (b) (texte vérifié du jeton) : regarde le top 3 du deck ; si AUCUN
+  // upgrade, cherche un upgrade du deck vers la MAIN puis mélange ; sinon remet (raté).
+  | { kind: 'covertOpsSearch' }
 
 // What kind of decision point this is, plus any context the enumeration/application needs.
 export interface WindowContext {

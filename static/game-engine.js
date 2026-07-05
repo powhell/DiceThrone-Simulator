@@ -2067,6 +2067,9 @@ var Game = (() => {
             const card = cardById(hero, cardId);
             if (card?.kind === "upgrade" && card.upgradeSlot) options.push({ kind: "covertOpsUpgrade", cardId });
           }
+          {
+            options.push({ kind: "covertOpsSearch" });
+          }
         }
         for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: "playInstant", cardId: id });
         for (const cardId of player.hand) options.push({ kind: "sellCard", cardId });
@@ -2165,6 +2168,30 @@ var Game = (() => {
     }
     if (action.kind === "covertOpsUpgrade") {
       applyCovertOpsUpgrade(state, playerIdx, action.cardId);
+      return;
+    }
+    if (action.kind === "covertOpsSearch") {
+      const self = state.players[playerIdx];
+      if (self.tokens.covertOps < 1 || self.covertOpsUsedThisTurn) return;
+      self.tokens.covertOps -= 1;
+      self.covertOpsUsedThisTurn = true;
+      const hero = heroTemplateFor(self.heroId);
+      const isUp = (id) => cardById(hero, id)?.kind === "upgrade";
+      const top3 = self.deck.slice(0, 3);
+      if (top3.some(isUp)) {
+        log(state, playerIdx, ctxPhaseless, "Covert Ops (b): top 3 contained an upgrade \u2014 put back, search failed");
+      } else {
+        const found = self.deck.find(isUp);
+        if (found) {
+          self.deck.splice(self.deck.indexOf(found), 1);
+          self.hand.push(found);
+        }
+        for (let i = self.deck.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          [self.deck[i], self.deck[j]] = [self.deck[j], self.deck[i]];
+        }
+        log(state, playerIdx, ctxPhaseless, found ? `Covert Ops (b): searched ${found} to hand, deck shuffled` : "Covert Ops (b): no upgrade left in deck, shuffled");
+      }
       return;
     }
     if (action.kind === "spendGrimPursuitBonus") return;
@@ -3392,6 +3419,11 @@ var Game = (() => {
       decide(state, playerIdx, request) {
         if (request.options.length === 1) return request.options[0];
         const covert = request.options.filter((o) => o.kind === "covertOpsUpgrade");
+        if (!covert.length) {
+          const search = request.options.find((o) => o.kind === "covertOpsSearch");
+          if (search && Math.random() < 0) {
+          }
+        }
         if (covert.length === 1) return covert[0];
         if (covert.length > 1) request = { ...request, options: covert };
         if (request.ctx.windowType === "offensiveRoll") {

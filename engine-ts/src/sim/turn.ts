@@ -629,6 +629,9 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
           const card = cardById(hero, cardId)
           if (card?.kind === 'upgrade' && card.upgradeSlot) options.push({ kind: 'covertOpsUpgrade', cardId })
         }
+        {
+          options.push({ kind: 'covertOpsSearch' })
+        }
       }
       for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
       // Selling: any hand card may be sold for 1 CP during your Main Phases (user-confirmed
@@ -735,6 +738,24 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'removeAllTokens') { applyRemoveAllTokens(state, playerIdx, action); return }
   if (action.kind === 'moveHead') { applyMoveHead(state, playerIdx, action); return }
   if (action.kind === 'covertOpsUpgrade') { applyCovertOpsUpgrade(state, playerIdx, action.cardId); return }
+  if (action.kind === 'covertOpsSearch') {
+    const self = state.players[playerIdx]
+    if (self.tokens.covertOps < 1 || self.covertOpsUsedThisTurn) return
+    self.tokens.covertOps -= 1
+    self.covertOpsUsedThisTurn = true
+    const hero = heroTemplateFor(self.heroId)
+    const isUp = (id: string) => cardById(hero, id)?.kind === 'upgrade'
+    const top3 = self.deck.slice(0, 3)
+    if (top3.some(isUp)) {
+      log(state, playerIdx, ctxPhaseless, 'Covert Ops (b): top 3 contained an upgrade — put back, search failed')
+    } else {
+      const found = self.deck.find(isUp)
+      if (found) { self.deck.splice(self.deck.indexOf(found), 1); self.hand.push(found) }
+      for (let i = self.deck.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [self.deck[i], self.deck[j]] = [self.deck[j], self.deck[i]] }
+      log(state, playerIdx, ctxPhaseless, found ? `Covert Ops (b): searched ${found} to hand, deck shuffled` : 'Covert Ops (b): no upgrade left in deck, shuffled')
+    }
+    return
+  }
   if (action.kind === 'spendGrimPursuitBonus') return // handled in applyAttackModifiers, not a window
 
   // Dice-alteration actions mutate the in-progress roll on state.pendingRoll (ORP2 / DRP3).

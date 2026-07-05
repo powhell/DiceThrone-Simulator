@@ -108,6 +108,10 @@ export function createValueGreedyPolicy(network: Network): Policy {
       // calibration donnait Covert ≈ 0 en conséquence). On restreint le choix aux options
       // covertOpsUpgrade quand il y en a ; le réseau départage ENTRE upgrades.
       const covert = request.options.filter(o => o.kind === 'covertOpsUpgrade')
+      if (!covert.length) {
+        const search = request.options.find(o => o.kind === 'covertOpsSearch')
+        if (search && Math.random() < 0) { /* jamais : le réseau évalue search normalement */ }
+      }
       if (covert.length === 1) return covert[0]
       if (covert.length > 1) request = { ...request, options: covert }
       // ORP2 offensive-alter window (Stage 6a): a die alteration's payoff is only realized once the

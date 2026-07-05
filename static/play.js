@@ -1126,6 +1126,7 @@
       case 'removeToken': return `Get That Outta Here! : retire 1 ${a.tokenKind} ${a.targetIdx===g.humanIdx?'⚠️ à TOI':'à l\'IA'}`;
       case 'removeAllTokens': return `What Status Effects? : retire TOUS les jetons ${a.targetIdx===g.humanIdx?'⚠️ de TOI':'de l\'IA'}`;
       case 'covertOpsUpgrade': return `Covert Ops : poser ${cn(a.cardId)} GRATUITEMENT`;
+      case 'covertOpsSearch': return 'Covert Ops (b) : regarde le top 3 — si AUCUN upgrade, va en chercher un dans le deck';
       default: return a.kind;
     }
   }
