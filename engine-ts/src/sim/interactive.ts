@@ -272,6 +272,14 @@ export function humanAttackModifierOptions(g: HumanGame, grimPursuitIncoming = f
 // One More Time! — the roller-hook cards that only the AI's oracle path could reach before).
 // The UI builds the choice (cardId + dieIndices + values); applyRollManipulationCard validates
 // hand/CP and pays/discards. Returns the updated dice and any extra Roll Attempts granted.
+// Try Try Again! (texte vérifié : "re-roll up to two dice — can be the same die twice in a
+// row") : la 2e relance est séquentielle et GRATUITE (la carte est déjà payée/défaussée).
+export function humanFreeRerollDie(g: HumanGame, vals: number[], dieIndex: number): number[] {
+  const out = vals.slice()
+  out[dieIndex] = rollDice(1, g.rng)[0]
+  return out
+}
+
 export function humanPlayRollCard(
   g: HumanGame, choice: RollManipulationChoice, dice: number[],
 ): { dice: number[]; extraRollsGranted: number } {

@@ -96,6 +96,7 @@
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
   let samMode = false;         // Samesies! 2-click mode during the roll phase (see below)
+  let ttaCharges = 0;          // Try Try Again! : 2e relance séquentielle restante (gratuite)
   let samTarget = null;        // first click = the die to CHANGE; second click = the die to COPY
 
   // ---- coach & game logging ----
@@ -602,6 +603,18 @@
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
       else {
+        if (ttaCharges > 0) {
+          const s0=document.createElement('span'); s0.className='rolls';
+          s0.textContent='Try Try Again : 2e relance gratuite (même dé permis) —';
+          c.appendChild(s0);
+          dice.forEach((d,i)=>c.appendChild(btn(`↻ dé ${i+1} (${d.v})`,'primary',()=>{
+            const nv=G.humanFreeRerollDie(g, dice.map(x=>x.v), i);
+            log(`Try Try Again : 2e relance du dé ${i+1} — <b>${dice[i].v} → ${nv[i]}</b>.`);
+            dice=nv.map((v,j)=>({v, kept: dice[j].kept})); ttaCharges=0; renderAll();
+          })));
+          c.appendChild(btn('Garder tel quel','',()=>{ ttaCharges=0; renderAll(); }));
+          return;
+        }
         c.appendChild(btn(rollsLeft>0?'Relancer les non-gardés':'Plus de relance','', doRoll, rollsLeft<=0));
         const s=document.createElement('span'); s.className='rolls'; s.textContent=`Relances : ${rollsLeft} · clic un dé pour le garder`; c.appendChild(s);
         // Grim Pursuit mode (a): out of rerolls, spend 1 token for one more Roll Attempt.
@@ -937,6 +950,7 @@
     const r = G.humanPlayRollCard(g, ch, dice.map(d=>d.v));
     dice = r.dice.map((v,i)=>({v, kept: dice[i] ? dice[i].kept : false}));
     if (r.extraRollsGranted) rollsLeft += r.extraRollsGranted;
+    if (ch.cardId==='try-try-again') ttaCharges = 1; // "up to two dice", séquentiel (règle vérifiée)
     log(`Tu joues <b>${lbl}</b>.`);
     renderAll();
   }
@@ -953,7 +967,7 @@
       }
     } catch (e) {}
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
-  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; renderAll(); }
+  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; ttaCharges=0; renderAll(); }
   function toAlter(){
     try { // coach: stopping with rerolls left, when the DP says rerolling is worth more?
       if (phase==='roll' && rollsLeft > 0) {

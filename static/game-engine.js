@@ -64,6 +64,7 @@ var Game = (() => {
     humanCraftOptions: () => humanCraftOptions,
     humanDragonsHoard: () => humanDragonsHoard,
     humanForgeOre: () => humanForgeOre,
+    humanFreeRerollDie: () => humanFreeRerollDie,
     humanInstantOptions: () => humanInstantOptions,
     humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
@@ -3153,6 +3154,11 @@ var Game = (() => {
       if (id === "unescapable" && self.tokens.grimPursuit < 1 && !grimPursuitIncoming && !(self.hand.includes("thundering-hooves") && self.cp >= 2)) return false;
       return true;
     });
+  }
+  function humanFreeRerollDie(g, vals, dieIndex) {
+    const out = vals.slice();
+    out[dieIndex] = rollDice(1, g.rng)[0];
+    return out;
   }
   function humanPlayRollCard(g, choice, dice) {
     return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng);
