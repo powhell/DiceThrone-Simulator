@@ -3391,6 +3391,9 @@ var Game = (() => {
       // through here for free. Salt keys the lookahead RNG per window type (fairness across options).
       decide(state, playerIdx, request) {
         if (request.options.length === 1) return request.options[0];
+        const covert = request.options.filter((o) => o.kind === "covertOpsUpgrade");
+        if (covert.length === 1) return covert[0];
+        if (covert.length > 1) request = { ...request, options: covert };
         if (request.ctx.windowType === "offensiveRoll") {
           return scoreCandidatesByReplay(
             network,

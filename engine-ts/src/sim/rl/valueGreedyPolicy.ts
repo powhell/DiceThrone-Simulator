@@ -102,6 +102,14 @@ export function createValueGreedyPolicy(network: Network): Policy {
     // through here for free. Salt keys the lookahead RNG per window type (fairness across options).
     decide(state, playerIdx, request: DecisionRequest): WindowAction {
       if (request.options.length === 1) return request.options[0]
+      // Prior connu-bon (guide vérifié : BW "pose TOUJOURS chaque upgrade") : un upgrade
+      // GRATUIT via Covert Ops domine toute autre option de Main Phase — le lookahead à 1
+      // coup le sous-évaluait (mesuré : 3 utilisations sur ~33 jetons en 11 parties, et la
+      // calibration donnait Covert ≈ 0 en conséquence). On restreint le choix aux options
+      // covertOpsUpgrade quand il y en a ; le réseau départage ENTRE upgrades.
+      const covert = request.options.filter(o => o.kind === 'covertOpsUpgrade')
+      if (covert.length === 1) return covert[0]
+      if (covert.length > 1) request = { ...request, options: covert }
       // ORP2 offensive-alter window (Stage 6a): a die alteration's payoff is only realized once the
       // attack resolves, and encodeState can't see the in-progress dice. So score each candidate by
       // applying it to the roller's pending dice, then RESOLVING the attack on those final dice
