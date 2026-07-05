@@ -24,8 +24,8 @@ function runOne(arm, seating, seed) {
   while (!state.gameOver && state.turnNumber < G.MAX_TURNS) {
     state.turnNumber += 1
     const i = state.activePlayerIdx
-    const pol = (mA === 'fm') ? greedy : netPol
-    G.playTurn(state, i, rng, [pol, pol])
+    // v3 (2026-07-05) : le réseau est entraîné avec fm — netPol PARTOUT (v2 : greedy pour fm)
+    G.playTurn(state, i, rng, [netPol, netPol])
     state.activePlayerIdx = 1 - i
   }
   // hhScore = score du PREMIER héros du matchup (hh ou fm selon le bras)

@@ -63,9 +63,9 @@
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   let ai;
-  const fmInvolved = HUMAN==='fm' || AI_HERO==='fm';
-  if (window.AI_WEIGHTS && !fmInvolved) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
-  else ai = G.greedyHighestDamagePolicy; // fm : le réseau n'est pas encore entraîné avec lui
+  // Depuis 2026-07-05 le réseau est entraîné AVEC le Forgemaster (features Forge/armures).
+  if (window.AI_WEIGHTS) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
+  else ai = G.greedyHighestDamagePolicy;
 
   // Stateful (snapshotable) rng so interactive defense can clone+replay the AI's attack deterministically.
   const rng = G.mulberry32Stateful((Date.now() % 2147483647) || 1);
@@ -1316,9 +1316,7 @@
   const aiNote = document.getElementById('ai-note');
   if (aiNote) aiNote.textContent = usingNet
     ? 'Adversaire : réseau entraîné par self-play.'
-    : fmInvolved
-      ? 'Adversaire : IA scriptée (le réseau n\'est pas encore entraîné avec le Forgemaster).'
-      : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
+    : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
   if (g.humanIdx === 0) {
     addLog('<span class="t">Départ</span>Tu commences la partie.');
     startHumanTurn();
