@@ -34,4 +34,30 @@ describe('zero-damage abilities skip the defense roll', () => {
     // et HH n'a pris aucun dégât (0 dmg)
     expect(hh.hp).toBe(hpBefore.hh)
   })
+
+  // Les 3 autres habiletés BW à 0 dégât — les alt-abilities des upgrades II. Même chemin
+  // (applyBWAbility), mais on le PROUVE au lieu de le supposer.
+  for (const [ability, upgradeId, dice] of [
+    ['Covert Mission', 'widows-gauntlets-ii', [1, 2, 3, 4, 6]], // AABB
+    ['Recon',          'grapple-ii',          [6, 6, 6, 1, 3]], // CCC
+    ['Subvert',        'vengeance-ii',        [1, 3, 4, 5, 6]], // ABBB
+  ] as const) {
+    it(`BW ${ability} (0 dmg, via ${upgradeId}): pas de jet de défense`, () => {
+      const rng = mulberry32(11)
+      const state = createInitialGameState('bw', 'hh', rng)
+      const bw0 = state.players[0], hh = state.players[1]
+      bw0.upgradesInPlay.push(upgradeId)
+      hh.tokens.dreadful = 3
+      const hpBw = bw0.hp, dreadful = hh.tokens.dreadful
+
+      const force: Policy = { ...greedyHighestDamagePolicy, chooseAbility: () => ability }
+      resolveAbilityPhase(state, 0, dice.slice(), rng, [force, greedyHighestDamagePolicy])
+
+      const logText = state.log.map(l => l.message).join('\n')
+      expect(logText).toContain('no defense roll')
+      expect(logText).not.toMatch(/Hallowed Reckoning|Defense dice/)
+      expect(bw0.hp).toBe(hpBw)                    // aucun contre-dégât
+      expect(hh.tokens.dreadful).toBe(dreadful)    // aucun Dreadful farmé
+    })
+  }
 })
