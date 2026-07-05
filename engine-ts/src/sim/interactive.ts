@@ -19,6 +19,7 @@ import type { RNG, StatefulRNG } from './rng.js'
 import { rollDice, rollDie, mulberry32Stateful } from './rng.js'
 import { greedyHighestDamagePolicy } from './policy.js'
 import { resolveMatchedAbilities } from './ability-resolver.js'
+import { resolveResponseWindow } from './decision.js'
 import {
   playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn, drawCards,
   playMainPhase, playOffensiveRollPhase, resolveOffensiveAlterWindow, checkGameOver,
@@ -386,6 +387,18 @@ function computeAttackInfo(g: HumanGame, dice: number[]): AiAttackInfo {
 // Step 1: run upkeep -> income -> main1 -> offensive roll -> (AI's) alter window, then stash the
 // attack. Returns { done:true } if the AI's turn ended before any attack (game over on upkeep).
 export function runAiTurnUpToAttack(g: HumanGame): { done: boolean; attack?: AiAttackInfo } {
+  const r = runAiTurnUpToAlter(g)
+  if (r.done) return { done: true }
+  return finishAiAlter(g)
+}
+
+// --- ORP2 interactif : TU peux altérer les dés d'attaque de l'IA (Helping Hand!/Tip It!/
+// So Wild!/Twice As Wild!) — avant, le pilote passait automatiquement (user-caught : "il
+// roule une grosse suite, j'ai Helping Hand et 2 CP, je ne peux rien faire"). ---------------
+
+// Étape A : le tour de l'IA jusqu'à SON jet final (upkeep -> income -> main1 -> roll).
+// Laisse state.pendingRoll ouvert : la fenêtre d'altération est à toi.
+export function runAiTurnUpToAlter(g: HumanGame): { done: boolean; dice?: number[] } {
   if (g.state.gameOver) return { done: true }
   g.state.turnNumber += 1
   playUpkeepPhase(g.state, g.aiIdx, g.rng, g.ai)
@@ -393,7 +406,34 @@ export function runAiTurnUpToAttack(g: HumanGame): { done: boolean; attack?: AiA
   playIncomePhase(g.state, g.aiIdx, g.rng)
   playMainPhase(g.state, g.aiIdx, 'main1', order(g, g.ai, passPolicy), g.rng)
   const dice = playOffensiveRollPhase(g.state, g.aiIdx, g.rng, g.ai)
-  const finalDice = resolveOffensiveAlterWindow(g.state, g.aiIdx, dice, g.rng, order(g, g.ai, passPolicy))
+  g.state.pendingRoll = { rollerIdx: g.aiIdx, dice }
+  return { done: false, dice: dice.slice() }
+}
+
+// Tes actions légales sur le jet de l'IA (fenêtre offensiveRoll, toi = non-lanceur).
+export function humanAiAlterOptions(g: HumanGame): WindowAction[] {
+  if (!g.state.pendingRoll) return []
+  return enumerateWindowActions(g.state, g.humanIdx, { windowType: 'offensiveRoll' })
+    .filter(a => a.kind !== 'pass')
+}
+
+// Applique UNE action (validée/payée par le moteur) et retourne les dés à jour.
+export function humanApplyAiAlter(g: HumanGame, action: WindowAction): number[] {
+  applyWindowAction(g.state, g.humanIdx, action, { windowType: 'offensiveRoll' }, g.rng)
+  return g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : []
+}
+
+// Étape B : l'IA répond dans la même fenêtre (elle peut re-corriger ses dés), puis on fige
+// l'attaque (snapshot rng pour la défense interactive, comme avant).
+export function finishAiAlter(g: HumanGame): { done: boolean; attack?: AiAttackInfo } {
+  const pr = g.state.pendingRoll
+  const dice = pr ? pr.dice : []
+  resolveResponseWindow(
+    g.state, [g.aiIdx, g.humanIdx], { windowType: 'offensiveRoll' },
+    g.rng, order(g, g.ai, passPolicy), enumerateWindowActions, applyWindowAction,
+  )
+  const finalDice = g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : dice
+  g.state.pendingRoll = null
   const savedRng = (g.rng as StatefulRNG).state
   const attack = computeAttackInfo(g, finalDice)
   g.def = { finalDice, savedRng, script: [], attack }

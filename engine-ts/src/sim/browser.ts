@@ -17,7 +17,7 @@ export {
   newHumanGame, beginHumanTurn, humanCanTerrorize, humanMainOptions, humanApplyMain,
   rollOffense, beginOffensiveAlter, offensiveAlterOptions, applyOffensiveAlter, endOffensiveAlter,
   matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, humanInstantOptions, humanApplyInstant, humanMinePeek, humanForgeOre, humanCraftOptions, humanCraft, humanMinesDraw, humanScrap, humanScrapDie, endHumanTurn, runAiTurn,
-  runAiTurnUpToAttack, nextDefenseDecision, chooseDefense, resolveAiAttack, finishAiTurn,
+  runAiTurnUpToAttack, runAiTurnUpToAlter, humanAiAlterOptions, humanApplyAiAlter, finishAiAlter, nextDefenseDecision, chooseDefense, resolveAiAttack, finishAiTurn,
 } from './interactive.js'
 export { createValueGreedyPolicy } from './rl/valueGreedyPolicy.js'
 export { fromJSON, toJSON, forward, createNetwork } from './rl/network.js'

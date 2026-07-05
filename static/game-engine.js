@@ -45,6 +45,7 @@ var Game = (() => {
     enumerateWindowActions: () => enumerateWindowActions,
     finalizeDefenseRoll: () => finalizeDefenseRoll,
     finalizePendingAttackDamage: () => finalizePendingAttackDamage,
+    finishAiAlter: () => finishAiAlter,
     finishAiTurn: () => finishAiTurn,
     forward: () => forward,
     fromJSON: () => fromJSON,
@@ -52,6 +53,8 @@ var Game = (() => {
     hasHead: () => hasHead,
     heroTemplateFor: () => heroTemplateFor,
     hhHero: () => hhHero,
+    humanAiAlterOptions: () => humanAiAlterOptions,
+    humanApplyAiAlter: () => humanApplyAiAlter,
     humanApplyInstant: () => humanApplyInstant,
     humanApplyMain: () => humanApplyMain,
     humanAttack: () => humanAttack,
@@ -88,6 +91,7 @@ var Game = (() => {
     rollDice: () => rollDice,
     rollOffense: () => rollOffense,
     runAiTurn: () => runAiTurn,
+    runAiTurnUpToAlter: () => runAiTurnUpToAlter,
     runAiTurnUpToAttack: () => runAiTurnUpToAttack,
     runMatch: () => runMatch,
     runOffensiveRoll: () => runOffensiveRoll,
@@ -2988,6 +2992,11 @@ var Game = (() => {
     return { abilityName: name, incomingDamage: c.baseDamage ?? 0, defendable: c.defendable ?? true };
   }
   function runAiTurnUpToAttack(g) {
+    const r = runAiTurnUpToAlter(g);
+    if (r.done) return { done: true };
+    return finishAiAlter(g);
+  }
+  function runAiTurnUpToAlter(g) {
     if (g.state.gameOver) return { done: true };
     g.state.turnNumber += 1;
     playUpkeepPhase(g.state, g.aiIdx, g.rng, g.ai);
@@ -2995,7 +3004,31 @@ var Game = (() => {
     playIncomePhase(g.state, g.aiIdx, g.rng);
     playMainPhase(g.state, g.aiIdx, "main1", order(g, g.ai, passPolicy), g.rng);
     const dice = playOffensiveRollPhase(g.state, g.aiIdx, g.rng, g.ai);
-    const finalDice = resolveOffensiveAlterWindow(g.state, g.aiIdx, dice, g.rng, order(g, g.ai, passPolicy));
+    g.state.pendingRoll = { rollerIdx: g.aiIdx, dice };
+    return { done: false, dice: dice.slice() };
+  }
+  function humanAiAlterOptions(g) {
+    if (!g.state.pendingRoll) return [];
+    return enumerateWindowActions(g.state, g.humanIdx, { windowType: "offensiveRoll" }).filter((a) => a.kind !== "pass");
+  }
+  function humanApplyAiAlter(g, action) {
+    applyWindowAction(g.state, g.humanIdx, action, { windowType: "offensiveRoll" }, g.rng);
+    return g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : [];
+  }
+  function finishAiAlter(g) {
+    const pr = g.state.pendingRoll;
+    const dice = pr ? pr.dice : [];
+    resolveResponseWindow(
+      g.state,
+      [g.aiIdx, g.humanIdx],
+      { windowType: "offensiveRoll" },
+      g.rng,
+      order(g, g.ai, passPolicy),
+      enumerateWindowActions,
+      applyWindowAction
+    );
+    const finalDice = g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : dice;
+    g.state.pendingRoll = null;
     const savedRng = g.rng.state;
     const attack = computeAttackInfo(g, finalDice);
     g.def = { finalDice, savedRng, script: [], attack };

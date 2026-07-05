@@ -86,6 +86,7 @@
   let amSel = new Set();       // attack-modifier cards armed for the attack being chosen
   let aghCpSel = false;        // A Good Haul : Mine SANS révéler (+1 CP) pré-armé
   let scrapMode = null;        // {oreId, mode:'reroll'|'set6'} — clique ensuite le dé visé
+  let aiAlterSel = new Set();  // dés de l'IA sélectionnés pendant la fenêtre d'altération (ORP2)
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
@@ -222,6 +223,17 @@
         `<div class="empty" style="width:100%">🛡️ TA DÉFENSE — résultat :</div>` +
         lastDefDice.map((v,i)=>dieHTML(humanHero, {v,kept:false}, i, false)).join('') +
         `<div class="empty" style="width:100%">${defenseExplain(HUMAN, lastDefDice)}</div>`;
+      return;
+    }
+    if (phase==='aialter' && aiDice) {
+      $('tray').innerHTML =
+        `<div class="empty" style="width:100%">⚔️ LE JET DE L'IA — clique 1-2 dés à altérer (Helping Hand!/Tip It!/So Wild!...) :</div>` +
+        aiDice.map((v,i)=>dieHTML(aiHero, {v,kept:aiAlterSel.has(i)}, i, true)).join('');
+      $('tray').querySelectorAll('.die').forEach(el=>{
+        el.onclick = () => { const i=+el.dataset.i;
+          if (aiAlterSel.has(i)) aiAlterSel.delete(i); else { if (aiAlterSel.size>=2) aiAlterSel.delete([...aiAlterSel][0]); aiAlterSel.add(i); }
+          renderDice(false); renderControls(); };
+      });
       return;
     }
     if (aiDice) {
@@ -513,7 +525,7 @@
     const c = $('controls'); c.innerHTML='';
     // While it's the AI's turn (except the defense window, which IS yours to act in), never show
     // your action buttons — otherwise a stale Main-Phase panel could be clicked during the AI's turn.
-    if (phase!=='defense' && phase!=='defarm' && phase!=='over' && g.state.activePlayerIdx !== g.humanIdx) {
+    if (phase!=='defense' && phase!=='defarm' && phase!=='aialter' && phase!=='over' && g.state.activePlayerIdx !== g.humanIdx) {
       const s=document.createElement('span'); s.className='rolls'; s.textContent='L\'IA joue son tour…'; c.appendChild(s); return;
     }
     if (phase==='tbroll') {
@@ -686,6 +698,26 @@
       });
       addFmBtns(c);
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
+    } else if (phase==='aialter') {
+      const s0=document.createElement('span'); s0.className='rolls';
+      s0.textContent = "Le jet de l'IA est ouvert à l'altération. Clique ses dés puis joue une carte :";
+      c.appendChild(s0);
+      const sel=[...aiAlterSel].sort((x,y)=>x-y);
+      const show = G.humanAiAlterOptions(g).filter(o=>{
+        if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
+        if (o.kind==='setDie') {
+          if (o.sets.length===1) return sel.length===1 && o.sets[0].dieIndex===sel[0];
+          return sel.length===2 && o.sets.every(s2=>sel.includes(s2.dieIndex)) && o.sets[0].value===o.sets[1].value;
+        }
+        return true; // instants & cie
+      });
+      show.slice(0,10).forEach(o=>c.appendChild(btn(actionLabel(o),'primary', ()=>{
+        log(`Tu joues <b>${actionLabel(o)}</b> sur le jet de l'IA.`);
+        aiDice = G.humanApplyAiAlter(g, o);
+        aiAlterSel.clear();
+        renderAll();
+      })));
+      c.appendChild(btn('Laisser ce jet →','gold', ()=>aiTurnAfterAlter()));
     } else if (phase==='defense' && pendingDefense) {
       const a = pendingAttackInfo;
       const isRollWindow = pendingDefense.ctx && pendingDefense.ctx.windowType === 'defenseRoll';
@@ -954,9 +986,26 @@
   }
   // The AI's turn, decomposed so YOU defend interactively when it attacks (see interactive.ts).
   function aiTurn(){
-    const r = G.runAiTurnUpToAttack(g);
+    const r0 = G.runAiTurnUpToAlter(g);
     if (g.state.gameOver) { renderAll(); return end(); }
-    if (r.done) { renderAll(); return startHumanTurn(); } // AI's turn ended before any attack
+    if (r0.done) { renderAll(); return startHumanTurn(); }
+    aiDice = r0.dice.slice();
+    aiAlterSel.clear();
+    // Fenêtre ORP2 : tes cartes d'altération sur SES dés (user-caught : Helping Hand injouable).
+    if (G.humanAiAlterOptions(g).length) {
+      phase='aialter';
+      $('turntag').textContent = "Le jet de l'IA — fenêtre d'altération";
+      log(`⚔️ L'IA a lancé <b>${r0.dice.join(', ')}</b> — tu peux altérer son jet.`);
+      renderAll();
+      return;
+    }
+    aiTurnAfterAlter();
+  }
+  function aiTurnAfterAlter(){
+    aiAlterSel.clear();
+    const r = G.finishAiAlter(g);
+    if (g.state.gameOver) { renderAll(); return end(); }
+    if (r.done) { renderAll(); return startHumanTurn(); }
     pendingAttackInfo = r.attack;
     // Show the AI's actual dice (g.def.finalDice — set by runAiTurnUpToAttack) so its attack
     // is something you SEE, not a one-line log flash.
