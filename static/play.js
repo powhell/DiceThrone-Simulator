@@ -966,11 +966,13 @@
     altSel.clear(); samMode=false; samTarget=null;
     const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
     if(!acts.length){
+      const logFrom2 = g.state.log.length;
       const before = dice.map(d=>d.v).join(',');
       dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
       const after = dice.map(d=>d.v).join(',');
       if (before !== after) {
-        log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+        const plays2 = aiAlterPlays(logFrom2);
+        log(`⚠️ L'IA joue <b>${plays2.join(' + ')||'une altération'}</b> sur ton jet : <b>${before}</b> → <b>${after}</b>`);
         // Droit de réplique AUSSI sur ce chemin (user-caught : à 0 CP, aucune carte
         // d'altération jouable -> on passait ici et la relance n'était jamais offerte).
         if (rollsLeft > 0) {
@@ -982,13 +984,26 @@
     } else phase='alter';
     renderAll(); }
   function applyAlter(a){ log(`Tu joues <b>${alterLabel(a)}</b>.`); dice=G.applyOffensiveAlter(g,a).map(v=>({v,kept:false})); renderAll(); }
+  // Quelles cartes l'IA vient de jouer dans la fenêtre (extraites du log moteur frais).
+  function aiAlterPlays(logFrom){
+    const out=[];
+    for (let i=logFrom;i<g.state.log.length;i++){
+      const m=g.state.log[i];
+      if (m.playerIdx!==g.aiIdx) continue;
+      let x;
+      if ((x=m.message.match(/^(.+?!):/))) out.push(x[1]);
+    }
+    return [...new Set(out)];
+  }
   function toAbilityFromAlter(){
     altSel.clear();
+    const logFrom = g.state.log.length;
     const before = dice.map(d=>d.v).join(',');
     dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
     const after = dice.map(d=>d.v).join(',');
+    var aiPlays = aiAlterPlays(logFrom);
     if (before !== after) {
-      log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+      log(`⚠️ L'IA joue <b>${aiPlays.join(' + ')||'une altération'}</b> sur ton jet : <b>${before}</b> → <b>${after}</b>`);
       // Droit de réplique (règle confirmée user) : s'il te reste des relances, tu retournes
       // en phase de jet ; sinon tu peux au moins répondre avec tes cartes de manipulation.
       if (rollsLeft > 0) {
@@ -1342,6 +1357,7 @@
     if ((m = msg.match(/^(.+?): set (\d+) dice to \[([\d,]+)\]/)))
       return `<b>${m[1]}</b> : fixe ${m[2]} dé(s) à <b>${m[3]}</b>`;
     if ((m = msg.match(/^(.+?): rerolled (\d+) dice$/))) return `<b>${m[1]}</b> : relance ${m[2]} dé(s)`;
+    if ((m = msg.match(/^(.+?): rerolled die (\d+) (\d)->(\d)/))) return `<b>${m[1]}</b> : relance le dé ${m[2]} — <b>${m[3]} → ${m[4]}</b>`;
     if (/^One More Time!/.test(msg)) return `<b>One More Time!</b> : +1 tentative de jet`;
     if (/^Grim Pursuit \(mode a\)/.test(msg)) return `<b>Grim Pursuit</b> : +1 tentative de jet`;
     if ((m = msg.match(/^Grim Pursuit spend \(b\): rolled \[([\d,]+)\], (\d+) Horseshoe/)))
