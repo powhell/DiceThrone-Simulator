@@ -605,8 +605,8 @@
           if (samMode) {
             const s2=document.createElement('span'); s2.className='rolls';
             s2.textContent = samTarget===null
-              ? '→ clique le dé à CHANGER'
-              : `→ dé ${samTarget+1} (${dice[samTarget].v}) : clique le dé à COPIER`;
+              ? '→ 1er clic : le dé à CHANGER (il perdra sa valeur)'
+              : `→ le dé ${samTarget+1} (${dice[samTarget].v}) sera changé — 2e clic : le dé MODÈLE à copier`;
             c.appendChild(s2);
           }
         }
@@ -939,7 +939,16 @@
     const before = dice.map(d=>d.v).join(',');
     dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
     const after = dice.map(d=>d.v).join(',');
-    if (before !== after) log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+    if (before !== after) {
+      log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+      // Règle (fenêtre de réponse) : la priorité te revient — tu peux répondre avec tes
+      // cartes de manipulation avant de choisir l'habileté (user-caught : suite cassée
+      // sans aucun droit de réponse).
+      G.beginOffensiveAlter(g, dice.map(d=>d.v));
+      const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
+      if (acts.length) { phase='alter'; renderAll(); return; }
+      dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
+    }
     phase='ability'; renderAll(); }
   function toMain2(){ phase='main2'; renderAll(); }
   function doRoll(){

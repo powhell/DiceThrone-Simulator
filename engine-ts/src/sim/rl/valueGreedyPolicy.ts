@@ -107,6 +107,12 @@ export function createValueGreedyPolicy(network: Network): Policy {
       // coup le sous-évaluait (mesuré : 3 utilisations sur ~33 jetons en 11 parties, et la
       // calibration donnait Covert ≈ 0 en conséquence). On restreint le choix aux options
       // covertOpsUpgrade quand il y en a ; le réseau départage ENTRE upgrades.
+      // Prior : une carte GRATUITE a gain pur (Vegas Baby! ~+2 CP, Getting Paid! +2 CP)
+      // se JOUE, elle ne se vend jamais pour 1 CP (user-caught : le coach conseillait la vente).
+      const freebie = request.options.find(o =>
+        (o.kind === 'playCard' || o.kind === 'playInstant') && (o as any).cardId
+        && ['vegas-baby', 'getting-paid'].includes((o as any).cardId))
+      if (freebie) return freebie
       const covert = request.options.filter(o => o.kind === 'covertOpsUpgrade')
       if (!covert.length) {
         const search = request.options.find(o => o.kind === 'covertOpsSearch')

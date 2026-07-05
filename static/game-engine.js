@@ -3583,6 +3583,8 @@ var Game = (() => {
       // through here for free. Salt keys the lookahead RNG per window type (fairness across options).
       decide(state, playerIdx, request) {
         if (request.options.length === 1) return request.options[0];
+        const freebie = request.options.find((o) => (o.kind === "playCard" || o.kind === "playInstant") && o.cardId && ["vegas-baby", "getting-paid"].includes(o.cardId));
+        if (freebie) return freebie;
         const covert = request.options.filter((o) => o.kind === "covertOpsUpgrade");
         if (!covert.length) {
           const search = request.options.find((o) => o.kind === "covertOpsSearch");
