@@ -1383,8 +1383,13 @@
       return `Dés après altération : <b>${m[1]}</b>`;
     if ((m = msg.match(/^(.+?): set dice ([\d,]+)->([\d,]+)/)))
       return `<b>${m[1]}</b> : change les dés ${m[2]} → <b>${m[3]}</b>`;
-    if ((m = msg.match(/^(.+?) bonus roll: \+(\d+) (?:dmg|dégâts), undefendable=(\w+), \+(\d+) Grim Pursuit/)))
-      return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> — jet bonus : +${m[2]} dégâts${m[3]==='true'?' · devient <b>indéfendable</b>':''}${+m[4]?` · +${m[4]} Grim Pursuit`:''}`;
+    if ((m = msg.match(/^(.+?) bonus roll(?: \[([\d,]*)\])?: \+(\d+) (?:dmg|dégâts), undefendable=(\w+), \+(\d+) Grim Pursuit/))) {
+      const faces = m[2] ? m[2].split(',').map(Number) : [];
+      const det = faces.length
+        ? ` — dés [${faces.join(',')}] : ${faces.filter(v=>v<=3).length} Hache(s), ${faces.filter(v=>v===4||v===5).length} Fer(s), ${faces.filter(v=>v===6).length} Frayeur(s)`
+        : '';
+      return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> — jet bonus (1 dé/Dreadful)${det} → +${m[3]} dégâts${m[4]==='true'?' · devient <b>indéfendable</b> (2+ Fers)':''}${+m[5]?` · +${m[5]} Grim Pursuit`:''}`;
+    }
     if ((m = msg.match(/^Time Bomb upkeep: (?:rolls \[([\d,]+)\], )?(\d+) self-dmg(?:, (\d+) defused)?/)))
       return `💣 Time Bomb à l'Upkeep${m[1]?` — jet ${m[1]}`:''} : ${m[2]} dégât(s)${m[3]&&+m[3]?` · ${m[3]} désamorcée(s)`:''}`;
     if ((m = msg.match(/^The Mines: mined — revealed (.+) to The Forge/)))

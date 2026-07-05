@@ -1351,7 +1351,7 @@ var Game = (() => {
       else if (s === "B") b += 1;
       else c += 1;
     }
-    return { bonusDamage: a, undefendable: b >= 2, grimPursuitGained: c };
+    return { bonusDamage: a, undefendable: b >= 2, grimPursuitGained: c, dice };
   }
   function grantDreadful(self, amount) {
     const tokens = self.tokens;
@@ -2594,7 +2594,7 @@ var Game = (() => {
       dmg += r.bonusDamage;
       if (r.undefendable) undefendableOverride = true;
       if (r.grimPursuitGained > 0) grantGrimPursuit(self, r.grimPursuitGained);
-      log(state, playerIdx, "resolveAttack", `${name} bonus roll: +${r.bonusDamage} dmg, undefendable=${r.undefendable}, +${r.grimPursuitGained} Grim Pursuit`);
+      log(state, playerIdx, "resolveAttack", `${name} bonus roll [${r.dice ? r.dice.join(",") : "?"}]: +${r.bonusDamage} dmg, undefendable=${r.undefendable}, +${r.grimPursuitGained} Grim Pursuit`);
     }
     if (data.numberMatchBonus) {
       const ofAKind = self.upgradesInPlay.includes("cleave-ii") ? 3 : data.numberMatchBonus.ofAKind;

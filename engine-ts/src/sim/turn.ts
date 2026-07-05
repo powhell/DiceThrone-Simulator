@@ -1218,7 +1218,7 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     dmg += r.bonusDamage
     if (r.undefendable) undefendableOverride = true
     if (r.grimPursuitGained > 0) hh.grantGrimPursuit(self, r.grimPursuitGained)
-    log(state, playerIdx, 'resolveAttack', `${name} bonus roll: +${r.bonusDamage} dmg, undefendable=${r.undefendable}, +${r.grimPursuitGained} Grim Pursuit`)
+    log(state, playerIdx, 'resolveAttack', `${name} bonus roll [${(r as any).dice ? (r as any).dice.join(',') : '?'}]: +${r.bonusDamage} dmg, undefendable=${r.undefendable}, +${r.grimPursuitGained} Grim Pursuit`)
   }
 
   if (data.numberMatchBonus) {

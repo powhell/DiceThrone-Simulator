@@ -32,6 +32,7 @@ export function hasNumberMatch(dice: number[], ofAKind: number): boolean {
 
 export interface BonusRollResult {
   bonusDamage: number
+  dice?: number[]
   undefendable: boolean
   grimPursuitGained: number
 }
@@ -52,7 +53,7 @@ export function resolveSpectralAssaultBonusRoll(self: PlayerState, rng: RNG): Bo
     else if (s === 'B') b += 1
     else c += 1
   }
-  return { bonusDamage: a, undefendable: b >= 2, grimPursuitGained: c }
+  return { bonusDamage: a, undefendable: b >= 2, grimPursuitGained: c, dice }
 }
 
 export function grantDreadful(self: PlayerState, amount: number): void {
