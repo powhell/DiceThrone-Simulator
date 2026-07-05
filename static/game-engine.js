@@ -1564,13 +1564,15 @@ var Game = (() => {
   function rollMasterworkDie(rng) {
     return rollDie(rng);
   }
-  function masterworkOutcome(face, self) {
+  function masterworkOutcome(face, self, incomingDamage) {
     if (face <= 3) return { mines: true, doubling: {} };
-    if (face <= 5) {
-      if (self.armor.shield > 0) return { mines: false, doubling: { shield: true } };
-      return { mines: false, doubling: { helmet: self.armor.helmet > 0 } };
-    }
-    return { mines: false, doubling: { helmet: self.armor.helmet > 0, shield: self.armor.shield > 0 } };
+    const hasHelm = self.armor.helmet > 0, hasShield = self.armor.shield > 0;
+    if (face >= 6) return { mines: false, doubling: { helmet: hasHelm, shield: hasShield } };
+    const base = armorEffects(self, "normal");
+    const helmGain = hasHelm ? HELMET_COUNTER[self.armor.helmet] : 0;
+    const shieldGain = hasShield ? Math.min(SHIELD_PREVENT[self.armor.shield], Math.max(0, incomingDamage - base.prevented)) : 0;
+    if (helmGain === 0 && shieldGain === 0) return { mines: false, doubling: {} };
+    return helmGain > shieldGain ? { mines: false, doubling: { helmet: true } } : { mines: false, doubling: { shield: true } };
   }
 
   // src/sim/turn.ts
@@ -2215,7 +2217,7 @@ var Game = (() => {
     let damagePrevented = 0;
     if (defender.heroId === "fm") {
       const face = finalDefenseDice[0];
-      const out = masterworkOutcome(face, defender);
+      const out = masterworkOutcome(face, defender, incomingDamage);
       if (out.mines) {
         const r = mine(defender);
         log(state, defenderIdx, "defense", `Masterwork (Pick): mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);

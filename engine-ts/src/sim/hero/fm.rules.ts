@@ -100,16 +100,28 @@ export function armorEffects(
   return { prevented, counter }
 }
 
-// Défense Masterwork : 1 dé. Pick (1-3) = Mine ; Forge (4-5) = double UNE armure (v1 : le
-// bouclier s'il existe, sinon le casque) ; Anvil (6) = double jusqu'à 2 armures différentes.
+// Défense Masterwork : 1 dé. Pick (1-3) = Mine ; Forge (4-5) = double UNE armure ; Anvil (6)
+// = double jusqu'à 2 armures différentes (doubler n'est jamais négatif -> les deux).
+// Choix Forge : compare le GAIN RÉEL des deux options (user-caught : l'ancien "bouclier
+// d'abord" doublait 2 prévenus au lieu des +3 contre-dégâts d'un casque Ultimanium) —
+// gain casque = son contre (atterrit toujours) ; gain bouclier = la prévention SUPPLÉMENTAIRE
+// réellement consommée par les dégâts entrants (au-delà, elle est gaspillée).
 export function rollMasterworkDie(rng: RNG): number {
   return rollDie(rng)
 }
-export function masterworkOutcome(face: number, self: PlayerState): { mines: boolean; doubling: { helmet?: boolean; shield?: boolean } } {
+export function masterworkOutcome(
+  face: number, self: PlayerState, incomingDamage: number,
+): { mines: boolean; doubling: { helmet?: boolean; shield?: boolean } } {
   if (face <= 3) return { mines: true, doubling: {} }
-  if (face <= 5) {
-    if (self.armor.shield > 0) return { mines: false, doubling: { shield: true } }
-    return { mines: false, doubling: { helmet: self.armor.helmet > 0 } }
-  }
-  return { mines: false, doubling: { helmet: self.armor.helmet > 0, shield: self.armor.shield > 0 } }
+  const hasHelm = self.armor.helmet > 0, hasShield = self.armor.shield > 0
+  if (face >= 6) return { mines: false, doubling: { helmet: hasHelm, shield: hasShield } }
+  const base = armorEffects(self, 'normal')
+  const helmGain = hasHelm ? HELMET_COUNTER[self.armor.helmet] : 0
+  const shieldGain = hasShield
+    ? Math.min(SHIELD_PREVENT[self.armor.shield], Math.max(0, incomingDamage - base.prevented))
+    : 0
+  if (helmGain === 0 && shieldGain === 0) return { mines: false, doubling: {} }
+  return helmGain > shieldGain
+    ? { mines: false, doubling: { helmet: true } }
+    : { mines: false, doubling: { shield: true } }
 }

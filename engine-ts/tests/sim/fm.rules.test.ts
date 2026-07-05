@@ -75,12 +75,21 @@ describe('Effets d\'armure', () => {
     expect(armorEffects(p, 'undefendable')).toEqual({ prevented: 2, counter: 0 }) // Ultimanium
     expect(armorEffects(p, 'ultimate')).toEqual({ prevented: 0, counter: 0 })
   })
-  it('Masterwork double : Forge = bouclier d\'abord, Anvil = les deux', () => {
+  it('Masterwork Forge : double l\'armure au meilleur GAIN réel (user-caught)', () => {
     const p = fmPlayer()
     p.armor = { helmet: 3, shield: 2 }
-    expect(armorEffects(p, 'normal', masterworkOutcome(4, p).doubling)).toEqual({ prevented: 4, counter: 3 })
-    expect(armorEffects(p, 'normal', masterworkOutcome(6, p).doubling)).toEqual({ prevented: 4, counter: 6 })
-    expect(masterworkOutcome(2, p).mines).toBe(true)
+    // casque Ultimanium (+3 contre) bat bouclier Diamond (+2 prévenus) sur une grosse attaque
+    expect(armorEffects(p, 'normal', masterworkOutcome(4, p, 10).doubling)).toEqual({ prevented: 2, counter: 6 })
+    // petite attaque (2) : la prévention de base (2) absorbe déjà tout — doubler le bouclier
+    // ne gagne RIEN, le casque gagne +3
+    expect(armorEffects(p, 'normal', masterworkOutcome(5, p, 2).doubling)).toEqual({ prevented: 2, counter: 6 })
+    // casque Gold (+1) vs bouclier Diamond utile (+2) : le bouclier gagne
+    p.armor = { helmet: 1, shield: 2 }
+    expect(armorEffects(p, 'normal', masterworkOutcome(4, p, 10).doubling)).toEqual({ prevented: 4, counter: 1 })
+    // Anvil : les deux doublés
+    p.armor = { helmet: 3, shield: 2 }
+    expect(armorEffects(p, 'normal', masterworkOutcome(6, p, 10).doubling)).toEqual({ prevented: 4, counter: 6 })
+    expect(masterworkOutcome(2, p, 10).mines).toBe(true)
   })
 })
 

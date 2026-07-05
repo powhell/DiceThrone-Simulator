@@ -856,7 +856,7 @@ export function finalizeDefenseRoll(
   let damagePrevented = 0
   if (defender.heroId === 'fm') {
     const face = finalDefenseDice[0]
-    const out = fm.masterworkOutcome(face, defender)
+    const out = fm.masterworkOutcome(face, defender, incomingDamage)
     if (out.mines) {
       const r = fm.mine(defender)
       log(state, defenderIdx, 'defense', `Masterwork (Pick): mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
