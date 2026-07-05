@@ -2496,7 +2496,9 @@ var Game = (() => {
       log(state, playerIdx, "resolveAttack", `${name}: ${data.numberMatchBonus.ofAKind}-of-a-kind bonus, +${data.numberMatchBonus.cpGain} CP`);
     }
     if (data.minesDeck) {
-      const r = mine(self, !!data.revealAllMinedOre);
+      const top3 = minePeek(self);
+      const choice = policy.chooseFmMine?.(state, playerIdx, top3);
+      const r = choice?.kind === "cp" ? mineResolve(self, []) : choice?.kind === "reveal" ? mineResolve(self, [choice.oreId]) : mine(self, !!data.revealAllMinedOre);
       log(state, playerIdx, "resolveAttack", `${name}: mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
     }
     if (data.searchOreToForge) {
@@ -2833,12 +2835,13 @@ var Game = (() => {
     const opp = g.state.players[g.aiIdx];
     return resolveMatchedAbilities(self.heroId, dice, oracleStateFor(self, opp));
   }
-  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = []) {
+  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = [], fmMine) {
     const humanPolicy = {
       ...greedyHighestDamagePolicy,
       chooseAbility: () => abilityName,
       chooseGrimPursuitSpend: () => gpBonus,
-      chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter((id) => eligible.includes(id))
+      chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter((id) => eligible.includes(id)),
+      ...fmMine ? { chooseFmMine: () => fmMine } : {}
     };
     const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);

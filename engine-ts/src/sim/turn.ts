@@ -1187,7 +1187,13 @@ function applyFMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     log(state, playerIdx, 'resolveAttack', `${name}: ${data.numberMatchBonus.ofAKind}-of-a-kind bonus, +${data.numberMatchBonus.cpGain} CP`)
   }
   if (data.minesDeck) {
-    const r = fm.mine(self, !!data.revealAllMinedOre)
+    // "Mine your deck" = mot-clé Mine : l'alternative "ne rien révéler, +1 CP" reste un choix
+    // même ici (validé user) ; 'skip' n'est PAS légal (le Mine fait partie de l'habileté).
+    const top3 = fm.minePeek(self)
+    const choice = policy.chooseFmMine?.(state, playerIdx, top3)
+    const r = choice?.kind === 'cp' ? fm.mineResolve(self, [])
+      : choice?.kind === 'reveal' ? fm.mineResolve(self, [choice.oreId])
+      : fm.mine(self, !!data.revealAllMinedOre)
     log(state, playerIdx, 'resolveAttack', `${name}: mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
   }
   if (data.searchOreToForge) {

@@ -155,16 +155,18 @@ export function matchedAbilities(g: HumanGame, dice: number[]): AbilityCandidate
 // Resolve the human's chosen attack. The chosen ability name is injected into a one-shot policy so
 // the real resolveAbilityPhase (which also runs the AI's defense) picks it. Returns nothing; read
 // g.state for the result. If dice match no ability it's a Whiff (handled inside resolveAbilityPhase).
-export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = []): void {
+export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice): void {
   // gpBonus: mode (b) Grim Pursuit pre-armed. attackMods: attack-modifier card ids the human
   // pre-armed in the UI (Cranial Assist!, Unescapable!, Subversion!, Thundering Hooves!) —
   // before this parameter the human hook always answered "none", making those 4 cards
   // unplayable on your own attacks (user-caught on Cranial Assist!).
+  // fmMine: choix de Mine pré-armé pour A Good Haul ('cp' = ne rien révéler ; défaut = tout).
   const humanPolicy: Policy = {
     ...greedyHighestDamagePolicy,
     chooseAbility: () => abilityName,
     chooseGrimPursuitSpend: () => gpBonus,
     chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter(id => eligible.includes(id)),
+    ...(fmMine ? { chooseFmMine: () => fmMine } : {}),
   }
   const policies: [Policy, Policy] = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy]
   resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies)

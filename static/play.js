@@ -84,6 +84,7 @@
   let lastDefDice = null;      // your resolved defense dice, shown in the tray after the attack lands
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
   let amSel = new Set();       // attack-modifier cards armed for the attack being chosen
+  let aghCpSel = false;        // A Good Haul : Mine SANS révéler (+1 CP) pré-armé
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
@@ -658,6 +659,13 @@
             ()=>{ amSel.has(id)?amSel.delete(id):amSel.add(id); renderControls(); }));
         }
       }
+      // A Good Haul : le Mine intégré garde son alternative "ne rien révéler, +1 CP"
+      // (mot-clé Mine, validé user). Pré-armé AVANT l'attaque — les 3 cartes ne se
+      // regardent qu'à la résolution.
+      if (HUMAN==='fm' && cands.some(cd=>cd.name.startsWith('A Good Haul'))) {
+        c.appendChild(btn(`${aghCpSel?'✅ ':''}A Good Haul : Mine sans révéler (+1 CP au lieu des Ore)`, aghCpSel?'primary':'',
+          ()=>{ aghCpSel=!aghCpSel; renderControls(); }));
+      }
       // Instants jouables MAINTENANT (règle : un Instant s'insère n'importe quand) — cas
       // rapporté : Rolling Pumpkin! pour donner la Tête à l'IA AVANT d'armer Cranial Assist.
       G.humanInstantOptions(g).slice(0,4).forEach(a=>{
@@ -888,8 +896,9 @@
     const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
     const base = (cand && cand.baseDamage) || 0;
     const logFrom = g.state.log.length;
-    G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel, [...amSel]);
-    gpBonusSel = false; amSel.clear();
+    G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel, [...amSel],
+      (aghCpSel && name.startsWith('A Good Haul')) ? {kind:'cp'} : undefined);
+    gpBonusSel = false; amSel.clear(); aghCpSel = false;
     const cb = parseCombat(logFrom);
     const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
     log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — ${breakdownStr(base, cb)} = ${Math.max(0,dealt)} infligés`+
@@ -1066,7 +1075,7 @@
       }
     }
     if (g.state.gameOver) { renderAll(); return end(); }
-    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; amSel.clear(); tbArmed=false;
+    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; amSel.clear(); aghCpSel=false; tbArmed=false;
     $('turntag').textContent = `Ton tour · tour ${g.state.turnNumber}`;
     renderAll();
   }
