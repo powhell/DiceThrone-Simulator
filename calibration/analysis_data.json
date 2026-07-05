@@ -1,0 +1,709 @@
+{
+ "hh": {
+  "Dreadful 0, sans Tête": {
+   "evMoyenTour": 8.7,
+   "board": [
+    {
+     "name": "Dreadful Charge (CCCCC)",
+     "value": 19.8,
+     "baseDamage": 15
+    },
+    {
+     "name": "Horrify (CCCC)",
+     "value": 9.7,
+     "baseDamage": 6
+    },
+    {
+     "name": "Spectral Assault (AAACC)",
+     "value": 8,
+     "baseDamage": 8
+    },
+    {
+     "name": "Cleave 5A (AAAAA)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Cleave 4A (AAAA)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Cleave 3A (AAA)",
+     "value": 4,
+     "baseDamage": 4
+    },
+    {
+     "name": "Ride Down (AAABB)",
+     "value": 9.6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Reap (BBBC)",
+     "value": 5.8,
+     "baseDamage": 3
+    },
+    {
+     "name": "Sow Despair L (5-straight)",
+     "value": 11.8,
+     "baseDamage": 9
+    },
+    {
+     "name": "Sow Despair S (4-straight)",
+     "value": 8.9,
+     "baseDamage": 7
+    },
+    {
+     "name": "Whiff",
+     "value": 1.8,
+     "baseDamage": 1.8
+    }
+   ],
+   "atterrissage": {
+    "Ride Down": 40.4,
+    "Sow Despair S": 17.6,
+    "Sow Despair L": 16.8,
+    "Cleave 4A": 8.1,
+    "Whiff": 5.5,
+    "Cleave 3A": 4,
+    "Spectral Assault": 2.9,
+    "Cleave 5A": 2.4,
+    "Reap": 1.1,
+    "Horrify": 0.8,
+    "Dreadful Charge": 0.3
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Cleave 3A": 33,
+    "Cleave 4A": 16.3,
+    "Ride Down": 13.5,
+    "Sow Despair S": 13,
+    "Reap": 6.5,
+    "Cleave 5A": 4.3,
+    "Spectral Assault": 4,
+    "Sow Despair L": 3.5,
+    "Horrify": 0.8
+   }
+  },
+  "Dreadful 2, avec Tête": {
+   "evMoyenTour": 8.62,
+   "board": [
+    {
+     "name": "Dreadful Charge (CCCCC)",
+     "value": 17,
+     "baseDamage": 15
+    },
+    {
+     "name": "Horrify (CCCC)",
+     "value": 9.8,
+     "baseDamage": 6
+    },
+    {
+     "name": "Spectral Assault (AAACC)",
+     "value": 11,
+     "baseDamage": 8
+    },
+    {
+     "name": "Cleave 5A (AAAAA)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Cleave 4A (AAAA)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Cleave 3A (AAA)",
+     "value": 4,
+     "baseDamage": 4
+    },
+    {
+     "name": "Ride Down (AAABB)",
+     "value": 9.6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Reap (BBBC)",
+     "value": 6.6,
+     "baseDamage": 3
+    },
+    {
+     "name": "Sow Despair L (5-straight)",
+     "value": 11,
+     "baseDamage": 9
+    },
+    {
+     "name": "Sow Despair S (4-straight)",
+     "value": 7.9,
+     "baseDamage": 7
+    },
+    {
+     "name": "Whiff",
+     "value": 1.8,
+     "baseDamage": 1.8
+    }
+   ],
+   "atterrissage": {
+    "Ride Down": 39.6,
+    "Sow Despair S": 13.8,
+    "Sow Despair L": 13.8,
+    "Spectral Assault": 11.1,
+    "Cleave 4A": 7,
+    "Whiff": 6.4,
+    "Cleave 3A": 3.4,
+    "Cleave 5A": 2.9,
+    "Reap": 1,
+    "Horrify": 0.7,
+    "Dreadful Charge": 0.3
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Cleave 3A": 33,
+    "Cleave 4A": 16.3,
+    "Ride Down": 13.5,
+    "Sow Despair S": 13,
+    "Reap": 6.5,
+    "Cleave 5A": 4.3,
+    "Spectral Assault": 4,
+    "Sow Despair L": 3.5,
+    "Horrify": 0.8
+   }
+  },
+  "Dreadful 4, avec Tête": {
+   "evMoyenTour": 8.77,
+   "board": [
+    {
+     "name": "Dreadful Charge (CCCCC)",
+     "value": 15,
+     "baseDamage": 15
+    },
+    {
+     "name": "Horrify (CCCC)",
+     "value": 7.8,
+     "baseDamage": 6
+    },
+    {
+     "name": "Spectral Assault (AAACC)",
+     "value": 14,
+     "baseDamage": 8
+    },
+    {
+     "name": "Cleave 5A (AAAAA)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Cleave 4A (AAAA)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Cleave 3A (AAA)",
+     "value": 4,
+     "baseDamage": 4
+    },
+    {
+     "name": "Ride Down (AAABB)",
+     "value": 9.6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Reap (BBBC)",
+     "value": 4.6,
+     "baseDamage": 3
+    },
+    {
+     "name": "Sow Despair L (5-straight)",
+     "value": 9,
+     "baseDamage": 9
+    },
+    {
+     "name": "Sow Despair S (4-straight)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Whiff",
+     "value": 1.8,
+     "baseDamage": 1.8
+    }
+   ],
+   "atterrissage": {
+    "Ride Down": 37.8,
+    "Spectral Assault": 21.5,
+    "Cleave 4A": 10.4,
+    "Sow Despair S": 10.3,
+    "Whiff": 8.9,
+    "Cleave 3A": 4.4,
+    "Sow Despair L": 3.1,
+    "Cleave 5A": 2.6,
+    "Horrify": 0.7,
+    "Dreadful Charge": 0.3,
+    "Reap": 0
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Cleave 3A": 33,
+    "Cleave 4A": 16.3,
+    "Ride Down": 13.5,
+    "Sow Despair S": 13,
+    "Reap": 6.5,
+    "Cleave 5A": 4.3,
+    "Spectral Assault": 4,
+    "Sow Despair L": 3.5,
+    "Horrify": 0.8
+   }
+  }
+ },
+ "bw": {
+  "0 upgrade": {
+   "evMoyenTour": 7.46,
+   "board": [
+    {
+     "name": "Widow's Bite (CCCCC)",
+     "value": 11.6,
+     "baseDamage": 10
+    },
+    {
+     "name": "Grapple (CCCC)",
+     "value": 7.5,
+     "baseDamage": 6
+    },
+    {
+     "name": "Widow's Gauntlets (BBBAA)",
+     "value": 6.75,
+     "baseDamage": 6
+    },
+    {
+     "name": "Vengeance (5-straight)",
+     "value": 11.88,
+     "baseDamage": 7
+    },
+    {
+     "name": "Hacked (4-straight)",
+     "value": 6.6,
+     "baseDamage": 5
+    },
+    {
+     "name": "Infiltrate (AABC)",
+     "value": 3.1,
+     "baseDamage": 0
+    },
+    {
+     "name": "Baton Strike 5B (BBBBB)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Baton Strike 4B (BBBB)",
+     "value": 6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Baton Strike 3B (BBB)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Whiff",
+     "value": 0,
+     "baseDamage": 0
+    }
+   ],
+   "atterrissage": {
+    "Hacked": 22.1,
+    "Vengeance": 20.2,
+    "Widow's Gauntlets": 20.2,
+    "Baton Strike 4B": 17.2,
+    "Baton Strike 5B": 12.7,
+    "Baton Strike 3B": 4.1,
+    "Whiff": 1.5,
+    "Infiltrate": 1.2,
+    "Grapple": 0.5,
+    "Widow's Bite": 0.2
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Baton Strike 3B": 31,
+    "Infiltrate": 25,
+    "Baton Strike 4B": 14.3,
+    "Hacked": 13,
+    "Widow's Gauntlets": 12.3,
+    "Baton Strike 5B": 4,
+    "Vengeance": 3.5,
+    "Grapple": 0.8
+   }
+  },
+  "3 upgrades": {
+   "evMoyenTour": 8.85,
+   "board": [
+    {
+     "name": "Widow's Bite (CCCCC)",
+     "value": 11.6,
+     "baseDamage": 10
+    },
+    {
+     "name": "Grapple (CCCC)",
+     "value": 11.25,
+     "baseDamage": 6
+    },
+    {
+     "name": "Widow's Gauntlets (BBBAA)",
+     "value": 9.75,
+     "baseDamage": 6
+    },
+    {
+     "name": "Vengeance (5-straight)",
+     "value": 11.88,
+     "baseDamage": 7
+    },
+    {
+     "name": "Hacked (4-straight)",
+     "value": 8.6,
+     "baseDamage": 5
+    },
+    {
+     "name": "Infiltrate (AABC)",
+     "value": 3.1,
+     "baseDamage": 0
+    },
+    {
+     "name": "Baton Strike 5B (BBBBB)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Baton Strike 4B (BBBB)",
+     "value": 6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Baton Strike 3B (BBB)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Whiff",
+     "value": 0,
+     "baseDamage": 0
+    }
+   ],
+   "atterrissage": {
+    "Widow's Gauntlets": 38.2,
+    "Hacked": 19.6,
+    "Vengeance": 18.3,
+    "Baton Strike 4B": 10,
+    "Baton Strike 3B": 5.3,
+    "Baton Strike 5B": 3.3,
+    "Whiff": 2.4,
+    "Infiltrate": 2,
+    "Grapple": 0.6,
+    "Widow's Bite": 0.3
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Baton Strike 3B": 31,
+    "Infiltrate": 25,
+    "Baton Strike 4B": 14.3,
+    "Hacked": 13,
+    "Widow's Gauntlets": 12.3,
+    "Baton Strike 5B": 4,
+    "Vengeance": 3.5,
+    "Grapple": 0.8
+   }
+  },
+  "6 upgrades": {
+   "evMoyenTour": 11.36,
+   "board": [
+    {
+     "name": "Widow's Bite (CCCCC)",
+     "value": 12.9,
+     "baseDamage": 10
+    },
+    {
+     "name": "Grapple (CCCC)",
+     "value": 15.25,
+     "baseDamage": 6
+    },
+    {
+     "name": "Widow's Gauntlets (BBBAA)",
+     "value": 13.75,
+     "baseDamage": 6
+    },
+    {
+     "name": "Vengeance (5-straight)",
+     "value": 13.12,
+     "baseDamage": 7
+    },
+    {
+     "name": "Hacked (4-straight)",
+     "value": 9.9,
+     "baseDamage": 5
+    },
+    {
+     "name": "Infiltrate (AABC)",
+     "value": 4.4,
+     "baseDamage": 0
+    },
+    {
+     "name": "Baton Strike 5B (BBBBB)",
+     "value": 8,
+     "baseDamage": 7
+    },
+    {
+     "name": "Baton Strike 4B (BBBB)",
+     "value": 7,
+     "baseDamage": 6
+    },
+    {
+     "name": "Baton Strike 3B (BBB)",
+     "value": 6,
+     "baseDamage": 5
+    },
+    {
+     "name": "Whiff",
+     "value": 0,
+     "baseDamage": 0
+    }
+   ],
+   "atterrissage": {
+    "Widow's Gauntlets": 55.8,
+    "Hacked": 13.7,
+    "Baton Strike 4B": 11,
+    "Vengeance": 6.9,
+    "Baton Strike 3B": 5.3,
+    "Whiff": 2.9,
+    "Infiltrate": 2.5,
+    "Grapple": 0.9,
+    "Baton Strike 5B": 0.9
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Baton Strike 3B": 31,
+    "Infiltrate": 25,
+    "Baton Strike 4B": 14.3,
+    "Hacked": 13,
+    "Widow's Gauntlets": 12.3,
+    "Baton Strike 5B": 4,
+    "Vengeance": 3.5,
+    "Grapple": 0.8
+   }
+  }
+ },
+ "fm": {
+  "0 armure": {
+   "evMoyenTour": 8.25,
+   "board": [
+    {
+     "name": "Final Touches! (CCCCC)",
+     "value": 16.2,
+     "baseDamage": 14
+    },
+    {
+     "name": "Smelting Time (CCCC)",
+     "value": 10.3,
+     "baseDamage": 9
+    },
+    {
+     "name": "Armored Up L (5-straight)",
+     "value": 10,
+     "baseDamage": 10
+    },
+    {
+     "name": "A Good Haul (ABCC)",
+     "value": 10,
+     "baseDamage": 8
+    },
+    {
+     "name": "Armored Up S (4-straight)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Furnace (BBBB)",
+     "value": 8.5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Pick Axe 5A (AAAAA)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Pick Axe 4A (AAAA)",
+     "value": 6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Pick Axe 3A (AAA)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Whiff",
+     "value": 0,
+     "baseDamage": 0
+    }
+   ],
+   "atterrissage": {
+    "A Good Haul": 37.3,
+    "Armored Up S": 16.8,
+    "Armored Up L": 13.3,
+    "Furnace": 9.5,
+    "Pick Axe 3A": 5.7,
+    "Pick Axe 5A": 5.3,
+    "Whiff": 5.2,
+    "Pick Axe 4A": 4.7,
+    "Smelting Time": 1.7,
+    "Final Touches!": 0.5
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Pick Axe 3A": 33,
+    "Pick Axe 4A": 16.3,
+    "Armored Up S": 13,
+    "A Good Haul": 11.3,
+    "Pick Axe 5A": 4.3,
+    "Furnace": 4.3,
+    "Armored Up L": 3.5,
+    "Smelting Time": 0.8
+   }
+  },
+  "2 armures": {
+   "evMoyenTour": 8.92,
+   "board": [
+    {
+     "name": "Final Touches! (CCCCC)",
+     "value": 16.2,
+     "baseDamage": 14
+    },
+    {
+     "name": "Smelting Time (CCCC)",
+     "value": 10.3,
+     "baseDamage": 9
+    },
+    {
+     "name": "Armored Up L (5-straight)",
+     "value": 12,
+     "baseDamage": 12
+    },
+    {
+     "name": "A Good Haul (ABCC)",
+     "value": 10,
+     "baseDamage": 8
+    },
+    {
+     "name": "Armored Up S (4-straight)",
+     "value": 9,
+     "baseDamage": 9
+    },
+    {
+     "name": "Furnace (BBBB)",
+     "value": 8.5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Pick Axe 5A (AAAAA)",
+     "value": 7,
+     "baseDamage": 7
+    },
+    {
+     "name": "Pick Axe 4A (AAAA)",
+     "value": 6,
+     "baseDamage": 6
+    },
+    {
+     "name": "Pick Axe 3A (AAA)",
+     "value": 5,
+     "baseDamage": 5
+    },
+    {
+     "name": "Whiff",
+     "value": 0,
+     "baseDamage": 0
+    }
+   ],
+   "atterrissage": {
+    "A Good Haul": 35.4,
+    "Armored Up S": 21.7,
+    "Armored Up L": 15.8,
+    "Furnace": 6.7,
+    "Pick Axe 3A": 6.4,
+    "Whiff": 5.4,
+    "Pick Axe 4A": 4.3,
+    "Pick Axe 5A": 2.4,
+    "Smelting Time": 1.5,
+    "Final Touches!": 0.4
+   },
+   "matchAuPremierJet": {
+    "Whiff": 100,
+    "Pick Axe 3A": 33,
+    "Pick Axe 4A": 16.3,
+    "Armored Up S": 13,
+    "A Good Haul": 11.3,
+    "Pick Axe 5A": 4.3,
+    "Furnace": 4.3,
+    "Armored Up L": 3.5,
+    "Smelting Time": 0.8
+   }
+  }
+ },
+ "defense": {
+  "hh": [
+   {
+    "dreadful": 0,
+    "des": 1,
+    "contre": 0.502,
+    "prevenu": 0,
+    "dreadfulGagne": 0.165
+   },
+   {
+    "dreadful": 1,
+    "des": 2,
+    "contre": 1.002,
+    "prevenu": 0.111,
+    "dreadfulGagne": 0.333
+   },
+   {
+    "dreadful": 2,
+    "des": 3,
+    "contre": 1.502,
+    "prevenu": 0.259,
+    "dreadfulGagne": 0.499
+   },
+   {
+    "dreadful": 3,
+    "des": 4,
+    "contre": 2.002,
+    "prevenu": 0.418,
+    "dreadfulGagne": 0.666
+   },
+   {
+    "dreadful": 4,
+    "des": 5,
+    "contre": 2.501,
+    "prevenu": 0.584,
+    "dreadfulGagne": 0.833
+   },
+   {
+    "dreadful": 5,
+    "des": 5,
+    "contre": 2.501,
+    "prevenu": 0.584,
+    "dreadfulGagne": 0.833
+   }
+  ],
+  "bw": {
+   "des": 3,
+   "contre": 1.499,
+   "prevenu": 1.001,
+   "pTimeBomb": 0.074
+  },
+  "fm": {
+   "pMine": 0.5,
+   "pDoubleUne": 0.3333333333333333,
+   "pDoubleDeux": 0.16666666666666666
+  }
+ }
+}

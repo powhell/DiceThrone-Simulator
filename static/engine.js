@@ -22,6 +22,7 @@ var Engine = (() => {
   var src_exports = {};
   __export(src_exports, {
     BWEngine: () => BWEngine,
+    FMEngine: () => FMEngine,
     HHEngine: () => HHEngine,
     calculateOptimalKeep: () => calculateOptimalKeep2,
     clearCache: () => clearCache,
@@ -716,6 +717,119 @@ var Engine = (() => {
     }
   };
 
+  // src/characters/forgemaster/constants.ts
+  var PICK_AXE_3A = 5;
+  var PICK_AXE_4A = 6;
+  var PICK_AXE_5A = 7;
+  var FURNACE_BASE = 5;
+  var FURNACE_BONUS_ROLL_EV = 3.5;
+  var SMELTING_TIME_UNDEFENDABLE = 9;
+  var A_GOOD_HAUL_DMG = 8;
+  var ARMORED_UP_SMALL = 7;
+  var ARMORED_UP_LARGE = 10;
+  var ARMORED_UP_2ARMOR_BONUS = 2;
+  var FINAL_TOUCHES_VALUE = 14;
+  var CP_TO_DMG_EQUIV2 = 0.75;
+  var CARD_DRAW_VALUE2 = 1.3;
+  var MINE_VALUE = 2;
+  var ORE_TUTOR_VALUE = 2.2;
+  var WHIFF_VALUE2 = 0;
+
+  // src/characters/forgemaster/abilities.ts
+  function fmFaceToSymbol(face) {
+    if (face <= 3) return "A";
+    if (face <= 5) return "B";
+    return "C";
+  }
+  function classify3(dice) {
+    const counts = { A: 0, B: 0, C: 0 };
+    for (const face of dice) counts[fmFaceToSymbol(face)]++;
+    return counts;
+  }
+  function hasStraight3(dice, length) {
+    const unique = new Set(dice);
+    for (let start = 1; start <= 7 - length; start++) {
+      let found = true;
+      for (let i = 0; i < length; i++) {
+        if (!unique.has(start + i)) {
+          found = false;
+          break;
+        }
+      }
+      if (found) return true;
+    }
+    return false;
+  }
+  function hasNumberMatch(dice, ofAKind) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return [...counts.values()].some((n) => n >= ofAKind);
+  }
+  function getCandidates3(dice, armorCount) {
+    const { A: a, B: b, C: c } = classify3(dice);
+    const out = [];
+    const pickCpBonus = hasNumberMatch(dice, 4) ? CP_TO_DMG_EQUIV2 : 0;
+    if (a >= 5) out.push(["Pick Axe 5A", PICK_AXE_5A + pickCpBonus, PICK_AXE_5A]);
+    else if (a === 4) out.push(["Pick Axe 4A", PICK_AXE_4A + pickCpBonus, PICK_AXE_4A]);
+    else if (a === 3) out.push(["Pick Axe 3A", PICK_AXE_3A + pickCpBonus, PICK_AXE_3A]);
+    if (b >= 4) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE]);
+    if (c >= 4) out.push(["Smelting Time", SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, SMELTING_TIME_UNDEFENDABLE]);
+    if (a >= 1 && b >= 1 && c >= 2) out.push(["A Good Haul", A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG]);
+    const armoredBonus = armorCount >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
+    if (hasStraight3(dice, 5)) out.push(["Armored Up L", ARMORED_UP_LARGE + armoredBonus, ARMORED_UP_LARGE + armoredBonus]);
+    if (hasStraight3(dice, 4)) out.push(["Armored Up S", ARMORED_UP_SMALL + armoredBonus, ARMORED_UP_SMALL + armoredBonus]);
+    if (c >= 5) out.push(["Final Touches!", FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, FINAL_TOUCHES_VALUE]);
+    out.push(["Whiff", WHIFF_VALUE2, WHIFF_VALUE2]);
+    return out;
+  }
+  function bestAbilityValue3(dice, armorCount) {
+    return Math.max(...getCandidates3(dice, armorCount).map(([, v]) => v));
+  }
+  function bestAbilityName3(dice, armorCount) {
+    const cands = getCandidates3(dice, armorCount);
+    return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
+  }
+  function buildAbilityBoard3(dice, armorCount) {
+    const matchedSet = new Set(getCandidates3(dice, armorCount).map(([name]) => name));
+    const armoredBonus = armorCount >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
+    return [
+      { name: "Final Touches! (CCCCC)", value: FINAL_TOUCHES_VALUE + ORE_TUTOR_VALUE, baseDamage: FINAL_TOUCHES_VALUE, matched: matchedSet.has("Final Touches!") },
+      { name: "Smelting Time (CCCC)", value: SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, baseDamage: SMELTING_TIME_UNDEFENDABLE, matched: matchedSet.has("Smelting Time") },
+      { name: "Armored Up L (5-straight)", value: ARMORED_UP_LARGE + armoredBonus, baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has("Armored Up L") },
+      { name: "A Good Haul (ABCC)", value: A_GOOD_HAUL_DMG + MINE_VALUE, baseDamage: A_GOOD_HAUL_DMG, matched: matchedSet.has("A Good Haul") },
+      { name: "Armored Up S (4-straight)", value: ARMORED_UP_SMALL + armoredBonus, baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has("Armored Up S") },
+      { name: "Furnace (BBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
+      { name: "Pick Axe 5A (AAAAA)", value: PICK_AXE_5A, baseDamage: PICK_AXE_5A, matched: matchedSet.has("Pick Axe 5A") },
+      { name: "Pick Axe 4A (AAAA)", value: PICK_AXE_4A, baseDamage: PICK_AXE_4A, matched: matchedSet.has("Pick Axe 4A") },
+      { name: "Pick Axe 3A (AAA)", value: PICK_AXE_3A, baseDamage: PICK_AXE_3A, matched: matchedSet.has("Pick Axe 3A") },
+      { name: "Whiff", value: WHIFF_VALUE2, baseDamage: WHIFF_VALUE2, matched: matchedSet.has("Whiff") }
+    ];
+  }
+
+  // src/characters/forgemaster/config.ts
+  var fmConfig = {
+    id: "fm",
+    faceToSymbol(face) {
+      return fmFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      return bestAbilityValue3(dice, state.armorCount);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName3(dice, state.armorCount);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard3(dice, state.armorCount);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates3(dice, state.armorCount);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      return `${Math.min(state.armorCount, 2)}`;
+    }
+  };
+
   // src/index.ts
   function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIds) {
     return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds });
@@ -726,6 +840,15 @@ var Engine = (() => {
   var HHEngine = {
     calculateOptimalKeep: calculateOptimalKeep2,
     evalState: evalState2,
+    clearCache
+  };
+  var FMEngine = {
+    calculateOptimalKeep(dice, rollsRemaining, state) {
+      return calculateOptimalKeep(fmConfig, dice, rollsRemaining, state);
+    },
+    evalState(kept, rollsRemaining, state) {
+      return evalState(fmConfig, kept, rollsRemaining, state);
+    },
     clearCache
   };
   var BWEngine = {
