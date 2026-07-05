@@ -64,7 +64,10 @@ var Game = (() => {
     humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
     humanMinePeek: () => humanMinePeek,
+    humanMinesDraw: () => humanMinesDraw,
     humanPlayRollCard: () => humanPlayRollCard,
+    humanScrap: () => humanScrap,
+    humanScrapDie: () => humanScrapDie,
     humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
     matchedAbilities: () => matchedAbilities,
     mulberry32: () => mulberry32,
@@ -902,7 +905,7 @@ var Game = (() => {
     if (a >= 5) out.push(["Pick Axe 5A", PICK_AXE_5A + pickCpBonus, PICK_AXE_5A]);
     else if (a === 4) out.push(["Pick Axe 4A", PICK_AXE_4A + pickCpBonus, PICK_AXE_4A]);
     else if (a === 3) out.push(["Pick Axe 3A", PICK_AXE_3A + pickCpBonus, PICK_AXE_3A]);
-    if (b >= 5) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE]);
+    if (b >= 4) out.push(["Furnace", FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE]);
     if (c >= 4) out.push(["Smelting Time", SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE2, SMELTING_TIME_UNDEFENDABLE]);
     if (a >= 1 && b >= 1 && c >= 2) out.push(["A Good Haul", A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG]);
     const armoredBonus = armorCount2 >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0;
@@ -928,7 +931,7 @@ var Game = (() => {
       { name: "Armored Up L (5-straight)", value: ARMORED_UP_LARGE + armoredBonus, baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has("Armored Up L") },
       { name: "A Good Haul (ABCC)", value: A_GOOD_HAUL_DMG + MINE_VALUE, baseDamage: A_GOOD_HAUL_DMG, matched: matchedSet.has("A Good Haul") },
       { name: "Armored Up S (4-straight)", value: ARMORED_UP_SMALL + armoredBonus, baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has("Armored Up S") },
-      { name: "Furnace (BBBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
+      { name: "Furnace (BBBB)", value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV, baseDamage: FURNACE_BASE, matched: matchedSet.has("Furnace") },
       { name: "Pick Axe 5A (AAAAA)", value: PICK_AXE_5A, baseDamage: PICK_AXE_5A, matched: matchedSet.has("Pick Axe 5A") },
       { name: "Pick Axe 4A (AAAA)", value: PICK_AXE_4A, baseDamage: PICK_AXE_4A, matched: matchedSet.has("Pick Axe 4A") },
       { name: "Pick Axe 3A (AAA)", value: PICK_AXE_3A, baseDamage: PICK_AXE_3A, matched: matchedSet.has("Pick Axe 3A") },
@@ -1168,7 +1171,7 @@ var Game = (() => {
       { id: "pick_axe_3a", boardName: "Pick Axe 3A (AAA)", dicePattern: "AAA", baseDamage: 5, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, notes: "Board: '3 Pick: Deal 5 dmg. 4: 6. 5: 7. On 4-of-a-kind (#'s), gain 1 CP.'", verified: true },
       { id: "pick_axe_4a", boardName: "Pick Axe 4A (AAAA)", dicePattern: "AAAA", baseDamage: 6, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, verified: true },
       { id: "pick_axe_5a", boardName: "Pick Axe 5A (AAAAA)", dicePattern: "AAAAA", baseDamage: 7, defendable: true, numberMatchBonus: { ofAKind: 4, cpGain: 1 }, verified: true },
-      { id: "furnace", boardName: "Furnace (BBBBB)", dicePattern: "BBBBB", baseDamage: 5, defendable: true, bonusRoll: { diceCount: "1", addRolledValueAsDamage: true }, notes: "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' (5 Forge symbols.)", verified: true },
+      { id: "furnace", boardName: "Furnace (BBBB)", dicePattern: "BBBB", baseDamage: 5, defendable: true, bonusRoll: { diceCount: "1", addRolledValueAsDamage: true }, notes: "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' 4 Forge symbols (corrig\xE9 2026-07-04 par le user contre le board physique \u2014 la premi\xE8re lecture photo disait 5).", verified: true },
       { id: "smelting_time", boardName: "Smelting Time (CCCC)", dicePattern: "CCCC", baseDamage: 9, defendable: false, cardDraw: 1, notes: "Board: 'Draw 1. Deal 9 undefendable dmg.' (4 Anvil symbols.)", verified: true },
       { id: "a_good_haul", boardName: "A Good Haul (ABCC)", dicePattern: "ABCC (1 Pick, 1 Forge, 2 Anvil)", baseDamage: 8, defendable: true, minesDeck: true, revealAllMinedOre: true, notes: "Board: 'Mine your deck. You may reveal all ORE cards that are Mined in this way and place them on your Passive Ability, THE FORGE. Then deal 8 dmg.' Pattern confirmed by user 2026-07-04: Pick + Forge + 2 Anvil.", verified: true },
       { id: "armored_up_s", boardName: "Armored Up S (4-straight)", dicePattern: "Small Straight (4 consecutive)", baseDamage: 7, defendable: true, thresholdBonusArmor: { armorAtLeast: 2, bonusDamage: 2 }, notes: "Board: 'If you have 2 Armor, add 2 dmg. SMALL STRAIGHT: Deal 7 dmg. LARGE STRAIGHT: Deal 10 dmg.'", verified: true },
@@ -1658,6 +1661,7 @@ var Game = (() => {
     self.grimPursuitBonusUsedThisTurn = false;
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
+    self.minesDrawUsedThisTurn = false;
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
@@ -2694,6 +2698,7 @@ var Game = (() => {
       grimPursuitBonusUsedThisTurn: false,
       covertOpsUsedThisTurn: false,
       grimPursuitRerollUsedThisTurn: false,
+      minesDrawUsedThisTurn: false,
       // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
       // "begin with any one Gold Armor" only applies with more than 1 opponent).
       forge: [],
@@ -2769,6 +2774,41 @@ var Game = (() => {
   }
   function humanMinePeek(g) {
     return g.state.players[g.humanIdx].deck.slice(0, 3);
+  }
+  function humanMinesDraw(g) {
+    const self = g.state.players[g.humanIdx];
+    if (self.heroId !== "fm" || self.cp < 3 || self.minesDrawUsedThisTurn) return false;
+    self.cp -= 3;
+    self.minesDrawUsedThisTurn = true;
+    drawCards(self, 1, g.rng);
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "main1", message: "The Mines: spent 3 CP, drew 1 card" });
+    return true;
+  }
+  function humanScrap(g, oreId, choice) {
+    const self = g.state.players[g.humanIdx];
+    const i = self.forge.indexOf(oreId);
+    if (i < 0) return false;
+    const legal = oreId === "gold-ore" && (choice === "heal" || choice === "cp") || oreId === "diamond-ore" && choice === "cp" || oreId === "ultimanium-ore" && choice === "draw2";
+    if (!legal) return false;
+    if (choice === "heal") self.hp = Math.min(self.hp + 1, STARTING_HP + HEAL_CAP_ABOVE_STARTING);
+    else if (choice === "cp") grantCp(self, 1);
+    else drawCards(self, 2, g.rng);
+    self.forge.splice(i, 1);
+    self.discard.push(oreId);
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "main1", message: `Scrap: ${oreId} -> ${choice}` });
+    return true;
+  }
+  function humanScrapDie(g, oreId, dice, dieIndex, mode) {
+    const self = g.state.players[g.humanIdx];
+    const i = self.forge.indexOf(oreId);
+    if (i < 0 || dieIndex < 0 || dieIndex >= dice.length) return null;
+    if (!(oreId === "diamond-ore" && mode === "reroll" || oreId === "ultimanium-ore" && mode === "set6")) return null;
+    const out = dice.slice();
+    out[dieIndex] = mode === "set6" ? 6 : rollDie(g.rng);
+    self.forge.splice(i, 1);
+    self.discard.push(oreId);
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: "roll", message: `Scrap: ${oreId} -> die ${dieIndex + 1} ${mode === "set6" ? "set to 6" : `rerolled to ${out[dieIndex]}`}` });
+    return out;
   }
   function humanForgeOre(g) {
     const self = g.state.players[g.humanIdx];

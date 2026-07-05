@@ -58,7 +58,7 @@ export function getCandidates(
   if (a >= 5) out.push(['Pick Axe 5A', PICK_AXE_5A + pickCpBonus, PICK_AXE_5A])
   else if (a === 4) out.push(['Pick Axe 4A', PICK_AXE_4A + pickCpBonus, PICK_AXE_4A])
   else if (a === 3) out.push(['Pick Axe 3A', PICK_AXE_3A + pickCpBonus, PICK_AXE_3A])
-  if (b >= 5) out.push(['Furnace', FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE])
+  if (b >= 4) out.push(['Furnace', FURNACE_BASE + FURNACE_BONUS_ROLL_EV, FURNACE_BASE])
   if (c >= 4) out.push(['Smelting Time', SMELTING_TIME_UNDEFENDABLE + CARD_DRAW_VALUE, SMELTING_TIME_UNDEFENDABLE])
   if (a >= 1 && b >= 1 && c >= 2) out.push(['A Good Haul', A_GOOD_HAUL_DMG + MINE_VALUE, A_GOOD_HAUL_DMG])
   const armoredBonus = armorCount >= 2 ? ARMORED_UP_2ARMOR_BONUS : 0
@@ -87,7 +87,7 @@ export function buildAbilityBoard(dice: number[], armorCount: number): AbilityEn
     { name: 'Armored Up L (5-straight)',  value: ARMORED_UP_LARGE + armoredBonus,                    baseDamage: ARMORED_UP_LARGE + armoredBonus, matched: matchedSet.has('Armored Up L') },
     { name: 'A Good Haul (ABCC)',         value: A_GOOD_HAUL_DMG + MINE_VALUE,                       baseDamage: A_GOOD_HAUL_DMG,            matched: matchedSet.has('A Good Haul') },
     { name: 'Armored Up S (4-straight)',  value: ARMORED_UP_SMALL + armoredBonus,                    baseDamage: ARMORED_UP_SMALL + armoredBonus, matched: matchedSet.has('Armored Up S') },
-    { name: 'Furnace (BBBBB)',            value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV,               baseDamage: FURNACE_BASE,               matched: matchedSet.has('Furnace') },
+    { name: 'Furnace (BBBB)',             value: FURNACE_BASE + FURNACE_BONUS_ROLL_EV,               baseDamage: FURNACE_BASE,               matched: matchedSet.has('Furnace') },
     { name: 'Pick Axe 5A (AAAAA)',        value: PICK_AXE_5A,                                        baseDamage: PICK_AXE_5A,                matched: matchedSet.has('Pick Axe 5A') },
     { name: 'Pick Axe 4A (AAAA)',         value: PICK_AXE_4A,                                        baseDamage: PICK_AXE_4A,                matched: matchedSet.has('Pick Axe 4A') },
     { name: 'Pick Axe 3A (AAA)',          value: PICK_AXE_3A,                                        baseDamage: PICK_AXE_3A,                matched: matchedSet.has('Pick Axe 3A') },

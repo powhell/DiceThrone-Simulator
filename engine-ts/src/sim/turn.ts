@@ -89,6 +89,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.grimPursuitBonusUsedThisTurn = false
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
+  self.minesDrawUsedThisTurn = false
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -157,7 +158,7 @@ export function playIncomePhase(state: GameState, playerIdx: 0 | 1, rng: RNG): v
   log(state, playerIdx, 'income', `+${CP_INCOME_PER_TURN} CP, drew 1 card (hand=${self.hand.length})`)
 }
 
-function drawCards(self: PlayerState, count: number, rng: RNG): void {
+export function drawCards(self: PlayerState, count: number, rng: RNG): void {
   for (let i = 0; i < count; i++) {
     if (self.deck.length === 0) {
       if (self.discard.length === 0) return

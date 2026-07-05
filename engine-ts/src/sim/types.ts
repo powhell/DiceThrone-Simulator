@@ -44,6 +44,9 @@ export interface PlayerState {
   // Reset to false each own-turn upkeep. Grim Pursuit mode (a) — "an additional Roll Attempt
   // during your Offensive Roll Phase" — is likewise once per turn (same verified token def).
   grimPursuitRerollUsedThisTurn: boolean
+  // Reset à l'upkeep. The Mines (fm) : "Once per turn, you may spend 3 CP at any time to
+  // draw 1 card" — garde le 1x/tour.
+  minesDrawUsedThisTurn: boolean
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

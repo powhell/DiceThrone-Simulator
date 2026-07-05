@@ -56,6 +56,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     grimPursuitBonusUsedThisTurn: false,
     covertOpsUsedThisTurn: false,
     grimPursuitRerollUsedThisTurn: false,
+    minesDrawUsedThisTurn: false,
     // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
     // "begin with any one Gold Armor" only applies with more than 1 opponent).
     forge: [],

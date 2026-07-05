@@ -55,7 +55,7 @@ describe('Forgemaster data layer', () => {
     const names = fmHero.abilities.map(a => a.boardName)
     expect(names).toEqual([
       'Pick Axe 3A (AAA)', 'Pick Axe 4A (AAAA)', 'Pick Axe 5A (AAAAA)',
-      'Furnace (BBBBB)', 'Smelting Time (CCCC)', 'A Good Haul (ABCC)',
+      'Furnace (BBBB)', 'Smelting Time (CCCC)', 'A Good Haul (ABCC)',
       'Armored Up S (4-straight)', 'Armored Up L (5-straight)', 'Final Touches! (CCCCC)',
     ])
     // the ultimate is undefendable and tutors 1 ore

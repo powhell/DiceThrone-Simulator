@@ -85,6 +85,7 @@
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
   let amSel = new Set();       // attack-modifier cards armed for the attack being chosen
   let aghCpSel = false;        // A Good Haul : Mine SANS révéler (+1 CP) pré-armé
+  let scrapMode = null;        // {oreId, mode:'reroll'|'set6'} — clique ensuite le dé visé
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
@@ -106,7 +107,7 @@
   // Plans de garde par héros : [nom, besoin en A, B, C] (les suites sont gérées à part).
   const PLAN_PATTERNS = {
     hh: [['Ride Down',3,2,0],['Reap',0,3,1],['Cleave',3,0,0],['Spectral Assault',3,0,2],['Horrify',0,0,4]],
-    fm: [['Pick Axe',3,0,0],['Furnace',0,5,0],['A Good Haul',1,1,2],['Smelting Time',0,0,4]],
+    fm: [['Pick Axe',3,0,0],['Furnace',0,4,0],['A Good Haul',1,1,2],['Smelting Time',0,0,4]],
     bw: [['Baton Strike',0,3,0],['Infiltrate',2,1,1],["Widow's Gauntlets",2,3,0],['Grapple',0,0,4]],
   };
   function planHint(kept){
@@ -263,6 +264,14 @@
       const i=+el.dataset.i;
       if (samMode && i===samTarget) el.classList.add('samsel');
       el.onclick = () => {
+        // Mode Scrap (Diamond relance / Ultimanium ->6) : le clic vise ce dé.
+        if (scrapMode) {
+          const m = scrapMode; scrapMode = null;
+          const nd = G.humanScrapDie(g, m.oreId, dice.map(d=>d.v), i, m.mode);
+          if (nd) { dice = nd.map((v,k)=>({v, kept: dice[k] ? dice[k].kept : false}));
+            log(`♻️ <b>Scrap ${m.oreId==='diamond-ore'?'Diamond':'Ultimanium'} Ore</b> : dé ${i+1} ${m.mode==='set6'?'→ 6':'relancé'}.`); }
+          renderAll(); return;
+        }
         // Mode Samesies! : 1er clic = dé à changer, 2e clic = dé dont on copie la valeur.
         if (samMode) {
           if (samTarget===null) { samTarget=i; }
@@ -558,6 +567,7 @@
       }
       if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
+      addFmBtns(c);
       c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
@@ -588,6 +598,7 @@
             c.appendChild(s2);
           }
         }
+        addFmBtns(c);
         c.appendChild(btn('Continuer →','gold', toAlter));
       }
     } else if (phase==='alter') {
@@ -617,6 +628,7 @@
         for (let v=1; v<=6; v++) if (!(dice[i].v===v && dice[j].v===v))
           c.appendChild(btn(`Twice As Wild! : (${dice[i].v},${dice[j].v})→(${v},${v}) · 3 CP`,'primary', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'twice-as-wild',sets:[{dieIndex:i,value:v},{dieIndex:j,value:v}]}); }));
       }
+      addFmBtns(c);
       c.appendChild(btn('Choisir l\'habileté →','gold', toAbilityFromAlter));
     } else if (phase==='ability') {
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
@@ -672,6 +684,7 @@
         c.appendChild(btn(`⚡ ${actionLabel(a)}`,'', ()=>{
           log(`Tu joues <b>${actionLabel(a)}</b>.`); G.humanApplyInstant(g,a); renderAll(); }));
       });
+      addFmBtns(c);
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
     } else if (phase==='defense' && pendingDefense) {
       const a = pendingAttackInfo;
@@ -705,6 +718,31 @@
         else c.appendChild(btn(defenseLabel(o),'primary', ()=>onDefenseChoice(o)));
       });
       c.appendChild(btn(isRollWindow?'Garder ce jet →':'Encaisser (ne rien jouer) →','gold', ()=>onDefenseChoice({kind:'pass'})));
+    }
+  }
+  // Boutons fm "at any time" : The Mines (3 CP -> pioche 1, 1x/tour) + Scrap des Ore de la
+  // Forge (effet puis DEFAUSSE — user-caught : le Scrap n'était pas déclenchable).
+  function addFmBtns(c){
+    if (HUMAN!=='fm' || g.state.activePlayerIdx!==g.humanIdx) return;
+    const you = g.state.players[g.humanIdx];
+    if (you.cp >= 3 && !you.minesDrawUsedThisTurn && you.deck.length)
+      c.appendChild(btn("⛏️ The Mines : 3 CP → pioche 1 (1×/tour)","", ()=>{
+        if (G.humanMinesDraw(g)) { log("⛏️ <b>The Mines</b> : 3 CP → pioche 1."); renderAll(); } }));
+    const onForge = new Set(you.forge);
+    const inRoll = phase==='roll' && attempts>0;
+    if (onForge.has('gold-ore')) {
+      c.appendChild(btn("♻️ Scrap Gold : soigne 1","", ()=>{ if(G.humanScrap(g,'gold-ore','heal')){ log("♻️ <b>Scrap Gold Ore</b> : +1 PV."); renderAll(); } }));
+      c.appendChild(btn("♻️ Scrap Gold : +1 CP","", ()=>{ if(G.humanScrap(g,'gold-ore','cp')){ log("♻️ <b>Scrap Gold Ore</b> : +1 CP."); renderAll(); } }));
+    }
+    if (onForge.has('diamond-ore')) {
+      c.appendChild(btn("♻️ Scrap Diamond : +1 CP","", ()=>{ if(G.humanScrap(g,'diamond-ore','cp')){ log("♻️ <b>Scrap Diamond Ore</b> : +1 CP."); renderAll(); } }));
+      if (inRoll) c.appendChild(btn(`${scrapMode&&scrapMode.oreId==='diamond-ore'?'✅ ':''}♻️ Scrap Diamond : relance un dé (clique-le)`, scrapMode&&scrapMode.oreId==='diamond-ore'?'primary':'', ()=>{
+        scrapMode = scrapMode&&scrapMode.oreId==='diamond-ore' ? null : {oreId:'diamond-ore', mode:'reroll'}; renderDice(false); renderControls(); }));
+    }
+    if (onForge.has('ultimanium-ore')) {
+      c.appendChild(btn("♻️ Scrap Ultimanium : pioche 2","", ()=>{ if(G.humanScrap(g,'ultimanium-ore','draw2')){ log("♻️ <b>Scrap Ultimanium Ore</b> : pioche 2."); renderAll(); } }));
+      if (inRoll) c.appendChild(btn(`${scrapMode&&scrapMode.oreId==='ultimanium-ore'?'✅ ':''}♻️ Scrap Ultimanium : un dé → 6 (clique-le)`, scrapMode&&scrapMode.oreId==='ultimanium-ore'?'primary':'', ()=>{
+        scrapMode = scrapMode&&scrapMode.oreId==='ultimanium-ore' ? null : {oreId:'ultimanium-ore', mode:'set6'}; renderDice(false); renderControls(); }));
     }
   }
   function alterLabel(a){ return actionLabel(a); }
@@ -861,7 +899,7 @@
   function toAbilityFromAlter(){ altSel.clear(); dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; renderAll(); }
   function toMain2(){ phase='main2'; renderAll(); }
   function doRoll(){
-    samMode=false; samTarget=null;
+    samMode=false; samTarget=null; scrapMode=null;
     if (attempts===0){ const vals=G.rollOffense(g,null,[]); dice=vals.map(v=>({v,kept:false})); attempts=1; }
     else {
       if(rollsLeft<=0) return;
@@ -1180,6 +1218,8 @@
       return `⛏️ <b>The Mines</b> : mine — révèle <b>${m[1]}</b> → la Forge`;
     if (/^The Mines: mined — no reveal/.test(msg)) return `⛏️ <b>The Mines</b> : mine — rien révélé, +1 CP`;
     if (/^The Mines: chose not to mine/.test(msg)) return `⛏️ <b>The Mines</b> : tu choisis de ne pas miner`;
+    if (/^Scrap: /.test(msg)) return null; // l'UI logge déjà la version française
+    if (/^The Mines: spent 3 CP/.test(msg)) return null; // idem
     if ((m = msg.match(/^The Forge: placed (.+) from hand/))) return `⚒️ <b>The Forge</b> : pose ${m[1]} depuis la main`;
     if ((m = msg.match(/^Crafted (\w+) \(tier (\d) (helmet|shield)\)/)))
       return `🛠️ <b>Craft</b> : ${m[1].replace(/_/g,' ')} (${m[3]==='helmet'?'casque':'bouclier'} tier ${m[2]})`;
@@ -1238,7 +1278,7 @@
       {name:'Reap',req:'BBBC',dmg:'3 ·+Dread'},{name:'Sow Despair',req:'suite 4',dmg:'7–9'},
       {name:'Horrify',req:'CCCC',dmg:'6 ·+3 Dread'},{name:'Spectral Assault',req:'AAACC',dmg:'8 +jet'},
       {name:'Dreadful Charge',req:'CCCCC',dmg:'14 · ULT'} ],
-    fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBBB',dmg:'5 +1d6'},
+    fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBB',dmg:'5 +1d6'},
       {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
       {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
     bw:[ {name:'Baton Strike',req:'BBB',dmg:'5–7'},{name:'Infiltrate',req:'AABC',dmg:'+Bomb'},

@@ -16,7 +16,7 @@ export { runOffensiveRoll } from './oracle.js'
 export {
   newHumanGame, beginHumanTurn, humanCanTerrorize, humanMainOptions, humanApplyMain,
   rollOffense, beginOffensiveAlter, offensiveAlterOptions, applyOffensiveAlter, endOffensiveAlter,
-  matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, humanInstantOptions, humanApplyInstant, humanMinePeek, humanForgeOre, humanCraftOptions, humanCraft, endHumanTurn, runAiTurn,
+  matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, humanInstantOptions, humanApplyInstant, humanMinePeek, humanForgeOre, humanCraftOptions, humanCraft, humanMinesDraw, humanScrap, humanScrapDie, endHumanTurn, runAiTurn,
   runAiTurnUpToAttack, nextDefenseDecision, chooseDefense, resolveAiAttack, finishAiTurn,
 } from './interactive.js'
 export { createValueGreedyPolicy } from './rl/valueGreedyPolicy.js'

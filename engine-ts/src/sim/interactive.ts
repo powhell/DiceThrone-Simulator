@@ -16,11 +16,11 @@ import type {
 } from './types.js'
 import type { Policy } from './policy.js'
 import type { RNG, StatefulRNG } from './rng.js'
-import { rollDice, mulberry32Stateful } from './rng.js'
+import { rollDice, rollDie, mulberry32Stateful } from './rng.js'
 import { greedyHighestDamagePolicy } from './policy.js'
 import { resolveMatchedAbilities } from './ability-resolver.js'
 import {
-  playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn,
+  playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn, drawCards,
   playMainPhase, playOffensiveRollPhase, resolveOffensiveAlterWindow, checkGameOver,
   enumerateWindowActions, applyWindowAction, resolveAbilityPhase, playTurn, oracleStateFor,
   applyRollManipulationCard,
@@ -28,6 +28,8 @@ import {
 import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
 import { heroTemplateFor, cardById } from './data/load.js'
+import { STARTING_HP, HEAL_CAP_ABOVE_STARTING } from './data/config.js'
+import { grantCp } from './cp.js'
 import { isOre as fmIsOre, craftOptions as fmCraftOptions, craftSpecific as fmCraftSpecific } from './hero/fm.rules.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
@@ -61,6 +63,53 @@ export type FmMineChoice = { kind: 'skip' } | { kind: 'cp' } | { kind: 'reveal';
 // "look" de la règle, privé au joueur).
 export function humanMinePeek(g: HumanGame): string[] {
   return g.state.players[g.humanIdx].deck.slice(0, 3)
+}
+
+// The Mines, 2e effet (vérifié board) : "Once per turn, you may spend 3 CP at any time to
+// draw 1 card." UI-only pour l'instant (l'IA ne l'utilise pas — TODO policy).
+export function humanMinesDraw(g: HumanGame): boolean {
+  const self = g.state.players[g.humanIdx]
+  if (self.heroId !== 'fm' || self.cp < 3 || self.minesDrawUsedThisTurn) return false
+  self.cp -= 3
+  self.minesDrawUsedThisTurn = true
+  drawCards(self, 1, g.rng)
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'main1', message: 'The Mines: spent 3 CP, drew 1 card' })
+  return true
+}
+
+// Scrap (vérifié leaflet) : à tout moment, choisir un Ore SUR LA FORGE, appliquer son effet,
+// puis le DÉFAUSSER (pas sous le deck). Options sans cible ici ; les options qui visent un dé
+// (Diamond reroll / Ultimanium ->6) passent par humanScrapDie pendant ton propre jet.
+export function humanScrap(g: HumanGame, oreId: string, choice: 'heal' | 'cp' | 'draw2'): boolean {
+  const self = g.state.players[g.humanIdx]
+  const i = self.forge.indexOf(oreId)
+  if (i < 0) return false
+  const legal = (oreId === 'gold-ore' && (choice === 'heal' || choice === 'cp'))
+    || (oreId === 'diamond-ore' && choice === 'cp')
+    || (oreId === 'ultimanium-ore' && choice === 'draw2')
+  if (!legal) return false
+  if (choice === 'heal') self.hp = Math.min(self.hp + 1, STARTING_HP + HEAL_CAP_ABOVE_STARTING)
+  else if (choice === 'cp') grantCp(self, 1)
+  else drawCards(self, 2, g.rng)
+  self.forge.splice(i, 1)
+  self.discard.push(oreId)
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'main1', message: `Scrap: ${oreId} -> ${choice}` })
+  return true
+}
+
+// Scrap ciblant un dé de TON jet en cours : Diamond = relance 1 dé ; Ultimanium = un dé -> 6.
+// Retourne le nouveau tableau de dés (l'UI possède les dés du jet), ou null si illégal.
+export function humanScrapDie(g: HumanGame, oreId: string, dice: number[], dieIndex: number, mode: 'reroll' | 'set6'): number[] | null {
+  const self = g.state.players[g.humanIdx]
+  const i = self.forge.indexOf(oreId)
+  if (i < 0 || dieIndex < 0 || dieIndex >= dice.length) return null
+  if (!((oreId === 'diamond-ore' && mode === 'reroll') || (oreId === 'ultimanium-ore' && mode === 'set6'))) return null
+  const out = dice.slice()
+  out[dieIndex] = mode === 'set6' ? 6 : rollDie(g.rng)
+  self.forge.splice(i, 1)
+  self.discard.push(oreId)
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.humanIdx, phase: 'roll', message: `Scrap: ${oreId} -> die ${dieIndex + 1} ${mode === 'set6' ? 'set to 6' : `rerolled to ${out[dieIndex]}`}` })
+  return out
 }
 
 // The Forge (Main Phase) : pose TOUS les Ore de la main sur la Forge. Retourne les ids posés.
