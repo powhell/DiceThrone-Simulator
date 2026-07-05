@@ -20,7 +20,7 @@ import { runMatch } from '../match.js'
 // Miroirs (hh-hh, bw-bw) retirés à la demande du user (2026-07-05) : ils coûtent la moitié
 // du budget de calcul pour des règles spéciales non modélisées (unicité Head/armures) et
 // n'informent pas l'équilibre inter-héros.
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh']]
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm']]
 
 function loadPolicy(pathOrGreedy: string): Policy {
   if (pathOrGreedy === 'greedy') return greedyHighestDamagePolicy

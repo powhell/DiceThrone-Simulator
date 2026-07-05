@@ -51,7 +51,7 @@ const ENCODINGS: Record<HeroId, HeroEncoding> = { hh: buildHeroEncoding('hh'), b
 // width. True today (14 hero cards + 17 common = 31 for both); if a future hero breaks this,
 // HAND_ONEHOT_SIZE must become the max and shorter decks zero-pad.
 export const UPGRADE_ONEHOT_SIZE = 8
-export const HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize)
+export const HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize, ENCODINGS.fm.deckSize)
 
 // One-hot over the hero's upgrade card list, padded to UPGRADE_ONEHOT_SIZE. Slot i means "the
 // i-th upgrade card of THIS hero's kit is in play" — hero-dependent semantics, which the
@@ -83,6 +83,7 @@ function encodePlayer(p: PlayerState): number[] {
   const deckSize = ENCODINGS[p.heroId].deckSize
   const isHH = p.heroId === 'hh' ? 1 : 0
   const isBW = p.heroId === 'bw' ? 1 : 0
+  const isFM = p.heroId === 'fm' ? 1 : 0
 
   return [
     p.hp / MAX_HP,
@@ -95,6 +96,14 @@ function encodePlayer(p: PlayerState): number[] {
     p.upgradesPlayedThisTurn / MAX_UPGRADES_PLAYED_PER_TURN,
     isHH,
     isBW,
+    isFM,
+    // Forgemaster : la Forge et les armures sont SON état stratégique central — sans ces
+    // features le réseau ne peut pas valoriser un état fm (zéro pour les autres héros).
+    p.forge.filter(id => id === 'gold-ore').length / 9,
+    p.forge.filter(id => id === 'diamond-ore').length / 6,
+    p.forge.filter(id => id === 'ultimanium-ore').length,
+    p.armor.helmet / 3,
+    p.armor.shield / 3,
     // Tokens read straight from the generic bag for BOTH heroes (v2: un-gated). Cross-player
     // token transfer cards mean any player can end up holding any bag token; gating by hero
     // hid that from the network.
@@ -118,5 +127,5 @@ export function encodeState(state: GameState, forPlayerIdx: 0 | 1): number[] {
   ]
 }
 
-const PLAYER_BLOCK_SIZE = 15 + UPGRADE_ONEHOT_SIZE
+const PLAYER_BLOCK_SIZE = 21 + UPGRADE_ONEHOT_SIZE // 15 + isFM + 3 ore Forge + 2 armures (2026-07-05)
 export const FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE
