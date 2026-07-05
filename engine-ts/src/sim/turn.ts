@@ -747,7 +747,12 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
     const isUp = (id: string) => cardById(hero, id)?.kind === 'upgrade'
     const top3 = self.deck.slice(0, 3)
     if (top3.some(isUp)) {
-      log(state, playerIdx, ctxPhaseless, 'Covert Ops (b): top 3 contained an upgrade — put back, search failed')
+      // "put them back in any order" (texte vérifié) : pas un échec sec — on remet les
+      // upgrades SUR LE DESSUS (l'ordre que tout joueur choisirait : pioche au prochain tour).
+      const rest = self.deck.slice(3)
+      const ups = top3.filter(isUp), others = top3.filter(id => !isUp(id))
+      self.deck = [...ups, ...others, ...rest]
+      log(state, playerIdx, ctxPhaseless, `Covert Ops (b): top 3 contained ${ups.length} upgrade(s) — no search, put back with upgrade(s) ON TOP (${ups.join(',')})`)
     } else {
       const found = self.deck.find(isUp)
       if (found) { self.deck.splice(self.deck.indexOf(found), 1); self.hand.push(found) }
