@@ -83,6 +83,8 @@
   .die .pip{position:absolute; bottom:5px; right:8px; font-family:var(--mono); font-size:11px; color:#d7c8f0; font-variant-numeric:tabular-nums}
   .die[data-cls="A"] .pip{color:#f3ede2} .die[data-cls="B"] .pip{color:#3fb6e8} .die[data-cls="C"] .pip{color:#ef6b2b}
   .die.kept{box-shadow:0 0 0 3px var(--gold), 0 5px 0 #3a2758, 0 9px 16px #0009; transform:translateY(-3px)}
+  /* dé ciblé par Samesies! (mode 2-clics) : anneau cyan, distinct du doré "gardé" */
+  .die.samsel{box-shadow:0 0 0 3px #3fb6e8, 0 5px 0 #3a2758, 0 9px 16px #0009; transform:translateY(-3px)}
   .die.kept::after{content:"GARDÉ"; position:absolute; top:-9px; left:50%; transform:translateX(-50%);
     background:var(--gold); color:#160f06; font-size:9px; font-weight:700; letter-spacing:.06em; padding:2px 7px; border-radius:999px}
   .die.rolling{animation:tumble .5s ease}

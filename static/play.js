@@ -74,6 +74,8 @@
   let tbArmed = false;         // Time Bomb upkeep roll: click-to-roll pacing flag
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
+  let samMode = false;         // Samesies! 2-click mode during the roll phase (see below)
+  let samTarget = null;        // first click = the die to CHANGE; second click = the die to COPY
 
   // ---- coach & game logging ----
   // The AI policy is seat-agnostic, so the SAME object can evaluate YOUR decisions: at each
@@ -229,7 +231,21 @@
       : '<div class="empty">Lance les dés pour commencer ton attaque.</div>';
     if (animate) $('tray').querySelectorAll('.die:not(.kept)').forEach(el=>el.classList.add('rolling'));
     if (phase==='roll' && attempts>0) $('tray').querySelectorAll('.die').forEach(el=>{
-      el.onclick = () => { const i=+el.dataset.i; dice[i].kept=!dice[i].kept; renderDice(false); renderControls(); };
+      const i=+el.dataset.i;
+      if (samMode && i===samTarget) el.classList.add('samsel');
+      el.onclick = () => {
+        // Mode Samesies! : 1er clic = dé à changer, 2e clic = dé dont on copie la valeur.
+        if (samMode) {
+          if (samTarget===null) { samTarget=i; }
+          else if (i!==samTarget && dice[i].v!==dice[samTarget].v) {
+            const t=samTarget; samMode=false; samTarget=null;
+            playRollCard({cardId:'samesies', dieIndices:[t], values:[dice[i].v]});
+            return;
+          } else if (i===samTarget) { samTarget=null; } // re-clic = désélection
+          renderDice(false); renderControls(); return;
+        }
+        dice[i].kept=!dice[i].kept; renderDice(false); renderControls();
+      };
     });
   }
 
@@ -491,6 +507,20 @@
         // AI reaches these via its oracle hook; the human plays them here, between attempts.
         // Hard cap 6 buttons to avoid flooding the row (the useful targets come first).
         humanRollCardChoices().slice(0,6).forEach(ch=>c.appendChild(btn(rollCardLabel(ch),'', ()=>playRollCard(ch))));
+        // Samesies! : mode 2-clics — n'importe quel dé peut copier n'importe quel AUTRE dé
+        // (l'énumération "→ max seulement" cachait p.ex. 2→4, bug rapporté).
+        const samCard = G.cardById(G.heroTemplateFor(HUMAN), 'samesies');
+        if (samCard && you.hand.includes('samesies') && you.cp >= (samCard.cpCost||0)) {
+          c.appendChild(btn(`${samMode?'✅ ':''}Samesies! : copie un dé sur un autre · ${samCard.cpCost||0} CP`,
+            samMode?'primary':'', ()=>{ samMode=!samMode; samTarget=null; renderDice(false); renderControls(); }));
+          if (samMode) {
+            const s2=document.createElement('span'); s2.className='rolls';
+            s2.textContent = samTarget===null
+              ? '→ clique le dé à CHANGER'
+              : `→ dé ${samTarget+1} (${dice[samTarget].v}) : clique le dé à COPIER`;
+            c.appendChild(s2);
+          }
+        }
         c.appendChild(btn('Continuer →','gold', toAlter));
       }
     } else if (phase==='alter') {
@@ -684,7 +714,9 @@
         const idx = vals.map((v,i)=>({v,i})).filter(x=>!dice[x.i].kept).sort((x,y)=>x.v-y.v).slice(0,2);
         for (const x of idx) out.push({cardId:id, dieIndices:[x.i]});
       }
-      else if (id==='samesies'){ const mx=Math.max(...vals); vals.forEach((v,i)=>{ if(v!==mx) out.push({cardId:id, dieIndices:[i], values:[mx]}); }); }
+      // samesies: PAS énuméré ici — l'ancien code n'offrait que "→ valeur max" (bug rapporté :
+      // impossible de copier un 4 sur un 2). Géré par le mode 2-clics (samMode) dans
+      // renderControls/renderDice, qui couvre toutes les paires comme le moteur.
     }
     return out;
   }
@@ -698,6 +730,7 @@
   }
   function playRollCard(ch){
     const lbl = rollCardLabel(ch); // label reads the CURRENT dice — compute before they change
+    samMode=false; samTarget=null; // les dés changent : toute sélection Samesies devient invalide
     const r = G.humanPlayRollCard(g, ch, dice.map(d=>d.v));
     dice = r.dice.map((v,i)=>({v, kept: dice[i] ? dice[i].kept : false}));
     if (r.extraRollsGranted) rollsLeft += r.extraRollsGranted;
@@ -717,7 +750,7 @@
       }
     } catch (e) {}
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
-  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; renderAll(); }
+  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; renderAll(); }
   function toAlter(){
     try { // coach: stopping with rerolls left, when the DP says rerolling is worth more?
       if (phase==='roll' && rollsLeft > 0) {
@@ -728,7 +761,7 @@
       }
     } catch (e) {}
     G.beginOffensiveAlter(g, dice.map(d=>d.v));
-    altSel.clear();
+    altSel.clear(); samMode=false; samTarget=null;
     const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
     if(!acts.length){ dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; } else phase='alter';
     renderAll(); }
@@ -736,6 +769,7 @@
   function toAbilityFromAlter(){ altSel.clear(); dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; renderAll(); }
   function toMain2(){ phase='main2'; renderAll(); }
   function doRoll(){
+    samMode=false; samTarget=null;
     if (attempts===0){ const vals=G.rollOffense(g,null,[]); dice=vals.map(v=>({v,kept:false})); attempts=1; }
     else {
       if(rollsLeft<=0) return;
