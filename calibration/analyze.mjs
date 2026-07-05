@@ -43,10 +43,12 @@ const fmtPct = d => d == null ? '—' : `${(d.mean * 100).toFixed(2)}% ± ${(d.s
 // ---- étalons PV ----
 const hpHH = pairedDelta('hh_hp4', 'base', 'hh')
 const hpBW = pairedDelta('bw_hp4', 'base', 'bw')
-const perHP = { hh: hpHH && { mean: hpHH.mean / 4, se: hpHH.se / 4 }, bw: hpBW && { mean: hpBW.mean / 4, se: hpBW.se / 4 } }
+const hpFM = pairedDelta('fm_hp4', 'base_fm', 'fm')
+const perHP = { hh: hpHH && { mean: hpHH.mean / 4, se: hpHH.se / 4 }, bw: hpBW && { mean: hpBW.mean / 4, se: hpBW.se / 4 }, fm: hpFM && { mean: hpFM.mean / 4, se: hpFM.se / 4 } }
 console.log('=== Étalons (valeur d\'1 PV en win-rate) ===')
 console.log(`HH +4 PV : Δwin ${fmtPct(hpHH)}  -> 1 PV = ${hpHH ? (hpHH.mean / 4 * 100).toFixed(2) + '%' : '—'}`)
 console.log(`BW +4 PV : Δwin ${fmtPct(hpBW)}  -> 1 PV = ${hpBW ? (hpBW.mean / 4 * 100).toFixed(2) + '%' : '—'}`)
+console.log(`FM +4 PV : Δwin ${fmtPct(hpFM)}  -> 1 PV = ${hpFM ? (hpFM.mean / 4 * 100).toFixed(2) + '%' : '—'}`)
 
 function dmgEquiv(d, hero) {
   const hp = perHP[hero]
@@ -83,6 +85,24 @@ for (const [arm, label, enc] of OTHERS) {
   const delta = pairedDelta(arm, 'base', hero)
   const eq = dmgEquiv(delta, hero)
   console.log(`${label.padEnd(20)}: Δwin ${fmtPct(delta)} -> ${fmtV(eq)} dmg-equiv (encodé ${enc})`)
+}
+
+console.log('\n=== Forgemaster (vs base_fm, greedy des 2 côtés) ===')
+for (const [arm, label, enc] of [
+  ['fm_cp1',       'CP (FM)',                 1.5],
+  ['fm_card1',     'pioche 1 (FM)',           2.0],
+  ['fm_gold2forge','2 Gold Ore sur la Forge', '—'],
+  ['fm_goldshield','Gold Shield porté',       '—'],
+  ['fm_goldhelmet','Gold Helmet porté',       '—'],
+]) {
+  const delta = pairedDelta(arm, 'base_fm', 'fm')
+  const eq = dmgEquiv(delta, 'fm')
+  console.log(`${label.padEnd(24)}: Δwin ${fmtPct(delta)} -> ${fmtV(eq)} dmg-equiv (encodé ${enc})`)
+}
+const baseFm = load('base_fm')
+if (baseFm.size) {
+  let wfm = 0; for (const r of baseFm.values()) if (r.hhScore === 1) wfm++
+  console.log(`base_fm : ${baseFm.size} parties · FM gagne ${(100 * wfm / baseFm.size).toFixed(1)}% vs BW`)
 }
 
 // ---- santé du run ----

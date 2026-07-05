@@ -1,0 +1,22 @@
+=== Étalons (valeur d'1 PV en win-rate) ===
+HH +4 PV : Δwin 14.41% ± 2.63 (n=340)  -> 1 PV = 3.60%
+BW +4 PV : Δwin 7.92% ± 4.06 (n=120)  -> 1 PV = 1.98%
+
+=== Échelle Dreadful (marginal du jeton n, encodé MARGINAL_VALUE=[3,3,3,5,0.5]) ===
+jeton 1 (0->1) : Δwin 3.75% ± 4.20 (n=160) -> 1.04 ± 1.18 dmg-equiv (encodé 3)
+jeton 2 (1->2) : Δwin -8.93% ± 4.13 (n=140) -> -2.48 ± 1.23 dmg-equiv (encodé 3)
+jeton 3 (2->3) : Δwin 4.58% ± 4.39 (n=120) -> 1.27 ± 1.24 dmg-equiv (encodé 3)
+jeton 4 (3->4) : Δwin 3.50% ± 5.42 (n=100) -> 0.97 ± 1.52 dmg-equiv (encodé 5)
+jeton 5 (4->5) : Δwin -2.08% ± 2.00 (n=240) -> -0.58 ± 0.56 dmg-equiv (encodé 0.5)
+
+=== Autres actifs (vs base) ===
+CP (HH)             : Δwin -0.21% ± 2.48 (n=240) -> -0.06 ± 0.69 dmg-equiv (encodé 1.5)
+pioche 1 (HH)       : Δwin 1.67% ± 4.09 (n=180) -> 0.46 ± 1.14 dmg-equiv (encodé 2)
+Grim Pursuit        : Δwin 6.03% ± 2.93 (n=340) -> 1.67 ± 0.87 dmg-equiv (encodé 1.66)
+Time Bomb infligée  : Δwin 7.08% ± 5.20 (n=120) -> 3.58 ± 3.21 dmg-equiv (encodé 2.8)
+CP (BW)             : Δwin -0.91% ± 2.47 (n=220) -> -0.46 ± 1.27 dmg-equiv (encodé 1.5)
+pioche 1 (BW)       : Δwin -6.25% ± 3.75 (n=240) -> -3.16 ± 2.49 dmg-equiv (encodé 2)
+Agility             : Δwin 8.75% ± 5.68 (n=80) -> 4.42 ± 3.66 dmg-equiv (encodé 2)
+Covert Ops          : Δwin -0.50% ± 3.38 (n=200) -> -0.25 ± 1.71 dmg-equiv (encodé 1.5)
+
+base : 1000 parties · HH gagne 47.6% · nuls 83 · timeouts 0

@@ -32,13 +32,30 @@ export const ARMS = {
   bw_card1:   s => { const p = bw(s); if (p.deck.length) p.hand.push(p.deck.shift()) },
   bw_agility1:s => { bw(s).tokens.agility += 1 },
   bw_covert1: s => { bw(s).tokens.covertOps += 1 },
+
+  // --- Forgemaster (matchup fm vs bw, greedy des deux côtés — réseau pas entraîné avec fm) ---
+  base_fm: null,
+  fm_hp4:  s => { fmp(s).hp += 4 },
+  fm_cp1:  s => { fmp(s).cp += 1 },
+  fm_card1:s => { const p = fmp(s); if (p.deck.length) p.hand.push(p.deck.shift()) },
+  // 2 Gold Ore déplacés du deck vers la Forge (état réaliste : deck plus mince, matériaux prêts)
+  fm_gold2forge: s => { const p = fmp(s); for (let k=0;k<2;k++){ const i=p.deck.indexOf('gold-ore'); if(i>=0){ p.deck.splice(i,1); p.forge.push('gold-ore'); } } },
+  fm_goldshield: s => { fmp(s).armor.shield = 1 },
+  fm_goldhelmet: s => { fmp(s).armor.helmet = 1 },
 }
 
 function hh(state) { return state.players.find(p => p.heroId === 'hh') }
 function bw(state) { return state.players.find(p => p.heroId === 'bw') }
+function fmp(state) { return state.players.find(p => p.heroId === 'fm') }
 
 // Le héros dont ce bras mesure la valeur (son win-rate est la métrique).
 export function armHero(arm) {
   if (arm === 'hh_tb1') return 'bw' // la TB sur HH est un actif de BW
+  if (arm === 'base_fm' || arm.startsWith('fm')) return 'fm'
   return arm.startsWith('bw') ? 'bw' : 'hh'
+}
+
+// Matchup du bras : les bras fm jouent fm vs bw (greedy des 2 côtés) ; le reste hh vs bw.
+export function armMatchup(arm) {
+  return (arm === 'base_fm' || arm.startsWith('fm')) ? ['fm', 'bw'] : ['hh', 'bw']
 }
