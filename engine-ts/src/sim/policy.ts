@@ -100,6 +100,9 @@ export interface RollManipulationChoice {
 // plays Action cards, since evaluating whether one is worth its CP needs more than a base-
 // damage heuristic.
 export const greedyHighestDamagePolicy: Policy = {
+  // Grim Pursuit (a) : E[bonus] = 5 dés x P(Fer)=2/6 ~ +1.67 dégâts pour 1 jeton. Un jeton
+  // stocké ne vaut que par sa dépense (cap 3) : on dépense dès que l'attaque touche.
+  chooseGrimPursuitSpend(state, playerIdx, dmg) { return dmg > 0 },
   chooseMidRollCards: () => [],
   // Scripted decision: in a Main Phase window, play the first affordable Hero Upgrade offered (the
   // engine re-enumerates after each play, so this plays every affordable upgrade one at a time —

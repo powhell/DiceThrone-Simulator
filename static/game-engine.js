@@ -2970,6 +2970,11 @@ var Game = (() => {
 
   // src/sim/policy.ts
   var greedyHighestDamagePolicy = {
+    // Grim Pursuit (a) : E[bonus] = 5 dés x P(Fer)=2/6 ~ +1.67 dégâts pour 1 jeton. Un jeton
+    // stocké ne vaut que par sa dépense (cap 3) : on dépense dès que l'attaque touche.
+    chooseGrimPursuitSpend(state, playerIdx, dmg) {
+      return dmg > 0;
+    },
     chooseMidRollCards: () => [],
     // Scripted decision: in a Main Phase window, play the first affordable Hero Upgrade offered (the
     // engine re-enumerates after each play, so this plays every affordable upgrade one at a time —
@@ -3781,20 +3786,16 @@ var Game = (() => {
       // of bonus damage, each replayed through resolveDefense (dice-independent, like the attack-
       // modifier scoring above — defendability isn't in this method's signature, so it approximates a
       // defendable attack for ranking). Same-seed-per-candidate keeps the comparison fair.
+      // Enquête v3 (2026-07-05) : le scoring par replay répondait NON 100% du temps — l'écart
+      // (+1.67 dégâts espérés) est sous le bruit de décision du réseau, et l'égalité retombe
+      // sur "ne pas dépenser". 59 jetons gagnés / 0 dépensés sur 12 parties => la calibration
+      // mesurait un jeton JAMAIS UTILISÉ (0.35). Règle robuste : dépenser dès que l'attaque
+      // touche, sauf garder le dernier jeton si Unescapable! est en main (mode b).
       chooseGrimPursuitSpend(state, playerIdx, dmg) {
-        const options = [false, true];
-        return scoreCandidatesByReplay(
-          network,
-          playerIdx,
-          state,
-          seedFor(state, 9),
-          options,
-          (clone, spend, rng) => {
-            let d = dmg;
-            if (spend) d += spendGrimPursuitForBonusDamage(clone.players[playerIdx], rng).bonus;
-            resolveDefense(clone, playerIdx, d, rng, [policy, policy]);
-          }
-        );
+        if (dmg <= 0) return false;
+        const self = state.players[playerIdx];
+        if (self.tokens.grimPursuit === 1 && self.hand.includes("unescapable")) return false;
+        return true;
       },
       // v1 gap, not an oversight: fires from WITHIN oracle.ts's roll loop for BW's mid-roll
       // upgrade plays (Red Room Training); scoring it would need the same resume machinery as
