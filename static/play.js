@@ -1371,6 +1371,22 @@
     paint();
     tg.onclick = ()=>{ coachLive=!coachLive; localStorage.setItem('dt_coach_live', coachLive?'1':'0'); paint(); renderMatch(); renderCoachPanel(); };
     tag.parentNode.insertBefore(tg, tag);
+    // Export de TOUTES les parties sauvegardées (localStorage en garde 20) — le bouton de fin
+    // de partie n'exportait que la dernière (user-caught).
+    const ex = document.createElement('button');
+    ex.className='btn'; ex.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px';
+    const histo = ()=>{ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } };
+    ex.textContent = `💾 Historique (${histo().length})`;
+    ex.onclick = ()=>{
+      const all = histo();
+      if (!all.length) { ex.textContent='💾 Historique (vide)'; return; }
+      const blob = new Blob([JSON.stringify(all, null, 1)], { type:'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `dicethrone_historique_${all.length}parties_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    };
+    tag.parentNode.insertBefore(ex, tag);
   })();
   // Tell the truth about which opponent is driving (learned net vs scripted fallback).
   const usingNet = !!window.AI_WEIGHTS && ai !== G.greedyHighestDamagePolicy;
