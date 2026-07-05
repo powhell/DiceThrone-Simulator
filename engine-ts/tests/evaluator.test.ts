@@ -7,14 +7,14 @@ beforeEach(() => clearCache())
 // EV = ability value exactly — verifiable from constants without running the solver.
 
 describe('terminal states', () => {
-  it('Reap at dreadful=0 (3+6=9)', () => {
-    // [4,4,4,6,1] → b=3, c=1, a=1 → Reap: 3 + MARGINAL[0]+MARGINAL[1] = 3+6 = 9
-    expect(evalState([1, 4, 4, 4, 6], 0, 0, false)).toBeCloseTo(9.0)
+  it('Reap at dreadful=0 (3+2.8=5.8, calibré 2026-07-05)', () => {
+    // [4,4,4,6,1] → b=3, c=1, a=1 → Reap: 3 + M[0]+M[1] = 3+1.9+0.9 = 5.8
+    expect(evalState([1, 4, 4, 4, 6], 0, 0, false)).toBeCloseTo(5.8)
   })
 
-  it('Reap at dreadful=0 with Head (+card draw = +2)', () => {
-    // [4,4,4,6,6] → b=3, c=2, hasHead → Reap: 3+6+2 = 11
-    expect(evalState([4, 4, 4, 6, 6], 0, 0, true)).toBeCloseTo(11.0)
+  it('Reap at dreadful=0 with Head (+card draw = +1.6)', () => {
+    // [4,4,4,6,6] → b=3, c=2, hasHead → Reap: 3+2.8+1.6 = 7.4
+    expect(evalState([4, 4, 4, 6, 6], 0, 0, true)).toBeCloseTo(7.4)
   })
 
   it('Spectral Assault at dreadful=0 (8+0=8)', () => {
@@ -27,41 +27,41 @@ describe('terminal states', () => {
     expect(evalState([1, 1, 3, 6, 6], 0, 4, false)).toBeCloseTo(14.0)
   })
 
-  it('Dreadful Charge at dreadful=0 (15+14=29)', () => {
-    // [6,6,6,6,6] → DC: 15 + (3+3+3+5) = 29
-    expect(evalState([6, 6, 6, 6, 6], 0, 0, false)).toBeCloseTo(29.0)
+  it('Dreadful Charge at dreadful=0 (15+4.8=19.8)', () => {
+    // [6,6,6,6,6] → DC: 15 + (1.9+0.9+0.9+1.1) = 19.8
+    expect(evalState([6, 6, 6, 6, 6], 0, 0, false)).toBeCloseTo(19.8)
   })
 
-  it('Dreadful Charge at dreadful=4 — near token cap (15+0.5=15.5)', () => {
-    // [6,6,6,6,6] → DC: 15 + MARGINAL[4] = 15+0.5 = 15.5
-    expect(evalState([6, 6, 6, 6, 6], 0, 4, false)).toBeCloseTo(15.5)
+  it('Dreadful Charge at dreadful=4 — near token cap (15+0=15)', () => {
+    // [6,6,6,6,6] → DC: 15 + M[4] = 15+0
+    expect(evalState([6, 6, 6, 6, 6], 0, 4, false)).toBeCloseTo(15.0)
   })
 
-  it('Horrify at dreadful=0 (6+9=15)', () => {
-    // [1,6,6,6,6] → c=4, a=1 → Horrify: 6 + (3+3+3) = 15
-    expect(evalState([1, 6, 6, 6, 6], 0, 0, false)).toBeCloseTo(15.0)
+  it('Horrify at dreadful=0 (6+3.7=9.7)', () => {
+    // [1,6,6,6,6] → c=4, a=1 → Horrify: 6 + (1.9+0.9+0.9) = 9.7
+    expect(evalState([1, 6, 6, 6, 6], 0, 0, false)).toBeCloseTo(9.7)
   })
 
-  it('Horrify at dreadful=0 with Head → 16.66', () => {
-    expect(evalState([1, 6, 6, 6, 6], 0, 0, true)).toBeCloseTo(16.66, 2)
+  it('Horrify at dreadful=0 with Head → 11.5', () => {
+    expect(evalState([1, 6, 6, 6, 6], 0, 0, true)).toBeCloseTo(11.5, 2)
   })
 
-  it('Ride Down at dreadful=0 (6+2×1.66=9.32) — needs the verified AAABB, not AABBB', () => {
-    // [1,1,2,4,4] → a=3, b=2 (true AAABB, no straight) → RideDown: 6 + 2*1.66 = 9.32
-    expect(evalState([1, 1, 2, 4, 4], 0, 0, false)).toBeCloseTo(9.32, 2)
+  it('Ride Down at dreadful=0 (6+2×1.8=9.6) — needs the verified AAABB, not AABBB', () => {
+    // [1,1,2,4,4] → a=3, b=2 (true AAABB, no straight) → RideDown: 6 + 2*1.8 = 9.6
+    expect(evalState([1, 1, 2, 4, 4], 0, 0, false)).toBeCloseTo(9.6, 2)
     // AABBB does NOT activate Ride Down (old matcher wrongly accepted it — user-caught in
     // the play UI): only the Whiff consolation remains.
-    expect(evalState([1, 2, 4, 4, 4], 0, 0, false)).toBeCloseTo(1.66, 2)
+    expect(evalState([1, 2, 4, 4, 4], 0, 0, false)).toBeCloseTo(1.8, 2)
   })
 
-  it('Sow Despair L at dreadful=0 (9+6=15)', () => {
-    // [1,2,3,4,5] → 5-straight → SowL: 9 + (3+3) = 15
-    expect(evalState([1, 2, 3, 4, 5], 0, 0, false)).toBeCloseTo(15.0)
+  it('Sow Despair L at dreadful=0 (9+2.8=11.8)', () => {
+    // [1,2,3,4,5] → 5-straight → SowL: 9 + (1.9+0.9) = 11.8
+    expect(evalState([1, 2, 3, 4, 5], 0, 0, false)).toBeCloseTo(11.8)
   })
 
-  it('Sow Despair S only — no 5-straight (7+3=10)', () => {
-    // [1,1,2,3,4] → unique {1,2,3,4} → 4-straight only → SowS: 7+3 = 10
-    expect(evalState([1, 1, 2, 3, 4], 0, 0, false)).toBeCloseTo(10.0)
+  it('Sow Despair S only — no 5-straight (7+1.9=8.9)', () => {
+    // [1,1,2,3,4] → unique {1,2,3,4} → 4-straight only → SowS: 7+1.9 = 8.9
+    expect(evalState([1, 1, 2, 3, 4], 0, 0, false)).toBeCloseTo(8.9)
   })
 
   it('Cleave 3A (no better ability)', () => {
@@ -74,9 +74,9 @@ describe('terminal states', () => {
     expect(evalState([1, 1, 1, 1, 6], 0, 0, false)).toBeCloseTo(5.0)
   })
 
-  it('Reap at dreadful=3 — reduced gain (3+5+0.5=8.5)', () => {
-    // [1,4,4,4,6] → Reap: 3 + MARGINAL[3]+MARGINAL[4] = 3+5+0.5 = 8.5
-    expect(evalState([1, 4, 4, 4, 6], 0, 3, false)).toBeCloseTo(8.5)
+  it('Reap at dreadful=3 — reduced gain (3+1.1+0=4.1)', () => {
+    // [1,4,4,4,6] → Reap: 3 + M[3]+M[4] = 3+1.1+0 = 4.1
+    expect(evalState([1, 4, 4, 4, 6], 0, 3, false)).toBeCloseTo(4.1)
   })
 
   it('throws on invalid state (5 dice required at rolls=0)', () => {
@@ -89,9 +89,9 @@ describe('terminal states', () => {
 describe('non-terminal states (oracle)', () => {
   it('[4,4,4,6,6] rolls=2 dreadful=0 — best keep EV ≈ 9.335', () => {
     const result = calculateOptimalKeep([4, 4, 4, 6, 6], 2, 0, false)
-    // 9.335 → 9.028 after the Ride Down matcher fix (AABBB keeps no longer credit a
-    // phantom Ride Down in the reroll EV).
-    expect(result.topOptions[0].ev).toBeCloseTo(9.028, 2)
+    // 9.335 → 9.028 (fix matcher Ride Down) → 7.5425 (recalibration 2026-07-05 : les
+    // Dreadful mesurés valent ~1/3 des anciens poids, l'EV de chasse aux Frayeurs baisse).
+    expect(result.topOptions[0].ev).toBeCloseTo(7.5425, 2)
   })
 
   it('[1,1,3,6,6] rolls=1 dreadful=2 — SA already matched, best EV = 11.0', () => {

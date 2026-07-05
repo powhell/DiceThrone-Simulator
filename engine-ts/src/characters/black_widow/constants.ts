@@ -49,9 +49,12 @@ export const RRT_ALL_ATTACK_BONUS = 1.0
 
 // Value conversions (heuristic EV weights for the reroll-decision oracle only — NOT real
 // game numbers. Real Vengeance/Grapple/Gauntlets numbers live in sim/data/characters/bw/hero.json.)
-export const AGILITY_VALUE = 2.0          // avg dmg mitigated per Agility (per BGG guide)
-export const CP_TO_DMG_EQUIV = 1.5        // same valuation as HH engine
-export const COVERT_OPS_VALUE = 1.5       // rough EV parity with CP_TO_DMG_EQUIV
+// CALIBRÉ 2026-07-05 (calibration v2) : Agility mesurée 1.47±0.36 ; CP(BW) et Covert Ops
+// mesurés ~0 mais c'est la POLITIQUE qui ne les exploite pas — alignés sur le CP HH mesuré
+// (0.75) plutôt que 0, à re-mesurer après ré-entraînement RL.
+export const AGILITY_VALUE = 1.5
+export const CP_TO_DMG_EQUIV = 0.75
+export const COVERT_OPS_VALUE = 0.75
 
 export const WHIFF_VALUE = 0.0
 

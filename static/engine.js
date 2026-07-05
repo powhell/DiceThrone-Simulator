@@ -199,8 +199,8 @@ var Engine = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 1.66;
-  var CARD_DRAW_VALUE = 2;
+  var GRIM_PURSUIT_AVG_DMG = 1.8;
+  var CARD_DRAW_VALUE = 1.6;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -240,7 +240,7 @@ var Engine = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [3, 3, 3, 5, 0.5];
+  var MARGINAL_VALUE = [1.9, 0.9, 0.9, 1.1, 0];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -478,9 +478,9 @@ var Engine = (() => {
   var WIDOWS_BITE_TB_INFLICTED = 1;
   var RRT_THRESHOLD_UPGRADES = 5;
   var RRT_ALL_ATTACK_BONUS = 1;
-  var AGILITY_VALUE = 2;
-  var CP_TO_DMG_EQUIV = 1.5;
-  var COVERT_OPS_VALUE = 1.5;
+  var AGILITY_VALUE = 1.5;
+  var CP_TO_DMG_EQUIV = 0.75;
+  var COVERT_OPS_VALUE = 0.75;
   var WHIFF_VALUE = 0;
   var COVERT_MISSION_DMG = 0;
   var RECON_DMG = 0;
@@ -489,8 +489,8 @@ var Engine = (() => {
   var SUBVERT_DMG = 0;
 
   // src/characters/black_widow/timebomb.ts
-  var TB_VALUE_LOW = 2.8;
-  var TB_VALUE_HIGH = 3.36;
+  var TB_VALUE_LOW = 1.6;
+  var TB_VALUE_HIGH = 1.9;
   var TB_STACK_CAP = 2;
   function tbMarginalValue(upgrades, currentTB) {
     if (currentTB >= TB_STACK_CAP) return 0;

@@ -20,9 +20,11 @@ export const ARMORED_UP_2ARMOR_BONUS = 2.0
 
 export const FINAL_TOUCHES_VALUE = 14.0
 
-// --- bootstraps provisoires (à calibrer) ---
-export const CP_TO_DMG_EQUIV = 1.5   // même convention que HH/BW en attendant la mesure
-export const CARD_DRAW_VALUE = 2.0
-export const MINE_VALUE = 1.5        // valeur d'un "Mine your deck" (Ore vers la Forge OU +1 CP)
-export const ORE_TUTOR_VALUE = 2.0   // Final Touches!: tutor l'Ore de son choix sur la Forge
+// --- CALIBRÉ 2026-07-05 (calibration v2, fm vs bw greedy — première mesure, à raffiner
+// après ré-entraînement RL). Un Gold Ore posé sur la Forge = 2.2 dmg-equiv (mesuré 4.33/2) ;
+// armures tier 1 ≈ 5.6-6.3. ---
+export const CP_TO_DMG_EQUIV = 0.75  // aligné HH mesuré (le greedy fm ne dépense pas : 0 mesuré)
+export const CARD_DRAW_VALUE = 1.3   // mesuré 1.27±0.22
+export const MINE_VALUE = 2.0        // P(Ore dans le top 3)≈0.87 x 2.2 + 0.13 x 0.75 CP
+export const ORE_TUTOR_VALUE = 2.2   // Final Touches! choisit son Ore (≥ valeur d'un Gold posé)
 export const WHIFF_VALUE = 0.0

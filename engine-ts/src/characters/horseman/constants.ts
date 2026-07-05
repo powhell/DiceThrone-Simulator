@@ -1,6 +1,10 @@
-export const GRIM_PURSUIT_AVG_DMG = 1.66
-export const CARD_DRAW_VALUE = 2.0
-export const CP_TO_DMG_EQUIV = 1.5
+// CALIBRÉ 2026-07-05 (voir calibration/resultats_v2_complets_20260705.txt) :
+// GP mesuré 1.80±0.37 (le 1.66 du guide = mode (b) seul ; le surplus = valeur d'option du
+// mode (a)) ; pioche 1.61±0.38 ; CP 0.75±0.24 (probablement borné par la politique — à
+// re-mesurer après le ré-entraînement RL, ne pas descendre plus bas sans nouvelle mesure).
+export const GRIM_PURSUIT_AVG_DMG = 1.8
+export const CARD_DRAW_VALUE = 1.6
+export const CP_TO_DMG_EQUIV = 0.75
 
 export const SPECTRAL_ASSAULT_BASE = 8.0
 export const SPECTRAL_ASSAULT_BASE_UPGRADED = 9.0 // Spectral Assault II

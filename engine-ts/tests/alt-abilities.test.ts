@@ -25,7 +25,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Ghostly Charge (AABC)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['cleave-ii'], 'Ghostly Charge (AABC)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(2.0 + 2 * 1.66, 5)
+    expect(e?.value).toBeCloseTo(2.0 + 2 * 1.8, 5) // GP calibré 1.8
   })
 
   it('Cursed Gallop (Ride Down II -> BBB): only appears with ride-down-ii in play', () => {
@@ -33,7 +33,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Cursed Gallop (BBB)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['ride-down-ii'], 'Cursed Gallop (BBB)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(1.0 + 1.66, 5)
+    expect(e?.value).toBeCloseTo(1.0 + 1.8, 5)
   })
 
   it('The Reaper (Reap II -> BBBCC): only appears with reap-ii in play', () => {
@@ -42,7 +42,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     const e = hhEntry(dice, 0, false, ['reap-ii'], 'The Reaper (BBBCC)')
     expect(e?.matched).toBe(true)
     // 4 dmg + dreadfulValueOfGaining(0,3)=9.0 + card draw (2.0)
-    expect(e?.value).toBeCloseTo(15.0, 5)
+    expect(e?.value).toBeCloseTo(4.0 + (1.9 + 0.9 + 0.9) + 1.6, 5) // The Reaper: dmg + 3 Dreadful calibrés + pioche 1.6
   })
 
   it('Haunted Strike (Spectral Assault II -> AACC): only appears with spectral-assault-ii in play', () => {
@@ -58,7 +58,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Spooky (CCC)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['horrify-ii'], 'Spooky (CCC)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(7.0 + 2 * 1.66, 5)
+    expect(e?.value).toBeCloseTo(7.0 + 2 * 1.8, 5)
   })
 })
 
@@ -68,7 +68,7 @@ describe('BW alt-abilities gated by upgradeIds', () => {
     expect(bwEntry(dice, 1, 0, [], 'Covert Mission')).toBeUndefined()
     const e = bwEntry(dice, 1, 0, ['widows-gauntlets-ii'], 'Covert Mission')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(2.8, 5) // TB gain value at upgrades<6
+    expect(e?.value).toBeCloseTo(1.6, 5) // TB calibrée 1.6 (upgrades<6)
   })
 
   it('Recon (Grapple II -> CCC): only appears with grapple-ii in play', () => {
@@ -76,7 +76,7 @@ describe('BW alt-abilities gated by upgradeIds', () => {
     expect(bwEntry(dice, 1, 0, [], 'Recon')).toBeUndefined()
     const e = bwEntry(dice, 1, 0, ['grapple-ii'], 'Recon')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(2.0 + 4.0, 5) // Agility + upgrade-search heuristic
+    expect(e?.value).toBeCloseTo(1.5 + 4.0, 5) // Agility calibrée 1.5 + upgrade-search heuristic
   })
 
   it('Spy Game (Infiltrate II -> AABCC): only appears with infiltrate-ii in play', () => {
@@ -84,7 +84,7 @@ describe('BW alt-abilities gated by upgradeIds', () => {
     expect(bwEntry(dice, 1, 0, [], 'Spy Game')).toBeUndefined()
     const e = bwEntry(dice, 1, 0, ['infiltrate-ii'], 'Spy Game')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(6.0 + 1.5 + 2.0, 5) // dmg + Covert Ops + Agility
+    expect(e?.value).toBeCloseTo(6.0 + 0.75 + 1.5, 5) // dmg + Covert Ops 0.75 + Agility 1.5 (calibrés)
   })
 
   it('Subvert (Vengeance II -> ABBB): only appears with vengeance-ii in play', () => {
@@ -92,7 +92,7 @@ describe('BW alt-abilities gated by upgradeIds', () => {
     expect(bwEntry(dice, 1, 0, [], 'Subvert')).toBeUndefined()
     const e = bwEntry(dice, 1, 0, ['vengeance-ii'], 'Subvert')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(1.5 + 2.0, 5) // Covert Ops + Agility
+    expect(e?.value).toBeCloseTo(0.75 + 1.5, 5) // Covert Ops + Agility calibrés
   })
 })
 
@@ -110,8 +110,8 @@ describe('HH base abilities buffed by their own II upgrade', () => {
 
   it('Ride Down: Grim Pursuit gain 2 -> 3 with ride-down-ii in play (dmg unchanged at 6)', () => {
     const dice = [1, 2, 3, 4, 5] // a=3, b=2, c=0
-    expect(hhEntry(dice, 0, false, [], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 2 * 1.66, 5)
-    expect(hhEntry(dice, 0, false, ['ride-down-ii'], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 3 * 1.66, 5)
+    expect(hhEntry(dice, 0, false, [], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 2 * 1.8, 5)
+    expect(hhEntry(dice, 0, false, ['ride-down-ii'], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 3 * 1.8, 5)
   })
 
   it('Sow Despair S/L: dreadful gain bumped (1->2 / 2->3), L also 9 -> 10 dmg, with sow-despair-ii', () => {
@@ -135,8 +135,8 @@ describe('HH base abilities buffed by their own II upgrade', () => {
 
   it('Horrify: Grim Pursuit becomes unconditional 2 (was 1, Head-only) with horrify-ii in play', () => {
     const dice = [6, 6, 6, 6, 1] // c=4, a=1
-    expect(hhEntry(dice, 0, false, [], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + 3 * 3.0, 5) // no Head, no upgrade
-    expect(hhEntry(dice, 0, false, ['horrify-ii'], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + 3 * 3.0 + 2 * 1.66, 5)
+    expect(hhEntry(dice, 0, false, [], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + (1.9 + 0.9 + 0.9), 5) // no Head, no upgrade (Dreadful calibrés)
+    expect(hhEntry(dice, 0, false, ['horrify-ii'], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + (1.9 + 0.9 + 0.9) + 2 * 1.8, 5) // Dreadful + GP calibrés
   })
 })
 

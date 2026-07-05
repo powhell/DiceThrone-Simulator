@@ -333,8 +333,8 @@ var Game = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 1.66;
-  var CARD_DRAW_VALUE = 2;
+  var GRIM_PURSUIT_AVG_DMG = 1.8;
+  var CARD_DRAW_VALUE = 1.6;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -374,7 +374,7 @@ var Game = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [3, 3, 3, 5, 0.5];
+  var MARGINAL_VALUE = [1.9, 0.9, 0.9, 1.1, 0];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -612,9 +612,9 @@ var Game = (() => {
   var WIDOWS_BITE_TB_INFLICTED = 1;
   var RRT_THRESHOLD_UPGRADES = 5;
   var RRT_ALL_ATTACK_BONUS = 1;
-  var AGILITY_VALUE = 2;
-  var CP_TO_DMG_EQUIV = 1.5;
-  var COVERT_OPS_VALUE = 1.5;
+  var AGILITY_VALUE = 1.5;
+  var CP_TO_DMG_EQUIV = 0.75;
+  var COVERT_OPS_VALUE = 0.75;
   var WHIFF_VALUE = 0;
   var COVERT_MISSION_DMG = 0;
   var RECON_DMG = 0;
@@ -623,8 +623,8 @@ var Game = (() => {
   var SUBVERT_DMG = 0;
 
   // src/characters/black_widow/timebomb.ts
-  var TB_VALUE_LOW = 2.8;
-  var TB_VALUE_HIGH = 3.36;
+  var TB_VALUE_LOW = 1.6;
+  var TB_VALUE_HIGH = 1.9;
   var TB_STACK_CAP = 2;
   function tbMarginalValue(upgrades, currentTB) {
     if (currentTB >= TB_STACK_CAP) return 0;
@@ -862,10 +862,10 @@ var Game = (() => {
   var ARMORED_UP_LARGE = 10;
   var ARMORED_UP_2ARMOR_BONUS = 2;
   var FINAL_TOUCHES_VALUE = 14;
-  var CP_TO_DMG_EQUIV2 = 1.5;
-  var CARD_DRAW_VALUE2 = 2;
-  var MINE_VALUE = 1.5;
-  var ORE_TUTOR_VALUE = 2;
+  var CP_TO_DMG_EQUIV2 = 0.75;
+  var CARD_DRAW_VALUE2 = 1.3;
+  var MINE_VALUE = 2;
+  var ORE_TUTOR_VALUE = 2.2;
   var WHIFF_VALUE2 = 0;
 
   // src/characters/forgemaster/abilities.ts

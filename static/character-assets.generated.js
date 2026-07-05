@@ -971,8 +971,8 @@ window.CHARACTER_ASSETS = {
         "id": "fm",
         "name": "Forgemaster",
         "diceAnatomy": "AAABBC — faces 1-3 = Pick (A), 4-5 = Forge (B), 6 = Anvil (C). Verified die leaflet (V1).",
-        "startingHp": null,
-        "cpIncomePerTurn": null,
+        "startingHp": 50,
+        "cpIncomePerTurn": 1,
         "setupNotes": "Hero Setup (verified leaflet): 'If you have more than 1 opponent, begin the game with any one Gold Armor.' In 1v1 (this engine) the Forgemaster therefore starts with NO Armor.",
         "source": "Encoded 2026-07-04 from user's scans in characters/forge_master/ (board x3, Forging Info Card x2, leaflet rules clarifications x2, die anatomy, 3 distinct Ore cards). No strategy guide exists for this hero.",
         "tokens": [],
@@ -1017,15 +1017,15 @@ window.CHARACTER_ASSETS = {
           },
           {
             "id": "furnace",
-            "boardName": "Furnace (BBBBB)",
-            "dicePattern": "BBBBB",
+            "boardName": "Furnace (BBBB)",
+            "dicePattern": "BBBB",
             "baseDamage": 5,
             "defendable": true,
             "bonusRoll": {
               "diceCount": "1",
               "addRolledValueAsDamage": true
             },
-            "notes": "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' (5 Forge symbols.)",
+            "notes": "Board: 'Deal 5 dmg and roll 1 die: Add dmg equal to the value rolled.' 4 Forge symbols (corrigé 2026-07-04 par le user contre le board physique — la première lecture photo disait 5).",
             "verified": true
           },
           {
