@@ -699,6 +699,17 @@
           c.appendChild(btn(`${amSel.has(id)?'✅ ':''}${AM_LABEL[id]||id}`, amSel.has(id)?'primary':'',
             ()=>{ amSel.has(id)?amSel.delete(id):amSel.add(id); renderControls(); }));
         }
+        // Ceux en main mais TROP CHERS : grisés avec la raison (user-caught : Cranial Assist
+        // 'disparaissait' au tour 1 après avoir payé des cartes de relance — CP insuffisant).
+        const heroAM = G.heroTemplateFor(HUMAN);
+        for (const id of ['unescapable','cranial-assist','subversion']) {
+          const cd = G.cardById(heroAM, id);
+          if (!cd || !you.hand.includes(id)) continue;
+          if (you.cp >= (cd.cpCost||0)) continue; // déjà listé au-dessus
+          const b2 = btn(`${AM_LABEL[id]||id} — coûte ${cd.cpCost} CP, il te reste ${you.cp}`, '', ()=>{});
+          b2.disabled = true;
+          c.appendChild(b2);
+        }
       }
       // A Good Haul : le Mine intégré garde son alternative "ne rien révéler, +1 CP"
       // (mot-clé Mine, validé user). Pré-armé AVANT l'attaque — les 3 cartes ne se
@@ -958,7 +969,15 @@
       const before = dice.map(d=>d.v).join(',');
       dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
       const after = dice.map(d=>d.v).join(',');
-      if (before !== after) log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+      if (before !== after) {
+        log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+        // Droit de réplique AUSSI sur ce chemin (user-caught : à 0 CP, aucune carte
+        // d'altération jouable -> on passait ici et la relance n'était jamais offerte).
+        if (rollsLeft > 0) {
+          log(`↩️ Il te reste ${rollsLeft} relance(s) — tu peux répliquer.`);
+          phase='roll'; renderAll(); return;
+        }
+      }
       phase='ability';
     } else phase='alter';
     renderAll(); }
