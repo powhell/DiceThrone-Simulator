@@ -227,7 +227,7 @@
     }
     if (phase==='aialter' && aiDice) {
       $('tray').innerHTML =
-        `<div class="empty" style="width:100%">⚔️ LE JET DE L'IA — clique 1-2 dés à altérer (Helping Hand!/Tip It!/So Wild!...) :</div>` +
+        `<div class="empty" style="width:100%">⚔️ LE JET FINAL DE L'IA — <b>0 relance restante</b> (ses 3 tentatives sont faites ; elle ne peut plus que répondre avec des cartes, CP : ${g.state.players[g.aiIdx].cp}). Clique 1-2 dés à altérer :</div>` +
         aiDice.map((v,i)=>dieHTML(aiHero, {v,kept:aiAlterSel.has(i)}, i, true)).join('');
       $('tray').querySelectorAll('.die').forEach(el=>{
         el.onclick = () => { const i=+el.dataset.i;
@@ -700,7 +700,7 @@
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
     } else if (phase==='aialter') {
       const s0=document.createElement('span'); s0.className='rolls';
-      s0.textContent = "Le jet de l'IA est ouvert à l'altération. Clique ses dés puis joue une carte :";
+      s0.textContent = "Jet FINAL de l'IA (elle ne relancera pas — un dé cassé reste cassé, sauf carte de réponse). Clique ses dés puis joue :";
       c.appendChild(s0);
       const sel=[...aiAlterSel].sort((x,y)=>x-y);
       const show = G.humanAiAlterOptions(g).filter(o=>{
