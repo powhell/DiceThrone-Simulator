@@ -115,7 +115,6 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
   self.minesDrawUsedThisTurn = false
-  self.hoardedDice = 0
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -1516,6 +1515,10 @@ export function playNaraxusTurn(state: GameState, bossIdx: 0 | 1, rng: RNG, poli
 
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
   const self = state.players[playerIdx]
+  if (self.hoardedDice > 0) {
+    log(state, playerIdx, 'endOfTurn', `Hoarding: ${self.hoardedDice} stolen die returned`)
+    self.hoardedDice = 0
+  }
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   if (self.heroId === 'hh' && hh.endOfTurnHeadCheck(self)) {
     log(state, playerIdx, 'endOfTurn', 'Opponent holds the Head: +1 Dreadful')

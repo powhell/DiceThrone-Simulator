@@ -182,9 +182,11 @@ export function humanApplyMain(g: HumanGame, action: WindowAction, phase: 'main1
 // Offensive Roll Phase, UI-controlled keeps (instead of the DP oracle the AI uses). First roll:
 // prev=null. Subsequent rolls: pass the current dice + a keep-mask; unkept dice are rerolled.
 export function rollOffense(g: HumanGame, prev: number[] | null, keep: boolean[]): number[] {
-  if (!prev) return rollDice(5, g.rng).sort((a, b) => a - b)
+  // Hoarding (Naraxus) : le de vole est indisponible pendant TOUT ton tour -> jet a 5-n des.
+  const n = 5 - (g.state.players[g.humanIdx].hoardedDice || 0)
+  if (!prev) return rollDice(n, g.rng).sort((a, b) => a - b)
   const kept = prev.filter((_, i) => keep[i])
-  const rerolled = rollDice(5 - kept.length, g.rng)
+  const rerolled = rollDice(n - kept.length, g.rng)
   return [...kept, ...rerolled].sort((a, b) => a - b)
 }
 

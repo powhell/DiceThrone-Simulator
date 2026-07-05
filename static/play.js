@@ -134,6 +134,7 @@
   }
   function liveAdvice(){
     if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
+    if (dice.length < 5) return null; // Hoarding : l'oracle exact exige 5 dés — coach muet ce tour
     // The key must carry the SOLVER STATE too (Dreadful count, Head, upgrades in play — see
     // oracleStateFor): keyed on dice+rerolls alone, a turn-1 answer got replayed all game.
     const you = g.state.players[g.humanIdx];
@@ -274,9 +275,11 @@
         `<div class="empty" style="width:100%"><b>${verdict}</b></div>`;
       return;
     }
+    const hoardNote = (g.state.players[g.humanIdx].hoardedDice>0)
+      ? `<div class="empty" style="width:100%">🐲 Naraxus te vole ${g.state.players[g.humanIdx].hoardedDice} dé ce tour !</div>` : '';
     $('tray').innerHTML = dice.length
-      ? dice.map((d,i)=>dieHTML(humanHero, d, i, phase==='roll' && attempts>0)).join('')
-      : '<div class="empty">Lance les dés pour commencer ton attaque.</div>';
+      ? hoardNote + dice.map((d,i)=>dieHTML(humanHero, d, i, phase==='roll' && attempts>0)).join('')
+      : hoardNote + '<div class="empty">Lance les dés pour commencer ton attaque.</div>';
     if (animate) $('tray').querySelectorAll('.die:not(.kept)').forEach(el=>el.classList.add('rolling'));
     if (phase==='roll' && attempts>0) $('tray').querySelectorAll('.die').forEach(el=>{
       const i=+el.dataset.i;

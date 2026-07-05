@@ -1741,7 +1741,6 @@ var Game = (() => {
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
     self.minesDrawUsedThisTurn = false;
-    self.hoardedDice = 0;
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
@@ -2843,6 +2842,10 @@ var Game = (() => {
   }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
+    if (self.hoardedDice > 0) {
+      log(state, playerIdx, "endOfTurn", `Hoarding: ${self.hoardedDice} stolen die returned`);
+      self.hoardedDice = 0;
+    }
     const opp = state.players[1 - playerIdx];
     if (self.heroId === "hh" && endOfTurnHeadCheck(self)) {
       log(state, playerIdx, "endOfTurn", "Opponent holds the Head: +1 Dreadful");
@@ -3079,9 +3082,10 @@ var Game = (() => {
     applyWindowAction(g.state, g.humanIdx, action, mainCtx(phase), g.rng);
   }
   function rollOffense(g, prev, keep) {
-    if (!prev) return rollDice(5, g.rng).sort((a, b) => a - b);
+    const n = 5 - (g.state.players[g.humanIdx].hoardedDice || 0);
+    if (!prev) return rollDice(n, g.rng).sort((a, b) => a - b);
     const kept = prev.filter((_, i) => keep[i]);
-    const rerolled = rollDice(5 - kept.length, g.rng);
+    const rerolled = rollDice(n - kept.length, g.rng);
     return [...kept, ...rerolled].sort((a, b) => a - b);
   }
   function beginOffensiveAlter(g, dice) {
