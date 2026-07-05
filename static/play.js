@@ -134,7 +134,7 @@
   }
   function liveAdvice(){
     if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
-    if (dice.length < 5) return null; // Hoarding : l'oracle exact exige 5 dés — coach muet ce tour
+    // Hoarding : le solveur gère maintenant 4 dés nativement (DP généralisé) — coach actif.
     // The key must carry the SOLVER STATE too (Dreadful count, Head, upgrades in play — see
     // oracleStateFor): keyed on dice+rerolls alone, a turn-1 answer got replayed all game.
     const you = g.state.players[g.humanIdx];

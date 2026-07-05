@@ -21,8 +21,8 @@ export interface SolverResult {
 const evMemo = new Map<string, number>()
 const distMemo = new Map<string, Record<string, number>>()
 
-function cacheKey<S>(cfg: CharacterConfig<S>, kept: number[], rollsRemaining: number, state: S): string {
-  return `${cfg.id}|${kept.join(',')}|${rollsRemaining}|${cfg.stateKey(state)}`
+function cacheKey<S>(cfg: CharacterConfig<S>, kept: number[], rollsRemaining: number, state: S, totalDice: number): string {
+  return `${cfg.id}|${totalDice}|${kept.join(',')}|${rollsRemaining}|${cfg.stateKey(state)}`
 }
 
 export function clearCache(): void {
@@ -30,28 +30,30 @@ export function clearCache(): void {
   distMemo.clear()
 }
 
+// totalDice : 5 normalement — 4 quand Naraxus a volé un dé (Hoarding), le solveur reste exact.
 export function evalState<S>(
   cfg: CharacterConfig<S>,
   kept: number[],
   rollsRemaining: number,
   state: S,
+  totalDice = 5,
 ): number {
   if (rollsRemaining === 0) {
-    if (kept.length !== 5) throw new Error(`evalState: need 5 dice at rolls=0, got ${kept.length}`)
+    if (kept.length !== totalDice) throw new Error(`evalState: need ${totalDice} dice at rolls=0, got ${kept.length}`)
     return cfg.bestAbilityValue(kept, state)
   }
 
-  const key = cacheKey(cfg, kept, rollsRemaining, state)
+  const key = cacheKey(cfg, kept, rollsRemaining, state, totalDice)
   const cached = evMemo.get(key)
   if (cached !== undefined) return cached
 
-  const nReroll = 5 - kept.length
+  const nReroll = totalDice - kept.length
   const prob = Math.pow(1 / 6, nReroll)
 
   let totalEv = 0.0
   for (const outcome of enumerateOutcomes(nReroll)) {
     const full = [...kept, ...outcome].sort((a, b) => a - b)
-    totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state)
+    totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state, totalDice)
   }
 
   evMemo.set(key, totalEv)
@@ -63,17 +65,19 @@ function _bestKeepEv<S>(
   full: number[],
   rollsRemaining: number,
   state: S,
+  totalDice = 5,
 ): number {
-  if (rollsRemaining === 0) return evalState(cfg, full, 0, state)
+  if (rollsRemaining === 0) return evalState(cfg, full, 0, state, totalDice)
 
   let best = -Infinity
-  for (let mask = 0; mask < 32; mask++) {
+  const n = full.length
+  for (let mask = 0; mask < (1 << n); mask++) {
     const kept: number[] = []
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < n; i++) {
       if (mask & (1 << i)) kept.push(full[i])
     }
     kept.sort((a, b) => a - b)
-    const ev = evalState(cfg, kept, rollsRemaining, state)
+    const ev = evalState(cfg, kept, rollsRemaining, state, totalDice)
     if (ev > best) best = ev
   }
   return best
@@ -84,19 +88,20 @@ function _optimalKeep<S>(
   full: number[],
   rollsRemaining: number,
   state: S,
+  totalDice = 5,
 ): number[] {
   if (rollsRemaining === 0) return full
 
   let bestEv = -Infinity
   let bestKept: number[] = full
-
-  for (let mask = 0; mask < 32; mask++) {
+  const n = full.length
+  for (let mask = 0; mask < (1 << n); mask++) {
     const kept: number[] = []
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < n; i++) {
       if (mask & (1 << i)) kept.push(full[i])
     }
     kept.sort((a, b) => a - b)
-    const ev = evalState(cfg, kept, rollsRemaining, state)
+    const ev = evalState(cfg, kept, rollsRemaining, state, totalDice)
     if (ev > bestEv) { bestEv = ev; bestKept = kept }
   }
   return bestKept
@@ -107,24 +112,25 @@ function _abilityDist<S>(
   kept: number[],
   rollsRemaining: number,
   state: S,
+  totalDice = 5,
 ): Record<string, number> {
   if (rollsRemaining === 0) {
-    if (kept.length !== 5) throw new Error('Need 5 dice at rolls=0')
+    if (kept.length !== totalDice) throw new Error(`Need ${totalDice} dice at rolls=0`)
     return { [cfg.bestAbilityName(kept, state)]: 1.0 }
   }
 
-  const key = cacheKey(cfg, kept, rollsRemaining, state)
+  const key = cacheKey(cfg, kept, rollsRemaining, state, totalDice)
   const cached = distMemo.get(key)
   if (cached !== undefined) return cached
 
-  const nReroll = 5 - kept.length
+  const nReroll = totalDice - kept.length
   const prob = Math.pow(1 / 6, nReroll)
   const dist: Record<string, number> = {}
 
   for (const outcome of enumerateOutcomes(nReroll)) {
     const full = [...kept, ...outcome].sort((a, b) => a - b)
-    const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state)
-    const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state)
+    const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state, totalDice)
+    const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state, totalDice)
     for (const [name, p] of Object.entries(sub)) {
       dist[name] = (dist[name] ?? 0) + prob * p
     }
@@ -140,6 +146,7 @@ export function calculateOptimalKeep<S>(
   rollsRemaining: number,
   state: S,
 ): SolverResult {
+  const totalDice = dice.length // 4 quand Naraxus a vole un de (Hoarding) — solveur exact quand meme
   const sorted = [...dice].sort((a, b) => a - b)
   const currentEv = cfg.bestAbilityValue(sorted, state)
   const directMap = cfg.directDamageByName?.(state) ?? null
@@ -157,7 +164,7 @@ export function calculateOptimalKeep<S>(
   }
 
   if (rollsRemaining === 0) {
-    const dist = _abilityDist(cfg, sorted, 0, state)
+    const dist = _abilityDist(cfg, sorted, 0, state, totalDice)
     return {
       currentEv,
       topOptions: [annotateDirect({
@@ -172,9 +179,9 @@ export function calculateOptimalKeep<S>(
   const seenKeys = new Set<string>()
   const options: KeepOption[] = []
 
-  for (let mask = 0; mask < 32; mask++) {
+  for (let mask = 0; mask < (1 << totalDice); mask++) {
     const kept: number[] = []
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < totalDice; i++) {
       if (mask & (1 << i)) kept.push(sorted[i])
     }
     kept.sort((a, b) => a - b)
@@ -182,8 +189,8 @@ export function calculateOptimalKeep<S>(
     if (seenKeys.has(kKey)) continue
     seenKeys.add(kKey)
 
-    const ev = evalState(cfg, kept, rollsRemaining, state)
-    const dist = _abilityDist(cfg, kept, rollsRemaining, state)
+    const ev = evalState(cfg, kept, rollsRemaining, state, totalDice)
+    const dist = _abilityDist(cfg, kept, rollsRemaining, state, totalDice)
     options.push(annotateDirect({ kept, ev, probDist: _distToPercent(dist) }))
   }
 

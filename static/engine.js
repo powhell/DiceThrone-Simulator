@@ -51,56 +51,58 @@ var Engine = (() => {
   // src/core/evaluator.ts
   var evMemo = /* @__PURE__ */ new Map();
   var distMemo = /* @__PURE__ */ new Map();
-  function cacheKey(cfg, kept, rollsRemaining, state) {
-    return `${cfg.id}|${kept.join(",")}|${rollsRemaining}|${cfg.stateKey(state)}`;
+  function cacheKey(cfg, kept, rollsRemaining, state, totalDice) {
+    return `${cfg.id}|${totalDice}|${kept.join(",")}|${rollsRemaining}|${cfg.stateKey(state)}`;
   }
   function clearCache() {
     evMemo.clear();
     distMemo.clear();
   }
-  function evalState(cfg, kept, rollsRemaining, state) {
+  function evalState(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
-      if (kept.length !== 5) throw new Error(`evalState: need 5 dice at rolls=0, got ${kept.length}`);
+      if (kept.length !== totalDice) throw new Error(`evalState: need ${totalDice} dice at rolls=0, got ${kept.length}`);
       return cfg.bestAbilityValue(kept, state);
     }
-    const key = cacheKey(cfg, kept, rollsRemaining, state);
+    const key = cacheKey(cfg, kept, rollsRemaining, state, totalDice);
     const cached = evMemo.get(key);
     if (cached !== void 0) return cached;
-    const nReroll = 5 - kept.length;
+    const nReroll = totalDice - kept.length;
     const prob = Math.pow(1 / 6, nReroll);
     let totalEv = 0;
     for (const outcome of enumerateOutcomes(nReroll)) {
       const full = [...kept, ...outcome].sort((a, b) => a - b);
-      totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state);
+      totalEv += prob * _bestKeepEv(cfg, full, rollsRemaining - 1, state, totalDice);
     }
     evMemo.set(key, totalEv);
     return totalEv;
   }
-  function _bestKeepEv(cfg, full, rollsRemaining, state) {
-    if (rollsRemaining === 0) return evalState(cfg, full, 0, state);
+  function _bestKeepEv(cfg, full, rollsRemaining, state, totalDice = 5) {
+    if (rollsRemaining === 0) return evalState(cfg, full, 0, state, totalDice);
     let best = -Infinity;
-    for (let mask = 0; mask < 32; mask++) {
+    const n = full.length;
+    for (let mask = 0; mask < 1 << n; mask++) {
       const kept = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < n; i++) {
         if (mask & 1 << i) kept.push(full[i]);
       }
       kept.sort((a, b) => a - b);
-      const ev = evalState(cfg, kept, rollsRemaining, state);
+      const ev = evalState(cfg, kept, rollsRemaining, state, totalDice);
       if (ev > best) best = ev;
     }
     return best;
   }
-  function _optimalKeep(cfg, full, rollsRemaining, state) {
+  function _optimalKeep(cfg, full, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) return full;
     let bestEv = -Infinity;
     let bestKept = full;
-    for (let mask = 0; mask < 32; mask++) {
+    const n = full.length;
+    for (let mask = 0; mask < 1 << n; mask++) {
       const kept = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < n; i++) {
         if (mask & 1 << i) kept.push(full[i]);
       }
       kept.sort((a, b) => a - b);
-      const ev = evalState(cfg, kept, rollsRemaining, state);
+      const ev = evalState(cfg, kept, rollsRemaining, state, totalDice);
       if (ev > bestEv) {
         bestEv = ev;
         bestKept = kept;
@@ -108,21 +110,21 @@ var Engine = (() => {
     }
     return bestKept;
   }
-  function _abilityDist(cfg, kept, rollsRemaining, state) {
+  function _abilityDist(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
-      if (kept.length !== 5) throw new Error("Need 5 dice at rolls=0");
+      if (kept.length !== totalDice) throw new Error(`Need ${totalDice} dice at rolls=0`);
       return { [cfg.bestAbilityName(kept, state)]: 1 };
     }
-    const key = cacheKey(cfg, kept, rollsRemaining, state);
+    const key = cacheKey(cfg, kept, rollsRemaining, state, totalDice);
     const cached = distMemo.get(key);
     if (cached !== void 0) return cached;
-    const nReroll = 5 - kept.length;
+    const nReroll = totalDice - kept.length;
     const prob = Math.pow(1 / 6, nReroll);
     const dist = {};
     for (const outcome of enumerateOutcomes(nReroll)) {
       const full = [...kept, ...outcome].sort((a, b) => a - b);
-      const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state);
-      const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state);
+      const bestKept = _optimalKeep(cfg, full, rollsRemaining - 1, state, totalDice);
+      const sub = _abilityDist(cfg, bestKept, rollsRemaining - 1, state, totalDice);
       for (const [name, p] of Object.entries(sub)) {
         dist[name] = (dist[name] ?? 0) + prob * p;
       }
@@ -131,6 +133,7 @@ var Engine = (() => {
     return dist;
   }
   function calculateOptimalKeep(cfg, dice, rollsRemaining, state) {
+    const totalDice = dice.length;
     const sorted = [...dice].sort((a, b) => a - b);
     const currentEv = cfg.bestAbilityValue(sorted, state);
     const directMap = cfg.directDamageByName?.(state) ?? null;
@@ -146,7 +149,7 @@ var Engine = (() => {
       return opt;
     };
     if (rollsRemaining === 0) {
-      const dist = _abilityDist(cfg, sorted, 0, state);
+      const dist = _abilityDist(cfg, sorted, 0, state, totalDice);
       return {
         currentEv,
         topOptions: [annotateDirect({
@@ -159,17 +162,17 @@ var Engine = (() => {
     }
     const seenKeys = /* @__PURE__ */ new Set();
     const options = [];
-    for (let mask = 0; mask < 32; mask++) {
+    for (let mask = 0; mask < 1 << totalDice; mask++) {
       const kept = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < totalDice; i++) {
         if (mask & 1 << i) kept.push(sorted[i]);
       }
       kept.sort((a, b) => a - b);
       const kKey = kept.join(",");
       if (seenKeys.has(kKey)) continue;
       seenKeys.add(kKey);
-      const ev = evalState(cfg, kept, rollsRemaining, state);
-      const dist = _abilityDist(cfg, kept, rollsRemaining, state);
+      const ev = evalState(cfg, kept, rollsRemaining, state, totalDice);
+      const dist = _abilityDist(cfg, kept, rollsRemaining, state, totalDice);
       options.push(annotateDirect({ kept, ev, probDist: _distToPercent(dist) }));
     }
     options.sort((a, b) => b.ev - a.ev);

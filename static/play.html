@@ -20,7 +20,7 @@
   body{font-family:var(--sans); color:var(--ink); background:var(--felt);
     background-image:radial-gradient(120% 80% at 50% 6%, #241a33 0%, #17111f 46%, #0e0a14 100%);
     min-height:100vh; padding:16px; -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:12px}
+  .wrap{max-width:1560px; margin:0 auto; display:flex; flex-direction:column; gap:12px}
   .mast{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;
     border-bottom:1px solid var(--edge); padding-bottom:9px}
   .mast h1{font-family:var(--display); font-weight:700; font-size:22px; margin:0}
@@ -30,7 +30,8 @@
   .fighter{display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
     background:linear-gradient(180deg,var(--panel),var(--felt-2)); border:1px solid var(--edge);
     border-radius:var(--r); padding:11px 15px}
-  .fighter.you{border-color:var(--hh-dim)} .fighter.ai{border-color:var(--bw-dim)}
+  .fighter.you{border-color:var(--hh-dim); position:sticky; bottom:8px; z-index:40; box-shadow:0 -6px 24px #000c}
+  .fighter.ai{border-color:var(--bw-dim); position:sticky; top:8px; z-index:40; box-shadow:0 6px 24px #000c}
   .fighter.active{box-shadow:0 0 0 2px var(--gold)}
   .crest{width:44px; height:44px; border-radius:11px; display:grid; place-items:center;
     font-family:var(--display); font-weight:700; font-size:20px; color:#120c17}
@@ -55,7 +56,7 @@
   .tok.agi .dot{background:#5fd0d6} .tok.covert .dot{background:#7ba7ff}
   .tok.head{border-color:#7a5c1f} .tok.bomb{border-color:var(--danger)} .tok.bomb .dot{background:var(--danger)}
 
-  .arena{display:grid; grid-template-columns:260px 1fr 300px; gap:12px}
+  .arena{display:grid; grid-template-columns:280px 1fr 420px; gap:12px}
   @media(max-width:1100px){.arena{grid-template-columns:1fr 300px} .col-left{grid-column:1 / -1} .col-left .abils{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}}
   @media(max-width:860px){.arena{grid-template-columns:1fr}}
   .col-main,.col-side,.col-left{display:flex; flex-direction:column; gap:12px}
@@ -120,7 +121,7 @@
   .evrow .dist{font-size:10.5px; color:var(--muted); grid-column:1 / -1; line-height:1.35}
   .evrow .sure{font-size:9px; font-weight:700; letter-spacing:.06em; color:#120c17; background:var(--hp);
     border-radius:4px; padding:1px 5px; vertical-align:1px; margin-left:5px}
-  .log{display:flex; flex-direction:column; font-size:12.5px; max-height:280px; overflow-y:auto}
+  .log{display:flex; flex-direction:column; font-size:12.5px; max-height:420px; overflow-y:auto}
   .log .l{padding:5px 2px; border-bottom:1px solid #241c31; color:var(--muted); line-height:1.35}
   .log .l:last-child{border-bottom:0} .log .l b{color:var(--ink); font-weight:600}
   .log .l .t{font-family:var(--mono); font-size:10px; color:var(--muted-2); margin-right:6px}
