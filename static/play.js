@@ -772,11 +772,16 @@
       const sel = [...defSel].sort((x,y)=>x-y);
       const show = pendingDefense.options.filter(o=>{
         if (o.kind==='pass') return false;
-        if (o.kind==='rerollAll') return true;
+        if (o.kind==='rerollAll') return sel.length===0; // sans sélection : relance tout
         if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
         if (o.kind==='setDie') return false; // remplacés par fullWildOptions (6 valeurs)
         return true; // cards, instants, token moves — always visible
       }).concat(fullWildOptions(sel, pendingDefense.defenseDice||[]));
+      // Better D! ("up to five dice") : relance les dés SÉLECTIONNÉS — le moteur supporte
+      // dieIndices, seule l'UI n'offrait que tout-ou-un-seul (user-caught : impossible d'en
+      // relancer 3).
+      const bd = pendingDefense.options.find(o=>o.kind==='rerollAll' && o.cardId==='better-d');
+      if (bd && sel.length>=1) show.push({kind:'rerollAll', cardId:'better-d', dieIndices:sel});
       show.slice(0,10).forEach(o=>{
         if (o.kind==='rerollAll') {
           const n = defSel.size;
@@ -1227,7 +1232,7 @@
         return `${cn(a.cardId)} : dé ${a.dieIndex+1}${old!=null?` (${old}→${old+a.delta})`:` ${a.delta>0?'+1':'−1'}`}${cp(a.cardId)}`;
       }
       case 'rerollDie':return `${cn(a.cardId)} : relance le dé ${a.dieIndex+1}${cp(a.cardId)}`;
-      case 'rerollAll':return `${cn(a.cardId)} : relance TOUS tes dés de défense${cp(a.cardId)}`;
+      case 'rerollAll':return a.dieIndices ? `${cn(a.cardId)} : relance les ${a.dieIndices.length} dé(s) sélectionné(s)${cp(a.cardId)}` : `${cn(a.cardId)} : relance TOUS tes dés de défense${cp(a.cardId)}`;
       case 'moveHead': return `Rolling Pumpkin! : Tête Hantée ${a.toIdx===g.humanIdx?'vers TOI':'vers l\'IA'}`;
       case 'spendGrimPursuitBonus': return 'Grim Pursuit : lance 5 dés, +1 dégât par Fer';
       // Token-manipulation cards enumerate one option PER TARGET — without saying who, they
