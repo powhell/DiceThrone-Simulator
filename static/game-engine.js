@@ -2411,11 +2411,19 @@ var Game = (() => {
     }
     let remaining = Math.max(0, incomingDamage - damagePrevented);
     let eludeEligible = false;
-    if (defender.tokens.agility > 0 && remaining > 0) {
+    let agilitySuccesses = 0;
+    while (defender.tokens.agility > 0 && remaining > 0 && agilitySuccesses < 2) {
       const r = spendAgilityToHalveDamage(defender, remaining, rng);
-      remaining = r.remainingDamage;
-      log(state, defenderIdx, "defense", `Agility spent: rolled ${r.roll}, ${r.succeeded ? "halved damage" : "no effect"}`);
-      eludeEligible = !r.succeeded && r.roll >= 5;
+      if (r.succeeded) {
+        agilitySuccesses += 1;
+        remaining = agilitySuccesses >= 2 ? 0 : r.remainingDamage;
+        log(state, defenderIdx, "defense", agilitySuccesses >= 2 ? `Agility spent: rolled ${r.roll} \u2014 SECOND half = 100% prevented (verified clarification)` : `Agility spent: rolled ${r.roll}, halved damage`);
+      } else {
+        remaining = r.remainingDamage;
+        log(state, defenderIdx, "defense", `Agility spent: rolled ${r.roll}, no effect`);
+        eludeEligible = r.roll >= 5;
+        break;
+      }
     }
     state.pendingAttack = { attackerIdx, defenderIdx, remaining };
     resolveResponseWindow(

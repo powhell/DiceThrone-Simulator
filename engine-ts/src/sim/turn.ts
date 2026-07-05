@@ -973,15 +973,24 @@ export function finalizeDefenseRoll(
   // ANY defender holding Agility may use it — tokens are cross-player-transferable by design
   // (Transference!), and the old `heroId === 'bw'` gate made a stolen Agility token dead weight
   // (user-caught: stole it, couldn't use it, lost).
-  if (defender.tokens.agility > 0 && remaining > 0) {
-    // TODO(user): MVP auto-spends Agility whenever available; make this an explicit Policy
-    // decision once card/Agility timing rules (guide: "peut être dépensée à tout moment") are settled.
+  // Jusqu'à 2 Agility sur la même attaque (clarification vérifiée du leaflet BW :
+  // "Double prévention ½ dégâts -> 100 % prévention (calcul simultané)", user-caught).
+  // MVP auto-spend ; TODO(user) : décision de Policy/humain.
+  let agilitySuccesses = 0
+  while (defender.tokens.agility > 0 && remaining > 0 && agilitySuccesses < 2) {
     const r = bw.spendAgilityToHalveDamage(defender, remaining, rng)
-    remaining = r.remainingDamage
-    log(state, defenderIdx, 'defense', `Agility spent: rolled ${r.roll}, ${r.succeeded ? 'halved damage' : 'no effect'}`)
-    // Elude! (verified card text): only playable when the Agility roll landed on 5-6 — a
-    // subset of the "fail" range (4-6) that would otherwise waste the token for nothing.
-    eludeEligible = !r.succeeded && r.roll >= 5
+    if (r.succeeded) {
+      agilitySuccesses += 1
+      remaining = agilitySuccesses >= 2 ? 0 : r.remainingDamage
+      log(state, defenderIdx, 'defense', agilitySuccesses >= 2
+        ? `Agility spent: rolled ${r.roll} — SECOND half = 100% prevented (verified clarification)`
+        : `Agility spent: rolled ${r.roll}, halved damage`)
+    } else {
+      remaining = r.remainingDamage
+      log(state, defenderIdx, 'defense', `Agility spent: rolled ${r.roll}, no effect`)
+      eludeEligible = r.roll >= 5
+      break // un échec : on ne brûle pas le 2e jeton automatiquement (MVP conservateur)
+    }
   }
 
   // DRP5: response window (Advanced Rules) — both players have priority in turn, active player
