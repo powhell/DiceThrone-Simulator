@@ -21,7 +21,7 @@ import { greedyHighestDamagePolicy } from './policy.js'
 import { resolveMatchedAbilities } from './ability-resolver.js'
 import { resolveResponseWindow } from './decision.js'
 import {
-  playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn, drawCards,
+  playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn, drawCards, naraxusUpToRoll,
   playMainPhase, playOffensiveRollPhase, resolveOffensiveAlterWindow, checkGameOver,
   enumerateWindowActions, applyWindowAction, resolveAbilityPhase, playTurn, oracleStateFor,
   applyRollManipulationCard,
@@ -32,6 +32,7 @@ import { heroTemplateFor, cardById } from './data/load.js'
 import { STARTING_HP, HEAL_CAP_ABOVE_STARTING } from './data/config.js'
 import { grantCp } from './cp.js'
 import { isOre as fmIsOre, craftOptions as fmCraftOptions, craftSpecific as fmCraftSpecific } from './hero/fm.rules.js'
+import { nxAttackInfo } from './hero/nx.rules.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
 import { fmConfig } from '../characters/forgemaster/config.js'
@@ -46,12 +47,24 @@ export interface HumanGame {
   def?: DefenseSession   // live interactive-defense session during the AI's attack (see below)
 }
 
-export function newHumanGame(humanHero: HeroId, aiHero: HeroId, ai: Policy, rng: RNG, humanFirst = true): HumanGame {
+export function newHumanGame(humanHero: HeroId, aiHero: HeroId, ai: Policy, rng: RNG, humanFirst = true, bossHard = false): HumanGame {
+  // Boss : Naraxus joue TOUJOURS premier (planche verifiee) — le heros est force en seat 0
+  // (l'income du Start Player n'est pas saute en mode boss, gere par playIncomePhase).
+  if (aiHero === 'nx') humanFirst = true
   const state = humanFirst
     ? createInitialGameState(humanHero, aiHero, rng)
     : createInitialGameState(aiHero, humanHero, rng)
+  state.bossHard = bossHard
   const humanIdx: 0 | 1 = humanFirst ? 0 : 1
   return { state, humanIdx, aiIdx: (1 - humanIdx) as 0 | 1, ai, rng }
+}
+
+// Dragon's Hoard (setup boss, verifie) : chaque joueur choisit pioche 1 OU +2 CP.
+export function humanDragonsHoard(g: HumanGame, choice: 'draw' | 'cp'): void {
+  const self = g.state.players[g.humanIdx]
+  if (choice === 'draw') { const c = self.deck.shift(); if (c) self.hand.push(c) }
+  else self.cp += 2
+  g.state.log.push({ turn: 0, playerIdx: g.humanIdx, phase: 'income', message: `Dragon's Hoard: ${choice === 'draw' ? 'drew 1' : '+2 CP'}` })
 }
 
 // --- The human's own turn, driven step by step by the UI ------------------------------------
@@ -385,6 +398,11 @@ function defensePolicy(script: WindowAction[], probe?: { captured: DefensePrompt
 
 function computeAttackInfo(g: HumanGame, dice: number[]): AiAttackInfo {
   const ai = g.state.players[g.aiIdx]
+  if (ai.heroId === 'nx') {
+    const face = g.state.bossHard ? Math.max(...dice) : dice[0]
+    const info = nxAttackInfo(face)
+    return { abilityName: info.name, incomingDamage: info.dmg, defendable: info.defendable }
+  }
   const human = g.state.players[g.humanIdx]
   const cands = resolveMatchedAbilities(ai.heroId, dice, oracleStateFor(ai, human))
   if (cands.length === 0) return { abilityName: null, incomingDamage: 0, defendable: false }
@@ -410,6 +428,12 @@ export function runAiTurnUpToAttack(g: HumanGame): { done: boolean; attack?: AiA
 export function runAiTurnUpToAlter(g: HumanGame): { done: boolean; dice?: number[] } {
   if (g.state.gameOver) return { done: true }
   g.state.turnNumber += 1
+  if (g.state.players[g.aiIdx].heroId === 'nx') {
+    const dice = naraxusUpToRoll(g.state, g.aiIdx, g.rng)
+    if (g.state.gameOver || !dice.length) return { done: true }
+    g.state.pendingRoll = { rollerIdx: g.aiIdx, dice }
+    return { done: false, dice: dice.slice() }
+  }
   playUpkeepPhase(g.state, g.aiIdx, g.rng, g.ai)
   if (checkGameOver(g.state)) return { done: true }
   playIncomePhase(g.state, g.aiIdx, g.rng)

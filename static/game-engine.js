@@ -62,6 +62,7 @@ var Game = (() => {
     humanCanTerrorize: () => humanCanTerrorize,
     humanCraft: () => humanCraft,
     humanCraftOptions: () => humanCraftOptions,
+    humanDragonsHoard: () => humanDragonsHoard,
     humanForgeOre: () => humanForgeOre,
     humanInstantOptions: () => humanInstantOptions,
     humanKeepAdvice: () => humanKeepAdvice,
@@ -2828,12 +2829,16 @@ var Game = (() => {
     log(state, bossIdx, "resolveAttack", `Dragon's Might: trigger roll ${trigger}${trigger >= 5 ? " -> SWOOP!" : ""}`);
     if (trigger >= 5) swoop();
   }
-  function playNaraxusTurn(state, bossIdx, rng, policies) {
+  function naraxusUpToRoll(state, bossIdx, rng) {
     const boss = state.players[bossIdx];
     const tb = tickTimeBombsUpkeep(boss, rng);
     if (tb.rolls.length > 0) log(state, bossIdx, "upkeep", `Time Bomb upkeep: rolls [${tb.rolls.join(",")}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`);
-    if (checkGameOver(state)) return;
-    const dice = state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)];
+    if (checkGameOver(state)) return [];
+    return state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)];
+  }
+  function playNaraxusTurn(state, bossIdx, rng, policies) {
+    const dice = naraxusUpToRoll(state, bossIdx, rng);
+    if (state.gameOver || !dice.length) return;
     resolveNaraxusAbility(state, bossIdx, dice, rng, policies);
   }
   function playEndOfTurn(state, playerIdx) {
@@ -2981,10 +2986,20 @@ var Game = (() => {
   };
 
   // src/sim/interactive.ts
-  function newHumanGame(humanHero, aiHero, ai, rng, humanFirst = true) {
+  function newHumanGame(humanHero, aiHero, ai, rng, humanFirst = true, bossHard = false) {
+    if (aiHero === "nx") humanFirst = true;
     const state = humanFirst ? createInitialGameState(humanHero, aiHero, rng) : createInitialGameState(aiHero, humanHero, rng);
+    state.bossHard = bossHard;
     const humanIdx = humanFirst ? 0 : 1;
     return { state, humanIdx, aiIdx: 1 - humanIdx, ai, rng };
+  }
+  function humanDragonsHoard(g, choice) {
+    const self = g.state.players[g.humanIdx];
+    if (choice === "draw") {
+      const c = self.deck.shift();
+      if (c) self.hand.push(c);
+    } else self.cp += 2;
+    g.state.log.push({ turn: 0, playerIdx: g.humanIdx, phase: "income", message: `Dragon's Hoard: ${choice === "draw" ? "drew 1" : "+2 CP"}` });
   }
   function humanMinePeek(g) {
     return g.state.players[g.humanIdx].deck.slice(0, 3);
@@ -3187,6 +3202,11 @@ var Game = (() => {
   }
   function computeAttackInfo(g, dice) {
     const ai = g.state.players[g.aiIdx];
+    if (ai.heroId === "nx") {
+      const face = g.state.bossHard ? Math.max(...dice) : dice[0];
+      const info = nxAttackInfo(face);
+      return { abilityName: info.name, incomingDamage: info.dmg, defendable: info.defendable };
+    }
     const human = g.state.players[g.humanIdx];
     const cands = resolveMatchedAbilities(ai.heroId, dice, oracleStateFor(ai, human));
     if (cands.length === 0) return { abilityName: null, incomingDamage: 0, defendable: false };
@@ -3202,6 +3222,12 @@ var Game = (() => {
   function runAiTurnUpToAlter(g) {
     if (g.state.gameOver) return { done: true };
     g.state.turnNumber += 1;
+    if (g.state.players[g.aiIdx].heroId === "nx") {
+      const dice2 = naraxusUpToRoll(g.state, g.aiIdx, g.rng);
+      if (g.state.gameOver || !dice2.length) return { done: true };
+      g.state.pendingRoll = { rollerIdx: g.aiIdx, dice: dice2 };
+      return { done: false, dice: dice2.slice() };
+    }
     playUpkeepPhase(g.state, g.aiIdx, g.rng, g.ai);
     if (checkGameOver(g.state)) return { done: true };
     playIncomePhase(g.state, g.aiIdx, g.rng);

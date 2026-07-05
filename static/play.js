@@ -54,6 +54,10 @@
     fm: { name:'Forgemaster', crest:'FM', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:GLYPH.pick,B:GLYPH.forgehammer,C:GLYPH.anvil}, symName:{A:'Pioche',B:'Forge',C:'Enclume'},
       col:{A:'#a9d6e8',B:'#f0a03a',C:'#f3ede2'} },
+    // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
+    nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
+      sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
+      col:{A:'#e0ac4e'} },
   };
 
   // ---- game state ----
@@ -61,7 +65,8 @@
   const _q = new URLSearchParams(location.search);
   const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
-  const AI_HERO = _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
+  const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
+  const BOSS_HARD = _q.get('hard')==='1';
   let ai;
   // Depuis 2026-07-05 le réseau est entraîné AVEC le Forgemaster (features Forge/armures).
   if (window.AI_WEIGHTS) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
@@ -72,7 +77,7 @@
   // First player is decided at random (like the opening roll). Going SECOND carries the rules'
   // compensation automatically (HH gains 1 Dreadful — handled in createInitialGameState).
   const humanFirst = rng() < 0.5;
-  const g = G.newHumanGame(HUMAN, AI_HERO, ai, rng, humanFirst);
+  const g = G.newHumanGame(HUMAN, AI_HERO, ai, rng, humanFirst, BOSS_HARD);
   const humanHero = HERO[HUMAN], aiHero = HERO[AI_HERO];
 
   let phase = 'main1';         // 'upkeep'|'main1'|'roll'|'alter'|'ability'|'main2'|'defense'|'over'
@@ -171,7 +176,8 @@
   }
   function renderFighter(elId, idx, def, isHuman) {
     const p = g.state.players[idx];
-    const pct = Math.max(0, Math.min(100, p.hp * 2));
+    const hpMax = p.heroId==='nx' ? 65 : 50;
+    const pct = Math.max(0, Math.min(100, p.hp * 100 / hpMax));
     const activeCls = (g.state.activePlayerIdx === idx && phase !== 'over') ? ' active' : '';
     // Upgrades in play were invisible ("je ne vois pas si j'ai Cleave II") — show them as chips.
     const hero = G.heroTemplateFor(p.heroId);
@@ -181,7 +187,7 @@
     $(elId).innerHTML =
       `<div class="crest">${def.crest}</div>
        <div class="who"><div class="name">${def.name}<small>${isHuman ? 'toi' : 'IA'}</small></div>
-         <div class="hpbar"><i style="width:${pct}%"></i><span>${Math.max(0,p.hp)} / 50</span></div></div>
+         <div class="hpbar"><i style="width:${pct}%"></i><span>${Math.max(0,p.hp)} / ${hpMax}</span></div></div>
        <div class="tokens">${tokenChips(p, isHuman)}${ups}</div>`;
   }
   function renderFighters() {
@@ -286,10 +292,11 @@
         }
         // Mode Samesies! : 1er clic = dé à changer, 2e clic = dé dont on copie la valeur.
         if (samMode) {
+          // Ordre inversé sur demande user : 1er clic = le dé MODÈLE, 2e = le dé à CHANGER.
           if (samTarget===null) { samTarget=i; }
           else if (i!==samTarget && dice[i].v!==dice[samTarget].v) {
-            const t=samTarget; samMode=false; samTarget=null;
-            playRollCard({cardId:'samesies', dieIndices:[t], values:[dice[i].v]});
+            const src=samTarget; samMode=false; samTarget=null;
+            playRollCard({cardId:'samesies', dieIndices:[i], values:[dice[src].v]});
             return;
           } else if (i===samTarget) { samTarget=null; } // re-clic = désélection
           renderDice(false); renderControls(); return;
@@ -437,6 +444,13 @@
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
   // II-aware ("je ne vois toujours pas sur le board la défense", reported).
   function defBoxHTML(heroKey, p){
+    if (heroKey==='nx'){
+      return `<div class="defbox"><b>🛡️ Dragon Scales</b><br>
+        Lance 1 dé : 1 = prévient 1 · 2-5 = prévient 3 · 6 = prévient 5<br>
+        (contre tout dégât défendable — l'indéfendable passe TOUT)<br>
+        ${g.state.bossHard?'<b>HARD MODE : 2 dés d\'attaque, garde le plus haut</b><br>':''}
+        CP infini · 0 carte · 1 dé, 1 tentative (non modifiables) · tu peux altérer son dé</div>`;
+    }
     if (heroKey==='fm'){
       return `<div class="defbox"><b>🛡️ Masterwork</b><br>
         Lance 1 dé :<br>
@@ -605,8 +619,8 @@
           if (samMode) {
             const s2=document.createElement('span'); s2.className='rolls';
             s2.textContent = samTarget===null
-              ? '→ 1er clic : le dé à CHANGER (il perdra sa valeur)'
-              : `→ le dé ${samTarget+1} (${dice[samTarget].v}) sera changé — 2e clic : le dé MODÈLE à copier`;
+              ? '→ 1er clic : le dé MODÈLE (celui à copier)'
+              : `→ tu copies le ${dice[samTarget].v} — 2e clic : le dé à CHANGER`;
             c.appendChild(s2);
           }
         }
@@ -941,9 +955,12 @@
     const after = dice.map(d=>d.v).join(',');
     if (before !== after) {
       log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
-      // Règle (fenêtre de réponse) : la priorité te revient — tu peux répondre avec tes
-      // cartes de manipulation avant de choisir l'habileté (user-caught : suite cassée
-      // sans aucun droit de réponse).
+      // Droit de réplique (règle confirmée user) : s'il te reste des relances, tu retournes
+      // en phase de jet ; sinon tu peux au moins répondre avec tes cartes de manipulation.
+      if (rollsLeft > 0) {
+        log(`↩️ Il te reste ${rollsLeft} relance(s) — tu peux répliquer.`);
+        phase='roll'; renderAll(); return;
+      }
       G.beginOffensiveAlter(g, dice.map(d=>d.v));
       const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
       if (acts.length) { phase='alter'; renderAll(); return; }
@@ -1305,6 +1322,18 @@
       return `<b>${m[1].replace(/\s*\([A-C5-]+\)$/,'')}</b> : va chercher <b>${m[2]}</b> → la Forge (deck mélangé)`;
     if ((m = msg.match(/^(.+?): mined — revealed (.+) to The Forge/)))
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> : mine — révèle <b>${m[2]}</b> → la Forge`;
+    if ((m = msg.match(/^Naraxus: rolled \[([\d,]+)\] -> (.+) \((\d)\)/)))
+      return `🐲 <b>Naraxus</b> lance [${m[1]}] → <b>${m[2]}</b>`;
+    if ((m = msg.match(/^Swoop: removed (\w+)/))) return `🐲 Swoop : retire son jeton ${m[1]}`;
+    if (/^Swoop: healed 4/.test(msg)) return `🐲 Swoop : se soigne de 4`;
+    if ((m = msg.match(/^Ember Spark: milled (\d+)/))) return `🐲 Ember Spark : ${m[1]} carte(s) de ton deck à la défausse`;
+    if ((m = msg.match(/^Gashing Bite: rolled \[([\d,]+)\] -> (\d+) dmg/))) return `🐲 Gashing Bite : lance [${m[1]}] → <b>${m[2]} dégâts</b>`;
+    if (/^Hoarding: stole 1 die/.test(msg)) return `🐲 Hoarding : te <b>vole un dé</b> jusqu'à la fin de ton tour`;
+    if ((m = msg.match(/^Thundering Roar: hero discarded (.+)/))) return `🐲 Thundering Roar : tu défausses <b>${m[1]}</b>`;
+    if ((m = msg.match(/^Dragon's Might: trigger roll (\d)( -> SWOOP!)?/))) return `🐲 Dragon's Might : dé ${m[1]}${m[2]?' → <b>SWOOP bonus !</b>':''}`;
+    if ((m = msg.match(/^Dragon Scales: face (\d), prevented (\d+)/))) return `🐲 <b>Dragon Scales</b> : dé ${m[1]} — prévient ${m[2]}`;
+    if ((m = msg.match(/^Hoarding: -1 defense die/))) return `🐲 Le dé volé manque à ta défense`;
+    if ((m = msg.match(/^Dragon's Hoard: (.+)/))) return `💰 Trésor du Dragon : ${m[1]==='drew 1'?'pioche 1':'+2 CP'}`;
     if ((m = msg.match(/^Defense dice: ([\d,]+)/)))
       return `🛡️ Dés de défense : <b>${diceWords(isHuman?humanHero:aiHero, m[1])}</b> (${m[1]})`;
     if ((m = msg.match(/^Agility spent: rolled (\d+), (halved damage|no effect)/)))
@@ -1352,6 +1381,12 @@
     fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBB',dmg:'5 +1d6'},
       {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
       {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
+    nx:[ {name:'1 · Swoop',req:'—',dmg:'3 indéf. ·soin 4 ·-1 statut'},
+      {name:'2 · Ember Spark',req:'—',dmg:'8 ·mill 3'},
+      {name:'3 · Gashing Bite',req:'—',dmg:'4d6: top2'},
+      {name:'4 · Hoarding',req:'—',dmg:'9 ·vole 1 dé'},
+      {name:'5 · Thundering Roar',req:'—',dmg:'8 indéf. ·défausse 1'},
+      {name:'6 · Dragon\'s Might',req:'—',dmg:'10 ·Swoop 5-6'} ],
     bw:[ {name:'Baton Strike',req:'BBB',dmg:'5–7'},{name:'Infiltrate',req:'AABC',dmg:'+Bomb'},
       {name:'Widow\'s Gauntlets',req:'BBBAA',dmg:'6 ·+CP'},{name:'Hacked',req:'suite 4',dmg:'5 ·+Bomb'},
       {name:'Grapple',req:'CCCC',dmg:'6 indéf.'},{name:'Vengeance',req:'suite 5',dmg:'7 +jet'},
@@ -1365,11 +1400,16 @@
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
     const opt = (v,cur)=>['hh','bw','fm'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
+    const optAi = ['hh','bw','fm'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+      + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
+      + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>
-      <label style="font-size:11px;color:var(--muted)"> IA <select id="pick-ai" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('ai',AI_HERO)}</select></label>`;
+      <label style="font-size:11px;color:var(--muted)"> IA <select id="pick-ai" class="btn" style="padding:3px 6px;font-size:.75rem">${optAi}</select></label>`;
     mast.appendChild(box);
-    const go = ()=>{ const me=document.getElementById('pick-me').value, ai2=document.getElementById('pick-ai').value;
-      if (me!==HUMAN || ai2!==AI_HERO) location.href = `play.html?me=${me}&ai=${ai2}`; };
+    const go = ()=>{ const me=document.getElementById('pick-me').value; let ai2=document.getElementById('pick-ai').value;
+      const hard = ai2==='nxh' ? '&hard=1' : ''; if (ai2==='nxh') ai2='nx';
+      if (me!==HUMAN || ai2!==AI_HERO || (ai2==='nx' && (hard==='&hard=1')!==BOSS_HARD)) location.href = `play.html?me=${me}&ai=${ai2}${hard}`; };
     document.getElementById('pick-me').onchange = go;
     document.getElementById('pick-ai').onchange = go;
   })();
@@ -1404,7 +1444,15 @@
   if (aiNote) aiNote.textContent = usingNet
     ? 'Adversaire : réseau entraîné par self-play.'
     : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
-  if (g.humanIdx === 0) {
+  if (AI_HERO === 'nx') {
+    addLog(`<span class="t">Départ</span>🐲 <b>Naraxus${BOSS_HARD?' (HARD)':''}</b> — 65 PV. Il joue TOUJOURS en premier. Vole le Trésor du Dragon :`);
+    phase='hoard';
+    $('turntag').textContent = 'Dragon\'s Hoard — choisis ton butin';
+    renderFighters();
+    const c=$('controls'); c.innerHTML='';
+    c.appendChild(btn('💰 Piocher 1 carte','primary', ()=>{ G.humanDragonsHoard(g,'draw'); log('💰 Trésor : pioche 1.'); setTimeout(aiTurn,300); }));
+    c.appendChild(btn('💰 Gagner 2 CP','primary', ()=>{ G.humanDragonsHoard(g,'cp'); log('💰 Trésor : +2 CP.'); setTimeout(aiTurn,300); }));
+  } else if (g.humanIdx === 0) {
     addLog('<span class="t">Départ</span>Tu commences la partie.');
     startHumanTurn();
   } else {

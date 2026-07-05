@@ -1498,13 +1498,19 @@ export function resolveNaraxusAbility(state: GameState, bossIdx: 0 | 1, dice: nu
   if (trigger >= 5) swoop()
 }
 
-// Tour complet du boss (simulations) : upkeep (Time Bombs) -> jet -> attaque.
-export function playNaraxusTurn(state: GameState, bossIdx: 0 | 1, rng: RNG, policies: [Policy, Policy]): void {
+// Upkeep du boss + son jet (1 de, 2 en hard) — separe pour le pont interactif.
+export function naraxusUpToRoll(state: GameState, bossIdx: 0 | 1, rng: RNG): number[] {
   const boss = state.players[bossIdx]
   const tb = bw.tickTimeBombsUpkeep(boss, rng)
   if (tb.rolls.length > 0) log(state, bossIdx, 'upkeep', `Time Bomb upkeep: rolls [${tb.rolls.join(',')}], ${tb.selfDamage} self-dmg, ${tb.defused} defused`)
-  if (checkGameOver(state)) return
-  const dice = state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)]
+  if (checkGameOver(state)) return []
+  return state.bossHard ? [rollDie(rng), rollDie(rng)] : [rollDie(rng)]
+}
+
+// Tour complet du boss (simulations) : upkeep (Time Bombs) -> jet -> attaque.
+export function playNaraxusTurn(state: GameState, bossIdx: 0 | 1, rng: RNG, policies: [Policy, Policy]): void {
+  const dice = naraxusUpToRoll(state, bossIdx, rng)
+  if (state.gameOver || !dice.length) return
   resolveNaraxusAbility(state, bossIdx, dice, rng, policies)
 }
 
