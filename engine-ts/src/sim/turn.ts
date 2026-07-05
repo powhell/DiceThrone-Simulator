@@ -975,7 +975,13 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
     if (!self.hand.includes(id)) return false
     const card = cardById(hero, id)
     if (!card || self.cp < (card.cpCost ?? 0)) return false
-    if (id === 'unescapable' && self.tokens.grimPursuit < 1) return false
+    if (id === 'unescapable' && self.tokens.grimPursuit < 1) {
+      // Combo user-caught : Thundering Hooves! (CP -> Grim Pursuit) se résout AVANT dans la
+      // même fenêtre, donc Unescapable! reste proposable à 0 jeton si TH peut en fournir
+      // (TH coûte 0 CP ; il faut 1 CP pour Unescapable + >=1 CP à convertir).
+      const canConvert = self.hand.includes('thundering-hooves') && self.cp >= 2
+      if (!canConvert) return false
+    }
     return true
   })
 }
@@ -998,6 +1004,9 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
   const hero = heroTemplateFor(self.heroId)
   const card = cardById(hero, cardId)
   if (!card || !self.hand.includes(cardId) || self.cp < (card.cpCost ?? 0)) return current
+  // Unescapable! exige 1 Grim Pursuit AU MOMENT de payer (l'éligibilité a pu être accordée en
+  // pariant sur Thundering Hooves — si la conversion n'a rien donné, no-op sans consommer).
+  if (cardId === 'unescapable' && self.tokens.grimPursuit < 1) return current
   self.cp -= card.cpCost ?? 0
   self.hand.splice(self.hand.indexOf(cardId), 1)
   self.discard.push(cardId)
@@ -1021,7 +1030,9 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
     return { ...current, dmg: current.dmg + bonus }
   }
   if (cardId === 'thundering-hooves') {
-    const spend = Math.min(3, self.cp)
+    // "jusqu'à 3" : ne convertit jamais au-delà du cap de Grim Pursuit (3) — l'ancienne
+    // version brûlait 3 CP même quand le cap n'en absorbait qu'un (découvert par le test combo).
+    const spend = Math.min(3, self.cp, Math.max(0, hh.GRIM_PURSUIT_CAP - self.tokens.grimPursuit))
     self.cp -= spend
     hh.grantGrimPursuit(self, spend)
     log(state, playerIdx, 'resolveAttack', `Thundering Hooves!: spent ${spend} CP for +${spend} Grim Pursuit`)
@@ -1038,6 +1049,9 @@ function applyAttackModifiers(state: GameState, playerIdx: 0 | 1, policy: Policy
   const eligible = eligibleAttackModifierCardIds(self)
   if (eligible.length > 0) {
     const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligible)
+      // Thundering Hooves! toujours en premier : il FOURNIT les Grim Pursuit qu'Unescapable!
+      // consomme dans la même fenêtre (combo user-caught).
+      .slice().sort((a, b) => (a === 'thundering-hooves' ? -1 : 0) - (b === 'thundering-hooves' ? -1 : 0))
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result)
   }
   // Grim Pursuit spend mode (b) — a STRATEGIC DECISION, not automatic (auto-spending nuked the

@@ -591,6 +591,12 @@
             ()=>{ amSel.has(id)?amSel.delete(id):amSel.add(id); renderControls(); }));
         }
       }
+      // Instants jouables MAINTENANT (règle : un Instant s'insère n'importe quand) — cas
+      // rapporté : Rolling Pumpkin! pour donner la Tête à l'IA AVANT d'armer Cranial Assist.
+      G.humanInstantOptions(g).slice(0,4).forEach(a=>{
+        c.appendChild(btn(`⚡ ${actionLabel(a)}`,'', ()=>{
+          log(`Tu joues <b>${actionLabel(a)}</b>.`); G.humanApplyInstant(g,a); renderAll(); }));
+      });
       if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
     } else if (phase==='defense' && pendingDefense) {
       const a = pendingAttackInfo;

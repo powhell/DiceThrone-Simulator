@@ -16,7 +16,7 @@ export { runOffensiveRoll } from './oracle.js'
 export {
   newHumanGame, beginHumanTurn, humanCanTerrorize, humanMainOptions, humanApplyMain,
   rollOffense, beginOffensiveAlter, offensiveAlterOptions, applyOffensiveAlter, endOffensiveAlter,
-  matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, endHumanTurn, runAiTurn,
+  matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, humanInstantOptions, humanApplyInstant, endHumanTurn, runAiTurn,
   runAiTurnUpToAttack, nextDefenseDecision, chooseDefense, resolveAiAttack, finishAiTurn,
 } from './interactive.js'
 export { createValueGreedyPolicy } from './rl/valueGreedyPolicy.js'

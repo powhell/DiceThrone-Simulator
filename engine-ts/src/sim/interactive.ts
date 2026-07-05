@@ -145,7 +145,10 @@ export function humanAttackModifierOptions(g: HumanGame): string[] {
     if (!self.hand.includes(id)) return false
     const card = cardById(hero, id)
     if (!card || self.cp < (card.cpCost ?? 0)) return false
-    if (id === 'unescapable' && self.tokens.grimPursuit < 1) return false
+    // 0 Grim Pursuit : Unescapable reste proposable si Thundering Hooves (armable dans la même
+    // fenêtre, résolu en premier côté moteur) peut convertir du CP en GP (combo user-caught).
+    if (id === 'unescapable' && self.tokens.grimPursuit < 1
+      && !(self.hand.includes('thundering-hooves') && self.cp >= 2)) return false
     return true
   })
 }
@@ -158,6 +161,17 @@ export function humanPlayRollCard(
   g: HumanGame, choice: RollManipulationChoice, dice: number[],
 ): { dice: number[]; extraRollsGranted: number } {
   return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng)
+}
+
+// Instants jouables HORS Main Phase (règle : un Instant s'interrompt n'importe quand). L'UI
+// les offre pendant la phase de choix d'habileté — cas user : Rolling Pumpkin! pour donner la
+// Tête à l'IA AVANT d'armer Cranial Assist! (+3 si l'adversaire a la Tête).
+export function humanInstantOptions(g: HumanGame): WindowAction[] {
+  return enumerateWindowActions(g.state, g.humanIdx, { windowType: 'mainPhase', phase: 'main1' })
+    .filter(a => a.kind === 'playInstant' || a.kind === 'moveHead')
+}
+export function humanApplyInstant(g: HumanGame, action: WindowAction): void {
+  applyWindowAction(g.state, g.humanIdx, action, { windowType: 'mainPhase', phase: 'main1' }, g.rng)
 }
 
 // Keep-advice for the HUMAN's roll, straight from the exact DP oracle (core/evaluator — the

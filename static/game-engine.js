@@ -52,10 +52,12 @@ var Game = (() => {
     hasHead: () => hasHead,
     heroTemplateFor: () => heroTemplateFor,
     hhHero: () => hhHero,
+    humanApplyInstant: () => humanApplyInstant,
     humanApplyMain: () => humanApplyMain,
     humanAttack: () => humanAttack,
     humanAttackModifierOptions: () => humanAttackModifierOptions,
     humanCanTerrorize: () => humanCanTerrorize,
+    humanInstantOptions: () => humanInstantOptions,
     humanKeepAdvice: () => humanKeepAdvice,
     humanMainOptions: () => humanMainOptions,
     humanPlayRollCard: () => humanPlayRollCard,
@@ -2308,7 +2310,10 @@ var Game = (() => {
       if (!self.hand.includes(id)) return false;
       const card = cardById(hero, id);
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
-      if (id === "unescapable" && self.tokens.grimPursuit < 1) return false;
+      if (id === "unescapable" && self.tokens.grimPursuit < 1) {
+        const canConvert = self.hand.includes("thundering-hooves") && self.cp >= 2;
+        if (!canConvert) return false;
+      }
       return true;
     });
   }
@@ -2318,6 +2323,7 @@ var Game = (() => {
     const hero = heroTemplateFor(self.heroId);
     const card = cardById(hero, cardId);
     if (!card || !self.hand.includes(cardId) || self.cp < (card.cpCost ?? 0)) return current;
+    if (cardId === "unescapable" && self.tokens.grimPursuit < 1) return current;
     self.cp -= card.cpCost ?? 0;
     self.hand.splice(self.hand.indexOf(cardId), 1);
     self.discard.push(cardId);
@@ -2337,7 +2343,7 @@ var Game = (() => {
       return { ...current, dmg: current.dmg + bonus };
     }
     if (cardId === "thundering-hooves") {
-      const spend = Math.min(3, self.cp);
+      const spend = Math.min(3, self.cp, Math.max(0, GRIM_PURSUIT_CAP - self.tokens.grimPursuit));
       self.cp -= spend;
       grantGrimPursuit(self, spend);
       log(state, playerIdx, "resolveAttack", `Thundering Hooves!: spent ${spend} CP for +${spend} Grim Pursuit`);
@@ -2350,7 +2356,7 @@ var Game = (() => {
     let result = initial;
     const eligible = eligibleAttackModifierCardIds(self);
     if (eligible.length > 0) {
-      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligible);
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligible).slice().sort((a, b) => (a === "thundering-hooves" ? -1 : 0) - (b === "thundering-hooves" ? -1 : 0));
       for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result);
     }
     if (self.heroId === "hh" && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
@@ -2790,12 +2796,18 @@ var Game = (() => {
       if (!self.hand.includes(id)) return false;
       const card = cardById(hero, id);
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
-      if (id === "unescapable" && self.tokens.grimPursuit < 1) return false;
+      if (id === "unescapable" && self.tokens.grimPursuit < 1 && !(self.hand.includes("thundering-hooves") && self.cp >= 2)) return false;
       return true;
     });
   }
   function humanPlayRollCard(g, choice, dice) {
     return applyRollManipulationCard(g.state, g.humanIdx, choice, dice, g.rng);
+  }
+  function humanInstantOptions(g) {
+    return enumerateWindowActions(g.state, g.humanIdx, { windowType: "mainPhase", phase: "main1" }).filter((a) => a.kind === "playInstant" || a.kind === "moveHead");
+  }
+  function humanApplyInstant(g, action) {
+    applyWindowAction(g.state, g.humanIdx, action, { windowType: "mainPhase", phase: "main1" }, g.rng);
   }
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
