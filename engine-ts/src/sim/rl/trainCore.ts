@@ -8,7 +8,7 @@ import type { Network } from './network.js'
 import { encodeState, FEATURE_COUNT } from './features.js'
 import { createValueGreedyPolicy } from './valueGreedyPolicy.js'
 import { createInitialGameState, MAX_TURNS } from '../match.js'
-import { playTurn } from '../turn.js'
+import { playTurn, playNaraxusTurn } from '../turn.js'
 import { greedyHighestDamagePolicy } from '../policy.js'
 import type { Policy } from '../policy.js'
 import { mulberry32 } from '../rng.js'
@@ -22,7 +22,7 @@ import type { HeroId, GameState } from '../types.js'
 export const LEARNING_RATE = 0.005
 export const HIDDEN_SIZES = [24, 12]
 export const EVAL_GAMES_PER_MATCHUP = 20
-export const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm']] // miroirs retirés (user 2026-07-05)
+export const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne) // miroirs retirés (user 2026-07-05)
 
 // Timeout (MAX_TURNS reached, state.winner still null) is treated as a draw (target 0) —
 // a deliberate v1 default, not an overlooked edge case (see the RL plan's open question).
@@ -34,12 +34,19 @@ function outcomeFor(state: GameState, idx: 0 | 1): number {
 export function playSelfPlayGame(network: Network, heroA: HeroId, heroB: HeroId, seed: number): { winner: 0 | 1 | null; turns: number } {
   const rng = mulberry32(seed)
   const state = createInitialGameState(heroA, heroB, rng)
+  const bossGame = heroB === 'nx'
+  if (bossGame) state.bossHard = (seed % 2 === 1)
   const policy = createValueGreedyPolicy(network)
   const lastFeatures: [number[] | null, number[] | null] = [null, null]
 
   while (!state.gameOver && state.turnNumber < MAX_TURNS) {
     state.turnNumber += 1
-    const activeIdx = state.activePlayerIdx
+    const activeIdx = bossGame ? 0 : state.activePlayerIdx
+    if (bossGame) {
+      playNaraxusTurn(state, 1, rng, [policy, policy])
+      if (!state.gameOver) playTurn(state, 0, rng, [policy, policy])
+      state.activePlayerIdx = 0
+    } else
     playTurn(state, activeIdx, rng, [policy, policy])
 
     const features = encodeState(state, activeIdx)

@@ -15,12 +15,12 @@ import { fromJSON } from './network.js'
 import { FEATURE_COUNT } from './features.js'
 import { createValueGreedyPolicy } from './valueGreedyPolicy.js'
 import { greedyHighestDamagePolicy } from '../policy.js'
-import { runMatch } from '../match.js'
+import { runMatch, runBossMatch } from '../match.js'
 
 // Miroirs (hh-hh, bw-bw) retirés à la demande du user (2026-07-05) : ils coûtent la moitié
 // du budget de calcul pour des règles spéciales non modélisées (unicité Head/armures) et
 // n'informent pas l'équilibre inter-héros.
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm']]
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne)
 
 function loadPolicy(pathOrGreedy: string): Policy {
   if (pathOrGreedy === 'greedy') return greedyHighestDamagePolicy
@@ -49,7 +49,7 @@ function main(): void {
       // Seat alternation: even games A sits p0, odd games A sits p1 (same hero pairing).
       const aSeat: 0 | 1 = g % 2 === 0 ? 0 : 1
       const policies: [Policy, Policy] = aSeat === 0 ? [polA, polB] : [polB, polA]
-      const r = runMatch(heroA, heroB, seed++, policies)
+      const r = heroB === 'nx' ? runBossMatch(heroA, seed++, policies[0], (seed % 2 === 1)) : runMatch(heroA, heroB, seed++, policies)
       if (r.winner === null) {
         if (r.finalState.gameOver) draws += 1
         else timeouts += 1

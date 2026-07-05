@@ -22,11 +22,11 @@ import { fromJSON } from './network.js'
 import { encodeState, FEATURE_COUNT } from './features.js'
 import { createValueGreedyPolicy } from './valueGreedyPolicy.js'
 import { mulberry32 } from '../rng.js'
-import { playTurn } from '../turn.js'
+import { playTurn, playNaraxusTurn } from '../turn.js'
 import { createInitialGameState, MAX_TURNS } from '../match.js'
 import { heroTemplateFor, cardById } from '../data/load.js'
 
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm']] // miroirs retirés (user 2026-07-05)
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne) // miroirs retirés (user 2026-07-05)
 
 function outcomeFor(state: GameState, idx: 0 | 1): number {
   if (state.winner === null) return 0
@@ -90,10 +90,20 @@ function main(): void {
     const [heroA, heroB] = MATCHUPS[g % MATCHUPS.length]
     const rng = mulberry32(seedBase + g)
     const state = createInitialGameState(heroA, heroB, rng)
+    const bossGame = heroB === 'nx'
+    if (bossGame) state.bossHard = (g % 2 === 1) // alterne normal/hard
 
     while (!state.gameOver && state.turnNumber < MAX_TURNS) {
       state.turnNumber += 1
       const activeIdx = state.activePlayerIdx
+      if (bossGame) {
+        // Le boss joue TOUJOURS avant le heros (planche verifiee) : un "tour" = boss puis heros.
+        playNaraxusTurn(state, 1, rng, [policy, policy])
+        if (!state.gameOver) playTurn(state, 0, rng, [policy, policy])
+        features.push(encodeState(state, 0)); perspectives.push(0)
+        state.activePlayerIdx = 0
+        continue
+      }
       playTurn(state, activeIdx, rng, [policy, policy])
       // One sample per perspective per turn: V is queried from both perspectives during
       // lookahead, so train it on both.
