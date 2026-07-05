@@ -26,7 +26,10 @@ import { createInitialGameState, MAX_TURNS } from '../match.js'
 
 const RL_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEIGHTS_DIR = path.join(RL_DIR, 'weights')
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['hh', 'hh'], ['bw', 'bw']]
+// Miroirs (hh-hh, bw-bw) retirés à la demande du user (2026-07-05) : ils coûtent la moitié
+// du budget de calcul pour des règles spéciales non modélisées (unicité Head/armures) et
+// n'informent pas l'équilibre inter-héros.
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh']]
 
 // ---- Per-hero accumulators ---------------------------------------------------------------------
 // Everything the AI does while playing this hero, pooled across every matchup it appears in. Counts

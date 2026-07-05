@@ -26,7 +26,7 @@ import { playTurn } from '../turn.js'
 import { createInitialGameState, MAX_TURNS } from '../match.js'
 import { heroTemplateFor, cardById } from '../data/load.js'
 
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['hh', 'hh'], ['bw', 'bw']]
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh']] // miroirs retirés (user 2026-07-05)
 
 function outcomeFor(state: GameState, idx: 0 | 1): number {
   if (state.winner === null) return 0

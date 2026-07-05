@@ -17,7 +17,10 @@ import { createValueGreedyPolicy } from './valueGreedyPolicy.js'
 import { greedyHighestDamagePolicy } from '../policy.js'
 import { runMatch } from '../match.js'
 
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['hh', 'hh'], ['bw', 'bw']]
+// Miroirs (hh-hh, bw-bw) retirés à la demande du user (2026-07-05) : ils coûtent la moitié
+// du budget de calcul pour des règles spéciales non modélisées (unicité Head/armures) et
+// n'informent pas l'équilibre inter-héros.
+const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh']]
 
 function loadPolicy(pathOrGreedy: string): Policy {
   if (pathOrGreedy === 'greedy') return greedyHighestDamagePolicy

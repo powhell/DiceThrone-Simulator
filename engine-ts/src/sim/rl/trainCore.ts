@@ -22,7 +22,7 @@ import type { HeroId, GameState } from '../types.js'
 export const LEARNING_RATE = 0.005
 export const HIDDEN_SIZES = [24, 12]
 export const EVAL_GAMES_PER_MATCHUP = 20
-export const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['hh', 'hh'], ['bw', 'bw']]
+export const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh']] // miroirs retirés (user 2026-07-05)
 
 // Timeout (MAX_TURNS reached, state.winner still null) is treated as a draw (target 0) —
 // a deliberate v1 default, not an overlooked edge case (see the RL plan's open question).
