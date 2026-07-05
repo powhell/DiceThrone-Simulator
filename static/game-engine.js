@@ -2888,6 +2888,17 @@ var Game = (() => {
     return g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : [];
   }
   function endOffensiveAlter(g) {
+    if (g.state.pendingRoll) {
+      resolveResponseWindow(
+        g.state,
+        [g.humanIdx, g.aiIdx],
+        { windowType: "offensiveRoll" },
+        g.rng,
+        order(g, g.ai, passPolicy),
+        enumerateWindowActions,
+        applyWindowAction
+      );
+    }
     const d = g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : [];
     g.state.pendingRoll = null;
     return d;

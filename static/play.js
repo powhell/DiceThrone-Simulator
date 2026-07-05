@@ -925,10 +925,22 @@
     G.beginOffensiveAlter(g, dice.map(d=>d.v));
     altSel.clear(); samMode=false; samTarget=null;
     const acts=G.offensiveAlterOptions(g).filter(o=>o.kind!=='pass');
-    if(!acts.length){ dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; } else phase='alter';
+    if(!acts.length){
+      const before = dice.map(d=>d.v).join(',');
+      dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
+      const after = dice.map(d=>d.v).join(',');
+      if (before !== after) log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+      phase='ability';
+    } else phase='alter';
     renderAll(); }
   function applyAlter(a){ log(`Tu joues <b>${alterLabel(a)}</b>.`); dice=G.applyOffensiveAlter(g,a).map(v=>({v,kept:false})); renderAll(); }
-  function toAbilityFromAlter(){ altSel.clear(); dice=G.endOffensiveAlter(g).map(v=>({v,kept:false})); phase='ability'; renderAll(); }
+  function toAbilityFromAlter(){
+    altSel.clear();
+    const before = dice.map(d=>d.v).join(',');
+    dice=G.endOffensiveAlter(g).map(v=>({v,kept:false}));
+    const after = dice.map(d=>d.v).join(',');
+    if (before !== after) log(`⚠️ L'IA a altéré ton jet : <b>${before}</b> → <b>${after}</b>`);
+    phase='ability'; renderAll(); }
   function toMain2(){ phase='main2'; renderAll(); }
   function doRoll(){
     samMode=false; samTarget=null; scrapMode=null;

@@ -190,6 +190,15 @@ export function applyOffensiveAlter(g: HumanGame, action: WindowAction): number[
   return g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : []
 }
 export function endOffensiveAlter(g: HumanGame): number[] {
+  // L'IA répond dans la MÊME fenêtre (Helping Hand!/Tip It!/So Wild! sur TES dés) — avant,
+  // le pont fermait la fenêtre sans jamais lui donner la priorité : en simulation complète
+  // l'adversaire altère bien les dés du lanceur, mais jamais dans le navigateur (user-caught).
+  if (g.state.pendingRoll) {
+    resolveResponseWindow(
+      g.state, [g.humanIdx, g.aiIdx], { windowType: 'offensiveRoll' },
+      g.rng, order(g, g.ai, passPolicy), enumerateWindowActions, applyWindowAction,
+    )
+  }
   const d = g.state.pendingRoll ? g.state.pendingRoll.dice.slice() : []
   g.state.pendingRoll = null
   return d
