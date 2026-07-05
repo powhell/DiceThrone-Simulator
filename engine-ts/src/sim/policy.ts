@@ -25,6 +25,9 @@ export interface Policy {
   // Black Widow's Sabotage only for now (>=4 upgrades unlocks a reroll of all 3 dice).
   chooseSabotageReroll(state: GameState, defenderIdx: 0 | 1, dice: number[]): boolean
 
+  // Naraxus Thundering Roar : 'discard 1 of their choice' — OPTIONNEL, defaut = cout min.
+  chooseDiscardForRoar?(state: GameState, playerIdx: 0 | 1, hand: string[]): string
+
   // Forgemaster only (The Mines, Upkeep) — OPTIONNEL. top3 = les 3 cartes regardées.
   // 'skip' = ne pas miner ; 'cp' = ne rien révéler (+1 CP, légal même avec des Ore) ;
   // 'reveal' = révéler cet Ore vers The Forge. Absent -> heuristique (meilleur Ore).

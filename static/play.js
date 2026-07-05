@@ -1070,6 +1070,26 @@
     // 0 dégât de base (Infiltrate...) : pas d'attaque à défendre, pas de pause "Lancer ta
     // défense" (le moteur n'ouvrira pas de jet ; si l'IA gonfle à >0 avec un modificateur,
     // aiDefenseStep re-proposera quand même la fenêtre — le probe décide).
+    // Thundering Roar (Naraxus) : TU choisis la carte a defausser avant la resolution.
+    const youH = g.state.players[g.humanIdx];
+    if (r.attack.abilityName === 'Thundering Roar' && youH.hand.length) {
+      phase='roardiscard';
+      $('turntag').textContent = 'Thundering Roar — choisis ta défausse';
+      const c=$('controls'); renderAll(); c.innerHTML='';
+      const s1=document.createElement('span'); s1.className='rolls';
+      s1.textContent='🐲 Thundering Roar : défausse 1 carte de TON choix (puis 8 indéfendables) :';
+      c.appendChild(s1);
+      const heroT=G.heroTemplateFor(HUMAN);
+      youH.hand.forEach(id=>{
+        const cd=G.cardById(heroT,id)||{name:id};
+        c.appendChild(btn(`Défausser ${cd.name}`,'', ()=>{
+          G.humanSetRoarDiscard(g, id);
+          log(`🐲 Tu choisis de défausser <b>${cd.name}</b>.`);
+          phase='defarm'; aiDefenseStep();
+        }));
+      });
+      return;
+    }
     if (r.attack.abilityName !== null && r.attack.incomingDamage === 0) {
       $('turntag').textContent = 'L\'IA joue son tour…';
       renderAll();

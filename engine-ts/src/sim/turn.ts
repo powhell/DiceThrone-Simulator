@@ -1479,10 +1479,12 @@ export function resolveNaraxusAbility(state: GameState, bossIdx: 0 | 1, dice: nu
     return
   }
   if (face === 5) {
-    // v1 : defausse auto de la carte au cout le plus bas (TODO : choix interactif du heros)
+    // 'of their choice' (planche verifiee) : le heros choisit via le hook ; defaut = cout min.
     if (hero.hand.length) {
       const heroT = heroTemplateFor(hero.heroId)
-      const pick = hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0]
+      const chosen = policies[heroIdx].chooseDiscardForRoar?.(state, heroIdx, hero.hand.slice())
+      const pick = (chosen && hero.hand.includes(chosen)) ? chosen
+        : hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0]
       hero.hand.splice(hero.hand.indexOf(pick), 1)
       hero.discard.push(pick)
       log(state, bossIdx, 'resolveAttack', `Thundering Roar: hero discarded ${pick}`)

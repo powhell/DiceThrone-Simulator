@@ -72,6 +72,7 @@ var Game = (() => {
     humanPlayRollCard: () => humanPlayRollCard,
     humanScrap: () => humanScrap,
     humanScrapDie: () => humanScrapDie,
+    humanSetRoarDiscard: () => humanSetRoarDiscard,
     humanSpendGrimPursuitReroll: () => humanSpendGrimPursuitReroll,
     matchedAbilities: () => matchedAbilities,
     mulberry32: () => mulberry32,
@@ -2815,7 +2816,8 @@ var Game = (() => {
     if (face === 5) {
       if (hero.hand.length) {
         const heroT = heroTemplateFor(hero.heroId);
-        const pick = hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0];
+        const chosen = policies[heroIdx].chooseDiscardForRoar?.(state, heroIdx, hero.hand.slice());
+        const pick = chosen && hero.hand.includes(chosen) ? chosen : hero.hand.slice().sort((a, b) => (cardById(heroT, a)?.cpCost ?? 0) - (cardById(heroT, b)?.cpCost ?? 0))[0];
         hero.hand.splice(hero.hand.indexOf(pick), 1);
         hero.discard.push(pick);
         log(state, bossIdx, "resolveAttack", `Thundering Roar: hero discarded ${pick}`);
@@ -3185,10 +3187,11 @@ var Game = (() => {
   function order(g, aiPol, humanPol) {
     return g.aiIdx === 0 ? [aiPol, humanPol] : [humanPol, aiPol];
   }
-  function defensePolicy(script, probe) {
+  function defensePolicy(script, probe, roarDiscard) {
     let i = 0;
     return {
       ...greedyHighestDamagePolicy,
+      ...roarDiscard ? { chooseDiscardForRoar: () => roarDiscard } : {},
       decide(state, _p, req) {
         if (i < script.length) return script[i++];
         if (probe && !probe.captured) {
@@ -3274,8 +3277,11 @@ var Game = (() => {
     const cloneRng = mulberry32Stateful(0);
     cloneRng.state = d.savedRng;
     const probe = { captured: null };
-    resolveAbilityPhase(clone, g.aiIdx, d.finalDice, cloneRng, order(g, g.ai, defensePolicy(d.script, probe)));
+    resolveAbilityPhase(clone, g.aiIdx, d.finalDice, cloneRng, order(g, g.ai, defensePolicy(d.script, probe, d.roarDiscard)));
     return probe.captured;
+  }
+  function humanSetRoarDiscard(g, cardId) {
+    if (g.def) g.def.roarDiscard = cardId;
   }
   function chooseDefense(g, action) {
     if (g.def) g.def.script.push(action);
@@ -3283,7 +3289,7 @@ var Game = (() => {
   function resolveAiAttack(g) {
     const d = g.def;
     if (!d) return;
-    resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script)));
+    resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, void 0, d.roarDiscard)));
   }
   function finishAiTurn(g) {
     if (!checkGameOver(g.state)) {

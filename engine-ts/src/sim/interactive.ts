@@ -366,6 +366,7 @@ interface DefenseSession {
   savedRng: number
   script: WindowAction[]
   attack: AiAttackInfo
+  roarDiscard?: string // Thundering Roar (Naraxus) : la carte que TU choisis de defausser
 }
 
 // Human is the OPPONENT during the AI's turn; for windows we don't yet expose interactively
@@ -378,10 +379,11 @@ function order(g: HumanGame, aiPol: Policy, humanPol: Policy): [Policy, Policy] 
 
 // The human's defense policy: replays `script` in order, then passes. If a `probe` is given, the
 // FIRST un-scripted decision is captured (for the UI) instead of being auto-decided.
-function defensePolicy(script: WindowAction[], probe?: { captured: DefensePrompt | null }): Policy {
+function defensePolicy(script: WindowAction[], probe?: { captured: DefensePrompt | null }, roarDiscard?: string): Policy {
   let i = 0
   return {
     ...greedyHighestDamagePolicy,
+    ...(roarDiscard ? { chooseDiscardForRoar: () => roarDiscard } : {}),
     decide(state, _p, req) {
       if (i < script.length) return script[i++]
       if (probe && !probe.captured) {
@@ -484,12 +486,16 @@ export function nextDefenseDecision(g: HumanGame): DefensePrompt | null {
   const cloneRng = mulberry32Stateful(0)
   cloneRng.state = d.savedRng
   const probe: { captured: DefensePrompt | null } = { captured: null }
-  resolveAbilityPhase(clone, g.aiIdx, d.finalDice, cloneRng, order(g, g.ai, defensePolicy(d.script, probe)))
+  resolveAbilityPhase(clone, g.aiIdx, d.finalDice, cloneRng, order(g, g.ai, defensePolicy(d.script, probe, d.roarDiscard)))
   return probe.captured
 }
 
 // The human picked a defensive action (a card / instant from a DefensePrompt's options). Record it;
 // the caller then re-probes. (Pass = "stop defending" → caller skips straight to resolveAiAttack.)
+export function humanSetRoarDiscard(g: HumanGame, cardId: string): void {
+  if (g.def) g.def.roarDiscard = cardId
+}
+
 export function chooseDefense(g: HumanGame, action: WindowAction): void {
   if (g.def) g.def.script.push(action)
 }
@@ -499,7 +505,7 @@ export function chooseDefense(g: HumanGame, action: WindowAction): void {
 export function resolveAiAttack(g: HumanGame): void {
   const d = g.def
   if (!d) return
-  resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script)))
+  resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, undefined, d.roarDiscard)))
 }
 
 // The AI's Main Phase 2 -> discard -> end of turn, then priority returns to the human.
