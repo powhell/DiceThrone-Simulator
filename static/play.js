@@ -61,9 +61,9 @@
       symName:{A:'Griffe',B:'Patte',C:'Nature'},
       col:{A:'#e8d94a',B:'#b07a4a',C:'#6fcf6f'} },
     rv: { name:'Raveness', crest:'RV', cls:v=>v<=3?'A':v<=5?'B':'C',
-      sym:{A:'<g class="glyph"><path d="M20 44 L32 20 L44 44 M26 36 L38 36" stroke-width="4" fill="none"/></g>',
-           B:'<g class="glyph"><path d="M16 40 Q32 12 48 28 Q40 34 34 34 Q40 40 30 42 Q36 46 24 46 Z"/></g>',
-           C:'<g class="glyph"><circle cx="32" cy="32" r="12" fill="none" stroke-width="4"/><circle cx="32" cy="32" r="5"/></g>'},
+      sym:{A:'<g class="glyph"><path d="M17 15 Q31 25 35 49 M31 12 Q42 24 42 47 M45 15 Q53 28 48 43" fill="none" stroke-width="4.5" stroke-linecap="round"/></g>',
+           B:'<g class="glyph"><path d="M14 42 Q28 13 51 21 Q45 28 37 29 Q43 33 33 36 Q39 40 27 42 Q32 45 19 46 Z"/></g>',
+           C:'<g class="glyph"><path d="M11 32 Q32 13 53 32 Q32 51 11 32 Z" fill="none" stroke-width="3.5"/><circle cx="32" cy="32" r="8"/><circle cx="36" cy="28" r="3" fill="none" stroke-width="2"/></g>'},
       symName:{A:'Talon',B:'Aile',C:'Œil'},
       col:{A:'#e8e26a',B:'#8fd6a0',C:'#e87ab8'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
