@@ -8,6 +8,7 @@ import { createInitialBWTokens } from './hero/bw.rules.js'
 import { createInitialFMTokens } from './hero/fm.rules.js'
 import { createInitialNXTokens, NX_HP_BY_HEROES } from './hero/nx.rules.js'
 import { createInitialRVTokens } from './hero/rv.rules.js'
+import { createInitialDRTokens } from './hero/dr.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
@@ -39,6 +40,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     : heroId === 'fm' ? createInitialFMTokens()
     : heroId === 'nx' ? createInitialNXTokens()
     : heroId === 'rv' ? createInitialRVTokens()
+    : heroId === 'dr' ? createInitialDRTokens()
     : createInitialBWTokens()
   // Verified leaflet setup rule (HH "Hero Setup"): "Begin the game with the Haunted Head on
   // your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful." No
@@ -65,6 +67,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     hoardedDice: 0,
     nevermoreDial: 0,
     featherCapBonus: 0,
+    form: heroId === 'dr' ? 'druid' : undefined,
     // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
     // "begin with any one Gold Armor" only applies with more than 1 opponent).
     forge: [],

@@ -7,6 +7,7 @@ import type { HHState } from '../characters/horseman/config.js'
 import type { BWState } from '../characters/black_widow/config.js'
 import type { FMState } from '../characters/forgemaster/config.js'
 import type { RVState } from '../characters/raveness/config.js'
+import type { DRState } from '../characters/druid/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -20,6 +21,7 @@ import * as bw from './hero/bw.rules.js'
 import * as fm from './hero/fm.rules.js'
 import * as nx from './hero/nx.rules.js'
 import * as rv from './hero/rv.rules.js'
+import * as dr from './hero/dr.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -37,6 +39,11 @@ export function defenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'bw') {
     // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
     return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
+  }
+  if (opponent.heroId === 'dr') {
+    // Thick Hide : hors Bear 2 des, contre 1/Claw (E=1), AUCUNE prevention ; Bear 4 des :
+    // contre E=2, prevention E=4x(1/3+1/6)=2. (ruling user)
+    return dr.formOf(opponent) === 'bear' ? 2 + 2 : 1
   }
   if (opponent.heroId === 'rv') {
     // Nothing More (5 des, seuils UNE fois — ruling user) : contre 2 x P(>=2 Talons | p=1/2,
@@ -68,7 +75,14 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState {
+  if (player.heroId === 'dr') {
+    return {
+      form: dr.formOf(player), shapeShift: player.tokens.shapeShift ?? 0,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'rv') {
     return {
       feathers: player.tokens.feather, nevermoreOnOpponent: (opponent.tokens.nevermore ?? 0) > 0,
@@ -147,6 +161,15 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
   self.minesDrawUsedThisTurn = false
+
+  // Regenerate (soigne, flip/retire) + Wound (1 dmg + d6 4-6 retire) — jetons Druid,
+  // portables par n'importe qui (Wound s'inflige a l'adversaire).
+  if ((self.tokens.regen2 ?? 0) > 0 || (self.tokens.regen1 ?? 0) > 0 || (self.tokens.wound ?? 0) > 0) {
+    const rw = dr.upkeepRegenAndWound(self, rng)
+    if (rw.healed > 0) log(state, playerIdx, 'upkeep', `Regenerate: healed ${rw.healed}`)
+    if (rw.woundDamage > 0) log(state, playerIdx, 'upkeep', `Wound: ${rw.woundDamage} dmg, rolls [${rw.woundRolls.join(',')}], ${rw.woundsRemoved} removed`)
+    if (checkGameOver(state)) return
+  }
 
   // Nevermore Die Roll (leaflet verifie) : le detenteur NON-rv lance 1 de a son upkeep.
   // (skippé si la fenêtre interactive Cull!/Feathers l'a déjà résolu ce tour)
@@ -460,6 +483,47 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     performNevermoreActivations(state, playerIdx, 1, rng, undefined)
     return
   }
+  if (card.id === 'hibernate') {
+    if (dr.formOf(self) !== 'bear') { self.form = 'bear' }
+    dr.grantRegen2(self, 1)
+    log(state, playerIdx, phase, 'Hibernate!: Bear Form, +Regenerate (2)')
+    return
+  }
+  if (card.id === 'ready-to-pounce') {
+    if (dr.formOf(self) !== 'cat') { self.form = 'cat' }
+    opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1)
+    log(state, playerIdx, phase, 'Ready to Pounce!: Cat Form, Wound inflicted')
+    return
+  }
+  if (card.id === 'natures-rest') {
+    if (dr.formOf(self) !== 'druid') { self.form = 'druid' }
+    drawCards(self, 1, rng)
+    log(state, playerIdx, phase, "Nature's Rest!: Druid Form, drew 1")
+    return
+  }
+  if (card.id === 'quick-morph') {
+    const g = dr.grantShapeShift(self, 1)
+    log(state, playerIdx, phase, `Quick Morph!: +${g} Shape Shift`)
+    return
+  }
+  if (card.id === 'natures-cycle') {
+    if ((self.tokens.regen1 ?? 0) > 0) { self.tokens.regen1 -= 1; self.tokens.regen2 = (self.tokens.regen2 ?? 0) + 1 }
+    log(state, playerIdx, phase, "Nature's Cycle!: flipped a Regenerate (1) to (2)")
+    return
+  }
+  if (card.id === 'fey-lure') {
+    dr.grantRegen2(self, 1)
+    log(state, playerIdx, phase, 'Fey Lure!: +Regenerate (2)')
+    return
+  }
+  if (card.id === 'strength-of-the-woods') {
+    if (dr.formOf(self) !== 'druid') { log(state, playerIdx, phase, 'Strength of the Woods!: no effect (not in Druid Form)'); return }
+    const sw = rollDie(rng)
+    if (sw <= 3) { opp.hp -= 2; log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> 2 dmg`); checkGameOver(state) }
+    else if (sw <= 5) { const g = dr.grantShapeShift(self, 1); log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> +${g} Shape Shift`) }
+    else { self.hp = Math.min(self.hp + 3, 60); log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> Heal 3`) }
+    return
+  }
   const eff = card.effect
   if (!eff) {
     log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP — TODO(user): effect not structured yet, no game-state change applied`)
@@ -625,11 +689,11 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph']
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1001,7 +1065,14 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // not baked into the roll. Active player (the attacker) has priority.
   let hallowedUpgraded = false
   let defenseDice: number[]
-  if (defender.heroId === 'rv') {
+  if (defender.heroId === 'dr') {
+    // Auto-morph IA : passer Bear avant une grosse defense si Shape Shift dispo.
+    if (!defender.humanControlled && dr.formOf(defender) !== 'bear' && (defender.tokens.shapeShift ?? 0) > 0 && incomingDamage >= 5) {
+      dr.spendShapeShift(defender, 'bear')
+      log(state, defenderIdx, 'defense', 'Shape Shift -> Bear Form (defense)')
+    }
+    defenseDice = rollDice(dr.thickHideDiceCount(defender), rng) // Thick Hide : 2 (Bear 4)
+  } else if (defender.heroId === 'rv') {
     defenseDice = rollDice(5, rng) // Nothing More : 5 des
   } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
@@ -1049,7 +1120,13 @@ export function finalizeDefenseRoll(
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
-  if (defender.heroId === 'rv') {
+  if (defender.heroId === 'dr') {
+    const bear = dr.formOf(defender) === 'bear'
+    const effTH = dr.thickHideEffects(finalDefenseDice, bear)
+    damagePrevented = effTH.prevented
+    if (effTH.counterDamage > 0) queueDamage(state, attackerIdx, effTH.counterDamage)
+    log(state, defenderIdx, 'defense', `Thick Hide${bear ? ' (Bear)' : ''}: prevented ${effTH.prevented}, ${effTH.counterDamage} dmg back`)
+  } else if (defender.heroId === 'rv') {
     const upgradedNM = defender.upgradesInPlay.includes('nothing-more-ii')
     const effNM = rv.nothingMoreEffects(finalDefenseDice, upgradedNM)
     damagePrevented = effNM.prevented
@@ -1128,7 +1205,7 @@ export function finalizeDefenseRoll(
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
@@ -1156,6 +1233,18 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     log(state, defenderIdx, 'defense', `Not This Time!: prevented ${prevented} dmg`)
     return remaining - prevented
   }
+  if (cardId === 'shrug-off') {
+    if (defender.form !== 'bear') { log(state, defenderIdx, 'defense', 'Shrug Off!: no effect (not in Bear Form)'); return remaining }
+    const prevented = Math.min(remaining, 2)
+    log(state, defenderIdx, 'defense', `Shrug Off!: prevented ${prevented} dmg (Bear Form)`)
+    return remaining - prevented
+  }
+  if (cardId === 'dont-poke-the-bear') {
+    if (defender.form !== 'bear') { log(state, defenderIdx, 'defense', "Don't Poke the Bear!: no effect (not in Bear Form)"); return remaining }
+    queueDamage(state, (1 - defenderIdx) as 0 | 1, 2)
+    log(state, defenderIdx, 'defense', "Don't Poke the Bear!: 2 dmg back (Bear Form)")
+    return remaining
+  }
   if (cardId === 'spirited-reprisal') {
     if (!hasHead(defender)) {
       log(state, defenderIdx, 'defense', 'Spirited Reprisal!: no effect (no Haunted Head)')
@@ -1182,7 +1271,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite']
 
 function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1190,6 +1279,9 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
     if (!self.hand.includes(id)) return false
     const card = cardById(hero, id)
     if (!card || self.cp < (card.cpCost ?? 0)) return false
+    if (id === 'lethal-swipe' || id === 'surprise-bite') {
+      return self.heroId === 'dr' && (self.form === 'cat')
+    }
     if (id === 'stone-beak' || id === 'talon-strike') {
       if (self.heroId !== 'rv') return false
       if (id === 'stone-beak' && (self.tokens.nevermore ?? 0) > 0) return false // doit etre sur la CIBLE
@@ -1231,6 +1323,19 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
   self.hand.splice(self.hand.indexOf(cardId), 1)
   self.discard.push(cardId)
 
+  if (cardId === 'lethal-swipe') {
+    if (!rng) { return { ...current, dmg: current.dmg + 2 } } // scoring : E[claws] ~ 2.5
+    const lsRoll = rollDice(5, rng)
+    const claws = lsRoll.filter(d => d <= 3).length
+    const paws = lsRoll.filter(d => d >= 4 && d <= 5).length
+    if (paws >= 2) { opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1) }
+    log(state, playerIdx, 'resolveAttack', `Lethal Swipe!: rolled [${lsRoll.join(',')}], +${claws} dmg${paws >= 2 ? ', Wound inflicted' : ''}`)
+    return { ...current, dmg: current.dmg + claws }
+  }
+  if (cardId === 'surprise-bite') {
+    log(state, playerIdx, 'resolveAttack', 'Surprise Bite!: attack becomes undefendable (Cat Form)')
+    return { ...current, undefendable: true }
+  }
   if (cardId === 'stone-beak') {
     // "Play only if Nevermore is on the target of your Attack" — verifie a l'eligibilite.
     log(state, playerIdx, 'resolveAttack', 'Stone Beak!: +1 dmg, attack becomes undefendable')
@@ -1589,6 +1694,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   if (self.heroId === 'hh') applyHHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'fm') applyFMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'rv') applyRVAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'dr') applyDRAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -1803,11 +1909,128 @@ function applyRVAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   log(state, playerIdx, 'resolveAttack', `Whiff — no Raveness ability matched (${name})`)
 }
 
+
+// --- Druid ---------------------------------------------------------------------------------
+// Resout une habilete Druid (SPEC.md verifie). Cat Form : +2 dmg + Wound sur attaque conclue.
+function applyDRAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+
+  // Auto-morph IA : passer Cat avant une attaque a degats si Shape Shift dispo (garde 1 pour Bear si PV bas).
+  const willDamage = !name.startsWith('Wild Realignment') && !name.startsWith('Rainfall') && name !== 'Whiff'
+  if (!self.humanControlled && willDamage && dr.formOf(self) !== 'cat'
+      && (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0)) {
+    dr.spendShapeShift(self, 'cat')
+    log(state, playerIdx, 'resolveAttack', 'Shape Shift -> Cat Form (attack)')
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    // Cat Form (overlay verifie) : l attaque conclue -> +2 dmg et inflige Wound.
+    if (dr.formOf(self) === 'cat' && result.dmg > 0) {
+      result = { ...result, dmg: result.dmg + 2 }
+      opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1)
+      log(state, playerIdx, 'resolveAttack', 'Cat Form: +2 dmg, Wound inflicted')
+    }
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  const counts = new Map<number, number>()
+  for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+  const maxKind = Math.max(...counts.values())
+  const a = dice.filter(d => d <= 3).length
+
+  if (name.startsWith('Ferocity')) {
+    const up = has('ferocity-ii')
+    const dmg = (a >= 5 ? [6, 7] : a >= 4 ? [5, 6] : [4, 5])[up ? 1 : 0]
+    const trigger = up ? 3 : 4
+    if (maxKind >= trigger) {
+      opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1)
+      log(state, playerIdx, 'resolveAttack', `Ferocity: ${trigger}-of-a-kind -> Wound inflicted`)
+    }
+    attack(dmg, true)
+    return
+  }
+  if (name.startsWith('Savage Maul') || name.startsWith('Maul')) {
+    if (name.startsWith('Savage Maul')) {
+      const g = dr.grantShapeShift(self, 1)
+      log(state, playerIdx, 'resolveAttack', `Savage Maul: +${g} Shape Shift — then Maul`)
+    }
+    const r = dr.maulRoll(rng, dr.formOf(self) === 'bear')
+    log(state, playerIdx, 'resolveAttack', `Maul roll [${r.dice.join(',')}]${r.rerolled ? ' (Bear re-roll)' : ''} -> ${r.total} dmg`)
+    attack(r.total, true)
+    return
+  }
+  if (name.startsWith("Nature's Cure")) {
+    dr.grantRegen2(self, 1)
+    log(state, playerIdx, 'resolveAttack', "Nature's Cure: +Regenerate (2)")
+    attack(5, true)
+    return
+  }
+  if (name.startsWith('Wild Realignment')) {
+    grantCp(self, 1)
+    const g = dr.grantShapeShift(self, 2)
+    let msg = `Wild Realignment: +1 CP, +${g} Shape Shift`
+    if (dr.formOf(self) === 'druid') { drawCards(self, 1, rng); msg += ', drew 1 (Druid Form)' }
+    log(state, playerIdx, 'resolveAttack', msg)
+    return
+  }
+  if (name.startsWith("Forest's Call")) {
+    const g = dr.grantShapeShift(self, 1)
+    log(state, playerIdx, 'resolveAttack', `Forest's Call: +${g} Shape Shift`)
+    attack(6, true)
+    return
+  }
+  if (name.startsWith("Forest's Answer")) {
+    const g = dr.grantShapeShift(self, 1)
+    const bonus = rollDie(rng)
+    let extra = 0
+    let note = ''
+    if (bonus <= 3) { extra = 2; note = '+2 dmg' }
+    else if (bonus <= 5) { dr.grantShapeShift(self, 1); note = '+1 Shape Shift' }
+    else { dr.grantRegen2(self, 1); note = '+Regenerate (2)' }
+    log(state, playerIdx, 'resolveAttack', `Forest's Answer: +${g} Shape Shift, bonus die ${bonus} -> ${note}`)
+    attack(7 + extra, true)
+    return
+  }
+  if (name.startsWith('Protect the Forest')) {
+    dr.grantRegen2(self, 1)
+    const g = dr.grantShapeShift(self, 1)
+    log(state, playerIdx, 'resolveAttack', `Protect the Forest: +Regenerate (2), +${g} Shape Shift`)
+    attack(has('protect-the-forest-ii') ? 8 : 6, false)
+    return
+  }
+  if (name.startsWith('Rainfall')) {
+    grantCp(self, 1)
+    dr.grantRegen2(self, 2)
+    log(state, playerIdx, 'resolveAttack', 'Rainfall: +1 CP, +2 Regenerate (2)')
+    return
+  }
+  if (name.startsWith('Wrath of Nature')) {
+    dr.grantRegen2(self, 1)
+    const g = dr.grantShapeShift(self, 2)
+    log(state, playerIdx, 'resolveAttack', `Wrath of Nature: +Regenerate (2), +${g} Shape Shift`)
+    attack(12, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Druid ability matched (${name})`)
+}
+
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
   const self = state.players[playerIdx]
   if ((self.tokens.hex ?? 0) > 0) {
     self.tokens.hex = 0
     log(state, playerIdx, 'endOfTurn', 'Hex removed (end of afflicted turn)')
+  }
+  if (self.heroId === 'dr' && dr.formOf(self) === 'druid') {
+    dr.grantRegen2(self, 1)
+    log(state, playerIdx, 'endOfTurn', 'Druid Form: gained Regenerate (2)')
   }
   if (self.hoardedDice > 0) {
     log(state, playerIdx, 'endOfTurn', `Hoarding: ${self.hoardedDice} stolen die returned`)

@@ -54,6 +54,12 @@
     fm: { name:'Forgemaster', crest:'FM', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:GLYPH.pick,B:GLYPH.forgehammer,C:GLYPH.anvil}, symName:{A:'Pioche',B:'Forge',C:'Enclume'},
       col:{A:'#a9d6e8',B:'#f0a03a',C:'#f3ede2'} },
+    dr: { name:'Druid', crest:'DR', cls:v=>v<=3?'A':v<=5?'B':'C',
+      sym:{A:'<g class="glyph"><path d="M18 20 L28 44 M30 18 L36 44 M44 20 L42 44" stroke-width="4" fill="none"/></g>',
+           B:'<g class="glyph"><circle cx="26" cy="24" r="5"/><circle cx="38" cy="24" r="5"/><ellipse cx="32" cy="38" rx="11" ry="9"/></g>',
+           C:'<g class="glyph"><path d="M32 14 Q46 28 32 50 Q18 28 32 14 Z M32 20 L32 44" stroke-width="2"/></g>'},
+      symName:{A:'Griffe',B:'Patte',C:'Nature'},
+      col:{A:'#e8d94a',B:'#b07a4a',C:'#6fcf6f'} },
     rv: { name:'Raveness', crest:'RV', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:'<g class="glyph"><path d="M20 44 L32 20 L44 44 M26 36 L38 36" stroke-width="4" fill="none"/></g>',
            B:'<g class="glyph"><path d="M16 40 Q32 12 48 28 Q40 34 34 34 Q40 40 30 42 Q36 46 24 46 Z"/></g>',
@@ -69,7 +75,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -84,6 +90,7 @@
   // compensation automatically (HH gains 1 Dreadful — handled in createInitialGameState).
   const humanFirst = rng() < 0.5;
   const g = G.newHumanGame(HUMAN, AI_HERO, ai, rng, humanFirst, BOSS_HARD);
+  g.state.players[g.humanIdx].humanControlled = true;
   const humanHero = HERO[HUMAN], aiHero = HERO[AI_HERO];
 
   let phase = 'main1';         // 'upkeep'|'main1'|'roll'|'alter'|'ability'|'main2'|'defense'|'over'
@@ -171,6 +178,13 @@
     if (t.covertOps)   out.push(`<span class="tok covert"><span class="dot"></span><b>Covert</b> ${t.covertOps}</span>`);
     if (t.head)        out.push(`<span class="tok head"><span class="dot" style="background:var(--gold)"></span><b>Haunted Head</b></span>`);
     (p.timeBombs || []).forEach(pos => out.push(`<span class="tok bomb"><span class="dot"></span><b>Time Bomb</b> ${pos}</span>`));
+    if (p.heroId==='dr') {
+      const F = {druid:'🧙 Druide', cat:'🐆 Chat', bear:'🐻 Ours'};
+      out.push(`<span class="tok" style="border-color:#6a8f3f"><b>${F[p.form||'druid']}</b></span>`);
+    }
+    if (t.shapeShift) out.push(`<span class="tok" style="border-color:#8f6a3f"><b>🔄 Shape Shift</b> ${t.shapeShift}</span>`);
+    if (t.regen2 || t.regen1) out.push(`<span class="tok" style="border-color:#3f8f5f"><b>🌿 Regen</b> ${t.regen2?t.regen2+'×②':''}${t.regen2&&t.regen1?' ':''}${t.regen1?t.regen1+'×①':''}</span>`);
+    if (t.wound) out.push(`<span class="tok" style="border-color:#b03a3a"><b>🩸 Wound</b> ${t.wound}</span>`);
     if (t.feather) out.push(`<span class="tok" style="border-color:#3f7a4f"><b>🪶 Feather</b> ${t.feather}</span>`);
     if (t.hex) out.push(`<span class="tok" style="border-color:#8a4fbf"><b>⬡ Hex</b> (tes 6 = blancs ce tour)</span>`);
     if (t.nevermore) {
@@ -511,6 +525,12 @@
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
   // II-aware ("je ne vois toujours pas sur le board la défense", reported).
   function defBoxHTML(heroKey, p){
+    if (heroKey==='dr'){
+      const bear = p.form==='bear';
+      return `<div class="defbox"><b>🛡️ Thick Hide${bear?' (Ours 🐻)':''}</b><br>
+        Lance ${bear?4:2} dés : 1 contre-dégât par Griffe<br>
+        ${bear?'Ours : préviens 1 par Patte + 1 par Nature':'(prévention en Bear Form seulement)'}</div>`;
+    }
     if (heroKey==='rv'){
       const up = p.upgradesInPlay.includes('nothing-more-ii');
       return `<div class="defbox"><b>🛡️ Nothing More${up?' II':''}</b><br>
@@ -680,6 +700,20 @@
     const m = g.state.players[g.humanIdx].nevermoreMode;
     return m==='absorb' ? '🩸 Absorber' : m==='move' ? '✈️ Déplacer' : '🤖 Auto';
   }
+  function addMorphBtns(c){
+    if (HUMAN!=='dr') return;
+    const you=g.state.players[g.humanIdx];
+    if (!(you.tokens.shapeShift>0)) return;
+    const F={druid:'🧙 Druide',cat:'🐆 Chat',bear:'🐻 Ours'};
+    for (const f of ['bear','cat','druid']){
+      if ((you.form||'druid')===f) continue;
+      c.appendChild(btn(`🔄→ ${F[f]} (1 SS)`,'', ()=>{
+        you.tokens.shapeShift-=1; you.form=f;
+        log(`🔄 Shape Shift : tu passes en <b>${F[f]}</b>.`);
+        renderAll();
+      }));
+    }
+  }
   function addNvToggle(c){
     if (HUMAN!=='rv') return;
     c.appendChild(btn(`🐦‍⬛ Nevermore : ${nvModeLabel()}`,'', ()=>{
@@ -704,6 +738,7 @@
       const a = pendingAttackInfo;
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = a && a.abilityName ? `${formatAbility(aiHero,a.abilityName).name} arrive (${a.defendable?`~${a.incomingDamage} dégâts, défendable`:'indéfendable !'}) :` : 'Attaque entrante :';
+      addMorphBtns(c); // 🐻 passer Ours AVANT de lancer ta défense (Shape Shift à tout moment)
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
     } else if (phase==='upkeep' && HUMAN==='fm') {
@@ -753,6 +788,7 @@
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
       else {
         addNvToggle(c);
+        addMorphBtns(c);
         if (ttaCharges > 0) {
           const s0=document.createElement('span'); s0.className='rolls';
           s0.textContent='Try Try Again : 2e relance gratuite (même dé permis) —';
@@ -1623,6 +1659,16 @@
       return `<b>${m[1].replace(/\s*\([A-C5-]+\)$/,'')}</b> : va chercher <b>${m[2]}</b> → la Forge (deck mélangé)`;
     if ((m = msg.match(/^(.+?): mined — revealed (.+) to The Forge/)))
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> : mine — révèle <b>${m[2]}</b> → la Forge`;
+    if ((m = msg.match(/^Shape Shift -> (\w+) Form \((\w+)\)/))) return `🔄 Shape Shift → <b>${{bear:'Ours 🐻',cat:'Chat 🐆',druid:'Druide 🧙'}[m[1].toLowerCase()]||m[1]}</b> (${m[2]==='attack'?'attaque':'défense'})`;
+    if ((m = msg.match(/^Regenerate: healed (\d+)/))) return `🌿 <b>Regenerate</b> : soigne ${m[1]}`;
+    if ((m = msg.match(/^Wound: (\d+) dmg, rolls \[([\d,]+)\], (\d+) removed/))) return `🩸 <b>Wound</b> : ${m[1]} dégât(s), dés [${m[2]}], ${m[3]} retiré(s)`;
+    if ((m = msg.match(/^Thick Hide( \(Bear\))?: prevented (\d+), (\d+) dmg back/))) return `🛡️ <b>Thick Hide${m[1]?' (Ours)':''}</b> : prévient ${m[2]}, ${m[3]} contre-dégât(s)`;
+    if ((m = msg.match(/^Maul roll \[([\d,]+)\]( \(Bear re-roll\))?: -> (\d+) dmg/))) return `🐻 <b>Maul</b> : [${m[1]}]${m[2]?' (relance Ours)':''} → ${m[3]} dégâts`;
+    if ((m = msg.match(/^Maul roll \[([\d,]+)\](.*) -> (\d+) dmg/))) return `🐻 <b>Maul</b> : [${m[1]}]${m[2]?' (relance Ours)':''} → ${m[3]} dégâts`;
+    if (/^Cat Form: \+2 dmg, Wound inflicted/.test(msg)) return `🐆 <b>Chat</b> : +2 dégâts, 🩸 Wound infligé`;
+    if (/^Druid Form: gained Regenerate/.test(msg)) return `🧙 <b>Druide</b> : +Regenerate ② (fin de tour)`;
+    if ((m = msg.match(/^Ferocity: (\d)-of-a-kind -> Wound inflicted/))) return `<b>Ferocity</b> : ${m[1]} identiques → 🩸 Wound`;
+    if ((m = msg.match(/^(Forest's \w+|Protect the Forest|Wrath of Nature|Wild Realignment|Nature's Cure|Savage Maul|Rainfall): (.+)$/))) return `<b>${m[1]}</b> : ${m[2]}`;
     if ((m = msg.match(/^Nevermore Die Roll: (\d)(.*)$/))) {
       const suites={' — gains Hex (6s are blanks this turn)':' — tu gagnes Hex (tes 6 sont blancs ce tour)',
         ' — must discard 1 of choice':' — tu dois défausser 1 carte',
@@ -1703,6 +1749,14 @@
     fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBB',dmg:'5 +1d6'},
       {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
       {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
+    dr:[ {name:'Ferocity',req:'AAA+',dmg:'4-6 ·4-kind: Wound'},
+      {name:'Maul',req:'BBBB',dmg:'2d6 (Bear: reroll)'},
+      {name:"Nature's Cure",req:'AACC',dmg:'5 ·+Regen 2'},
+      {name:'Wild Realignment',req:'ABBC',dmg:'+1CP +2 SS ·pioche'},
+      {name:"Forest's Call",req:'SUITE 4',dmg:'6 ·+SS'},
+      {name:"Forest's Answer",req:'SUITE 5',dmg:'7 +dé bonus'},
+      {name:'Protect the Forest',req:'CCCC',dmg:'6 indéf. ·+Regen+SS'},
+      {name:'Wrath of Nature',req:'CCCCC',dmg:'12 ·ULT'} ],
     rv:[ {name:'Peck',req:'AAA+',dmg:'5-7 ·4-kind: Activ.'},
       {name:'Raven Sight',req:'AACC',dmg:'3 indéf. ·Activ.'},
       {name:'Craven',req:'SUITE 4',dmg:'8 ·+1 Feather'},
@@ -1729,9 +1783,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>

@@ -152,7 +152,7 @@ var Game = (() => {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
   function emptyBag() {
-    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0 };
+    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0 };
   }
   function hasHead(p) {
     return p.tokens.head > 0;
@@ -1240,9 +1240,162 @@ var Game = (() => {
     }
   };
 
+  // src/characters/druid/constants.ts
+  var SHAPE_SHIFT_VALUE = 1.2;
+  var REGEN2_VALUE = 2.2;
+  var WOUND_VALUE = 1.6;
+  var CARD_DRAW_VALUE4 = 1.3;
+  var CP_TO_DMG_EQUIV3 = 0.75;
+  var FEROCITY_DMG = [4, 5, 6];
+  var FEROCITY_DMG_UPGRADED = [5, 6, 7];
+  var MAUL_EV = 7;
+  var MAUL_EV_BEAR = 8.17;
+  var NATURES_CURE_DMG = 5;
+  var FORESTS_CALL_DMG = 6;
+  var FORESTS_ANSWER_DMG = 7;
+  var PROTECT_DMG = 6;
+  var PROTECT_DMG_UPGRADED = 8;
+  var WRATH_DMG = 12;
+  var CAT_ATTACK_BONUS = 2;
+
+  // src/characters/druid/abilities.ts
+  function drFaceToSymbol(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function classify5(dice) {
+    let A = 0, B = 0, C = 0;
+    for (const d of dice) {
+      if (d <= 3) A += 1;
+      else if (d <= 5) B += 1;
+      else C += 1;
+    }
+    return { A, B, C };
+  }
+  function hasStraight5(dice, len) {
+    const uniq = [...new Set(dice)].sort((a, b) => a - b);
+    let run = 1;
+    for (let i = 1; i < uniq.length; i++) {
+      run = uniq[i] === uniq[i - 1] + 1 ? run + 1 : 1;
+      if (run >= len) return true;
+    }
+    return false;
+  }
+  function maxOfAKind2(dice) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    return Math.max(...counts.values());
+  }
+  function getCandidates5(dice, form, shapeShift, upgradeIds = [], defenseTax = 0) {
+    const { A: a, B: b, C: c } = classify5(dice);
+    const has = (id) => upgradeIds.includes(id);
+    const out = [];
+    const tax = (defendable) => defendable ? defenseTax : 0;
+    const catBonus = (dmg) => form === "cat" && dmg > 0 ? CAT_ATTACK_BONUS + WOUND_VALUE : 0;
+    const fUp = has("ferocity-ii");
+    const fd = fUp ? FEROCITY_DMG_UPGRADED : FEROCITY_DMG;
+    const kindNeeded = fUp ? 3 : 4;
+    const woundBonus = maxOfAKind2(dice) >= kindNeeded ? WOUND_VALUE : 0;
+    if (a >= 5) out.push(["Ferocity 5A (AAAAA)", fd[2] + woundBonus + catBonus(fd[2]) - tax(true), fd[2]]);
+    else if (a >= 4) out.push(["Ferocity 4A (AAAA)", fd[1] + woundBonus + catBonus(fd[1]) - tax(true), fd[1]]);
+    else if (a >= 3) out.push(["Ferocity 3A (AAA)", fd[0] + woundBonus + catBonus(fd[0]) - tax(true), fd[0]]);
+    const maulEv = form === "bear" ? MAUL_EV_BEAR : MAUL_EV;
+    if (b >= 5 && has("maul-ii")) {
+      out.push(["Savage Maul (BBBBB)", SHAPE_SHIFT_VALUE + maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)]);
+    }
+    if (b >= 4) out.push(["Maul (BBBB)", maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)]);
+    if (a >= 2 && c >= 2) {
+      out.push(["Nature's Cure (AACC)", NATURES_CURE_DMG + REGEN2_VALUE + catBonus(NATURES_CURE_DMG) - tax(true), NATURES_CURE_DMG]);
+    }
+    if (a >= 1 && b >= 2 && c >= 1) {
+      const val = CP_TO_DMG_EQUIV3 + Math.min(2, 2 - 0) * SHAPE_SHIFT_VALUE + (form === "druid" ? CARD_DRAW_VALUE4 : 0);
+      out.push(["Wild Realignment (ABBC)", val, 0]);
+    }
+    if (hasStraight5(dice, 4)) {
+      out.push(["Forest's Call (4-straight)", FORESTS_CALL_DMG + SHAPE_SHIFT_VALUE + catBonus(FORESTS_CALL_DMG) - tax(true), FORESTS_CALL_DMG]);
+    }
+    if (hasStraight5(dice, 5)) {
+      const bonus = 0.5 * 2 + 1 / 3 * SHAPE_SHIFT_VALUE + 1 / 6 * REGEN2_VALUE;
+      out.push(["Forest's Answer (5-straight)", FORESTS_ANSWER_DMG + SHAPE_SHIFT_VALUE + bonus + catBonus(FORESTS_ANSWER_DMG) - tax(true), FORESTS_ANSWER_DMG]);
+    }
+    const pDmg = has("protect-the-forest-ii") ? PROTECT_DMG_UPGRADED : PROTECT_DMG;
+    if (c >= 4) {
+      out.push(["Protect the Forest (CCCC)", pDmg + REGEN2_VALUE + SHAPE_SHIFT_VALUE + catBonus(pDmg), pDmg]);
+    } else if (c >= 3 && has("protect-the-forest-ii")) {
+      out.push(["Rainfall (CCC)", CP_TO_DMG_EQUIV3 + 2 * REGEN2_VALUE, 0]);
+    }
+    if (c >= 5) {
+      out.push(["Wrath of Nature (CCCCC)", WRATH_DMG + REGEN2_VALUE + 2 * SHAPE_SHIFT_VALUE + catBonus(WRATH_DMG), WRATH_DMG]);
+    }
+    out.push(["Whiff", 0, 0]);
+    return out;
+  }
+  function bestAbilityValue5(dice, form, shapeShift, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates5(dice, form, shapeShift, upgradeIds, defenseTax).map(([, v]) => v));
+  }
+  function bestAbilityName5(dice, form, shapeShift, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates5(dice, form, shapeShift, upgradeIds, defenseTax);
+    let best = cands[0];
+    for (const cand of cands) if (cand[1] > best[1]) best = cand;
+    return best[0];
+  }
+  function buildAbilityBoard5(dice, form, shapeShift, upgradeIds = [], defenseTax = 0) {
+    const matched = new Map(getCandidates5(dice, form, shapeShift, upgradeIds, defenseTax).map(([n, v, d]) => [n, [v, d]]));
+    const all = [
+      "Ferocity 3A (AAA)",
+      "Ferocity 4A (AAAA)",
+      "Ferocity 5A (AAAAA)",
+      "Maul (BBBB)",
+      "Nature's Cure (AACC)",
+      "Wild Realignment (ABBC)",
+      "Forest's Call (4-straight)",
+      "Forest's Answer (5-straight)",
+      "Protect the Forest (CCCC)",
+      "Wrath of Nature (CCCCC)"
+    ];
+    if (upgradeIds.includes("maul-ii")) all.push("Savage Maul (BBBBB)");
+    if (upgradeIds.includes("protect-the-forest-ii")) all.push("Rainfall (CCC)");
+    return all.map((name) => {
+      const hit = matched.get(name);
+      return { name, matched: !!hit, value: hit ? hit[0] : 0, baseDamage: hit ? hit[1] : 0 };
+    });
+  }
+
+  // src/characters/druid/config.ts
+  var drConfig = {
+    id: "dr",
+    faceToSymbol(face) {
+      return drFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      const base = bestAbilityValue5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue5(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0)
+      );
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      const w = state.wildcards || {};
+      const wc = (w.sixIt ? 1 : 0) + (w.soWild ? 2 : 0) + (w.twiceAsWild ? 4 : 0) + (w.samesies ? 8 : 0) + (w.tipIt ? 16 : 0);
+      return `${state.form}|${Math.min(state.shapeShift, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgrades}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -1790,6 +1943,302 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/dr/hero.json
+  var hero_default5 = {
+    id: "dr",
+    name: "Druid",
+    diceAnatomy: "1-3 = Claw (A), 4-5 = Paw (B), 6 = Nature (C). V\xE9rifi\xE9 leaflet (scan user 2026-07-06).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    source: "Board + leaflet + 14 cartes scann\xE9s user 2026-07-06. Spec compl\xE8te : characters/Druid/SPEC.md. Rulings user : Thick Hide contre par Claw toujours / pr\xE9vention Bear seulement ; Nature's Cure = AACC ; Wound = 1 dmg upkeep + d6 4-6 retire.",
+    tokens: [
+      { id: "shapeShift", name: "Shape Shift", startingCount: 0, stackCap: 2, description: "Unique Status Effect. Spend at ANY time: Transform into Bear Form / Cat Form / return to Druid Form. May not be removed or transferred by any other means." },
+      { id: "regen2", name: "Regenerate (face 2)", startingCount: 0, stackCap: 2, description: "Positive. Upkeep: heal 2, flip to face 1. Gaining a 2 at stack cap may flip a 1 to the 2 side. Total regen tokens (2+1 faces) capped at 2." },
+      { id: "regen1", name: "Regenerate (face 1)", startingCount: 0, stackCap: 2, description: "Positive. Upkeep: heal 1, remove." },
+      { id: "wound", name: "Wound", startingCount: 0, stackCap: 2, description: "Negative. Afflicted player is dealt 1 dmg during their Upkeep Phase, then rolls 1 die: on 4-6, remove this token (per token)." }
+    ],
+    flags: [],
+    forms: {
+      start: "druid",
+      druid: "At the conclusion of your turn, gain Regenerate 2 (1v1: self).",
+      cat: "If you conclude your Offensive Roll Phase with an Attack, add 2 dmg and inflict Wound. Attack Modifier.",
+      bear: "Your Defensive Ability is stronger (see Thick Hide)."
+    },
+    abilities: [
+      {
+        id: "ferocity_3a",
+        boardName: "Ferocity 3A (AAA)",
+        dicePattern: "AAA",
+        baseDamage: 4,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, tokensInflictedOnOpponent: { wound: 1 } },
+        upgradedBy: { upgradeId: "ferocity-ii", baseDamage: 5, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "ferocity_4a",
+        boardName: "Ferocity 4A (AAAA)",
+        dicePattern: "AAAA",
+        baseDamage: 5,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, tokensInflictedOnOpponent: { wound: 1 } },
+        upgradedBy: { upgradeId: "ferocity-ii", baseDamage: 6, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "ferocity_5a",
+        boardName: "Ferocity 5A (AAAAA)",
+        dicePattern: "AAAAA",
+        baseDamage: 6,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, tokensInflictedOnOpponent: { wound: 1 } },
+        upgradedBy: { upgradeId: "ferocity-ii", baseDamage: 7, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "maul",
+        boardName: "Maul (BBBB)",
+        dicePattern: "BBBB",
+        baseDamage: 0,
+        defendable: true,
+        maulRoll: { dice: 2, bearMayRerollOne: true },
+        upgradedBy: { upgradeId: "maul-ii" },
+        notes: "Lance 2d6, d\xE9g\xE2ts = somme (E=7). Si Bear Form : peut relancer un des deux (E~8.2). Maul II : identique (l'upgrade vaut par son alt Savage Maul).",
+        verified: true
+      },
+      {
+        id: "natures_cure",
+        boardName: "Nature's Cure (AACC)",
+        dicePattern: "AACC",
+        baseDamage: 5,
+        defendable: true,
+        tokensGrantedToSelf: { regen2: 1 },
+        notes: "Ruling user : pattern AACC. Gain Regenerate (2) + 5 d\xE9g\xE2ts.",
+        verified: true
+      },
+      {
+        id: "wild_realignment",
+        boardName: "Wild Realignment (ABBC)",
+        dicePattern: "ABBC",
+        baseDamage: 0,
+        defendable: true,
+        cpGain: 1,
+        tokensGrantedToSelf: { shapeShift: 2 },
+        drawIfDruidForm: 1,
+        notes: "Gain 1 CP et 2 Shape Shift. Puis, si Druid Form, pioche 1.",
+        verified: true
+      },
+      {
+        id: "forests_call",
+        boardName: "Forest's Call (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 6,
+        defendable: true,
+        tokensGrantedToSelf: { shapeShift: 1 },
+        verified: true
+      },
+      {
+        id: "forests_answer",
+        boardName: "Forest's Answer (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 7,
+        defendable: true,
+        tokensGrantedToSelf: { shapeShift: 1 },
+        bonusRoll: { dice: 1, onA: "add2dmg", onB: "shapeShift1", onC: "regen2" },
+        verified: true
+      },
+      {
+        id: "protect_the_forest",
+        boardName: "Protect the Forest (CCCC)",
+        dicePattern: "CCCC",
+        baseDamage: 6,
+        defendable: false,
+        tokensGrantedToSelf: { regen2: 1, shapeShift: 1 },
+        upgradedBy: { upgradeId: "protect-the-forest-ii", baseDamage: 8 },
+        verified: true
+      },
+      {
+        id: "wrath_of_nature",
+        boardName: "Wrath of Nature (CCCCC)",
+        dicePattern: "CCCCC",
+        baseDamage: 12,
+        defendable: false,
+        ultimate: true,
+        tokensGrantedToSelf: { regen2: 1, shapeShift: 2 },
+        verified: true
+      }
+    ],
+    altAbilities: [
+      {
+        id: "savage_maul",
+        boardName: "Savage Maul (BBBBB)",
+        dicePattern: "BBBBB",
+        baseDamage: 0,
+        defendable: true,
+        requiresUpgradeId: "maul-ii",
+        tokensGrantedToSelf: { shapeShift: 1 },
+        thenActivateMaul: true,
+        notes: "Gain Shape Shift, puis active MAUL II (2d6 somme, reroll Bear).",
+        verified: true
+      },
+      {
+        id: "rainfall",
+        boardName: "Rainfall (CCC)",
+        dicePattern: "CCC",
+        baseDamage: 0,
+        defendable: true,
+        requiresUpgradeId: "protect-the-forest-ii",
+        cpGain: 1,
+        tokensGrantedToSelf: { regen2: 2 },
+        notes: "1v1 : sur soi \u2014 gagne 1 CP et 2 Regenerate (2).",
+        verified: true
+      }
+    ],
+    passives: [
+      {
+        id: "forms",
+        name: "Formes (overlay)",
+        trigger: "permanent",
+        text: "Druid: fin de ton tour +Regenerate 2. Cat: attaque conclue -> +2 dmg et inflige Wound. Bear: Thick Hide renforc\xE9e (4 d\xE9s + pr\xE9vention).",
+        verified: true
+      }
+    ],
+    defense: {
+      name: "Thick Hide",
+      diceCount: "2 (4 en Bear Form)",
+      text: "Defense Roll 2 (Bear: 4). Deal 1 dmg per Claw. If in Bear Form: prevent 1 per Paw + 1 per Nature. (Hors Bear : aucune pr\xE9vention \u2014 ruling user.)",
+      verified: true
+    },
+    cards: [
+      {
+        id: "maul-ii",
+        name: "Maul II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "maul",
+        text: "BBBB: Roll 2 dice and deal dmg equal to the total roll value. If in Bear Form, you may re-roll one of these dice. Adds alt SAVAGE MAUL (BBBBB): Gain Shape Shift. Then activate MAUL II.",
+        verified: true
+      },
+      {
+        id: "ferocity-ii",
+        name: "Ferocity II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "ferocity",
+        text: "AAA: 5. AAAA: 6. AAAAA: 7. On 3-of-a-kind (#'s), inflict Wound.",
+        verified: true
+      },
+      {
+        id: "protect-the-forest-ii",
+        name: "Protect the Forest II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "protect_the_forest",
+        text: "CCCC: Gain Regenerate 2 and Shape Shift. Then deal 8 undefendable dmg. Adds alt RAINFALL (CCC): A chosen player gains 1 CP and 2 Regenerate 2.",
+        verified: true
+      },
+      {
+        id: "hibernate",
+        name: "Hibernate!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Transform into Bear Form (if not already). Gain Regenerate 2.",
+        verified: true
+      },
+      {
+        id: "ready-to-pounce",
+        name: "Ready to Pounce!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Transform into Cat Form (if not already). Inflict Wound on a chosen player.",
+        verified: true
+      },
+      {
+        id: "natures-rest",
+        name: "Nature's Rest!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Return to Druid Form (if not already). Draw 1.",
+        verified: true
+      },
+      {
+        id: "quick-morph",
+        name: "Quick Morph!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "instant",
+        text: "Instant Action. Gain Shape Shift.",
+        verified: true
+      },
+      {
+        id: "natures-cycle",
+        name: "Nature's Cycle!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Flip any one Regenerate 1 token to the Regenerate 2 side.",
+        verified: true
+      },
+      {
+        id: "fey-lure",
+        name: "Fey Lure!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. A chosen player gains Regenerate 2. (1v1 : soi.)",
+        verified: true
+      },
+      {
+        id: "lethal-swipe",
+        name: "Lethal Swipe!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. If in Cat Form, roll 5 dice: Add 1 x Claw dmg. On 2 Paws, inflict Wound.",
+        verified: true
+      },
+      {
+        id: "surprise-bite",
+        name: "Surprise Bite!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. If in Cat Form, your Attack becomes undefendable.",
+        verified: true
+      },
+      {
+        id: "strength-of-the-woods",
+        name: "Strength of the Woods!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. If in Druid Form, roll 1 die: On Claw, deal 2 dmg to a chosen opponent. On Paw, gain Shape Shift. On Nature, Heal 3.",
+        verified: true
+      },
+      {
+        id: "shrug-off",
+        name: "Shrug Off!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. If in Bear Form, prevent 2 dmg.",
+        verified: true
+      },
+      {
+        id: "dont-poke-the-bear",
+        name: "Don't Poke the Bear!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. If in Bear Form, deal 2 dmg.",
+        verified: true
+      }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -1819,6 +2268,7 @@ var Game = (() => {
   var bwHero = hero_default2;
   var fmHero = hero_default3;
   var rvHero = hero_default4;
+  var drHero = hero_default5;
   var commonCards = common_cards_default;
   var nxHero = {
     id: "nx",
@@ -1835,7 +2285,7 @@ var Game = (() => {
     cards: []
   };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "nx" ? nxHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const base = hero.abilities.find((a) => a.boardName === boardName);
@@ -1867,7 +2317,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -2322,6 +2772,94 @@ var Game = (() => {
     };
   }
 
+  // src/sim/hero/dr.rules.ts
+  var SHAPE_SHIFT_CAP = 2;
+  var REGEN_CAP = 2;
+  function createInitialDRTokens() {
+    return emptyBag();
+  }
+  function drFaceToSymbol2(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function formOf(p) {
+    return p.form ?? "druid";
+  }
+  function grantShapeShift(self, n) {
+    const before = self.tokens.shapeShift ?? 0;
+    self.tokens.shapeShift = Math.min(SHAPE_SHIFT_CAP, before + n);
+    return self.tokens.shapeShift - before;
+  }
+  function grantRegen2(self, n = 1) {
+    for (let i = 0; i < n; i++) {
+      const total = (self.tokens.regen2 ?? 0) + (self.tokens.regen1 ?? 0);
+      if (total < REGEN_CAP) self.tokens.regen2 = (self.tokens.regen2 ?? 0) + 1;
+      else if ((self.tokens.regen1 ?? 0) > 0) {
+        self.tokens.regen1 -= 1;
+        self.tokens.regen2 = (self.tokens.regen2 ?? 0) + 1;
+      }
+    }
+  }
+  function spendShapeShift(self, to) {
+    if ((self.tokens.shapeShift ?? 0) < 1) return null;
+    if (formOf(self) === to) return null;
+    self.tokens.shapeShift -= 1;
+    self.form = to;
+    return to;
+  }
+  function upkeepRegenAndWound(self, rng) {
+    let healed = 0;
+    const r2 = self.tokens.regen2 ?? 0;
+    const r1 = self.tokens.regen1 ?? 0;
+    if (r2 > 0) {
+      healed += 2 * r2;
+      self.tokens.regen2 = 0;
+      self.tokens.regen1 = Math.min(REGEN_CAP, r1 + r2);
+    }
+    const r1b = self.tokens.regen1 ?? 0;
+    if (r1 > 0) {
+      healed += 1 * r1;
+      self.tokens.regen1 = r1b - r1;
+    }
+    self.hp = Math.min(self.hp + healed, 60);
+    let woundDamage = 0, woundsRemoved = 0;
+    const woundRolls = [];
+    const wounds = self.tokens.wound ?? 0;
+    for (let i = 0; i < wounds; i++) {
+      woundDamage += 1;
+      const roll = rollDie(rng);
+      woundRolls.push(roll);
+      if (roll >= 4) woundsRemoved += 1;
+    }
+    self.hp -= woundDamage;
+    self.tokens.wound = wounds - woundsRemoved;
+    return { healed, woundDamage, woundsRemoved, woundRolls };
+  }
+  function thickHideDiceCount(p) {
+    return formOf(p) === "bear" ? 4 : 2;
+  }
+  function thickHideEffects(dice, bear) {
+    let a = 0, b = 0, c = 0;
+    for (const d of dice) {
+      const s = drFaceToSymbol2(d);
+      if (s === "A") a += 1;
+      else if (s === "B") b += 1;
+      else c += 1;
+    }
+    return { counterDamage: a, prevented: bear ? b + c : 0 };
+  }
+  function maulRoll(rng, bear) {
+    const d = [rollDie(rng), rollDie(rng)];
+    let rerolled = false;
+    if (bear) {
+      const iMin = d[0] <= d[1] ? 0 : 1;
+      if (d[iMin] <= 3) {
+        d[iMin] = rollDie(rng);
+        rerolled = true;
+      }
+    }
+    return { dice: d, total: d[0] + d[1], rerolled };
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
@@ -2329,6 +2867,9 @@ var Game = (() => {
   function defenseTaxFor(opponent) {
     if (opponent.heroId === "bw") {
       return opponent.upgradesInPlay.includes("sabotage-ii") ? 2.67 : 2;
+    }
+    if (opponent.heroId === "dr") {
+      return formOf(opponent) === "bear" ? 2 + 2 : 1;
     }
     if (opponent.heroId === "rv") {
       return 2 * 0.8125 + 2 * 0.539;
@@ -2354,6 +2895,15 @@ var Game = (() => {
     };
   }
   function oracleStateFor(player, opponent) {
+    if (player.heroId === "dr") {
+      return {
+        form: formOf(player),
+        shapeShift: player.tokens.shapeShift ?? 0,
+        upgradeIds: player.upgradesInPlay,
+        defenseTax: defenseTaxFor(opponent),
+        wildcards: wildcardFlagsFor(player)
+      };
+    }
     if (player.heroId === "rv") {
       return {
         feathers: player.tokens.feather,
@@ -2427,6 +2977,12 @@ var Game = (() => {
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
     self.minesDrawUsedThisTurn = false;
+    if ((self.tokens.regen2 ?? 0) > 0 || (self.tokens.regen1 ?? 0) > 0 || (self.tokens.wound ?? 0) > 0) {
+      const rw = upkeepRegenAndWound(self, rng);
+      if (rw.healed > 0) log(state, playerIdx, "upkeep", `Regenerate: healed ${rw.healed}`);
+      if (rw.woundDamage > 0) log(state, playerIdx, "upkeep", `Wound: ${rw.woundDamage} dmg, rolls [${rw.woundRolls.join(",")}], ${rw.woundsRemoved} removed`);
+      if (checkGameOver(state)) return;
+    }
     if (self.heroId !== "rv" && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === "rv" && !state.nevermoreRollResolved) {
       const face = rollDie(rng);
       const r = applyNevermoreDieFace(opp, self, face);
@@ -2669,6 +3225,67 @@ var Game = (() => {
       performNevermoreActivations(state, playerIdx, 1, rng, void 0);
       return;
     }
+    if (card.id === "hibernate") {
+      if (formOf(self) !== "bear") {
+        self.form = "bear";
+      }
+      grantRegen2(self, 1);
+      log(state, playerIdx, phase, "Hibernate!: Bear Form, +Regenerate (2)");
+      return;
+    }
+    if (card.id === "ready-to-pounce") {
+      if (formOf(self) !== "cat") {
+        self.form = "cat";
+      }
+      opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1);
+      log(state, playerIdx, phase, "Ready to Pounce!: Cat Form, Wound inflicted");
+      return;
+    }
+    if (card.id === "natures-rest") {
+      if (formOf(self) !== "druid") {
+        self.form = "druid";
+      }
+      drawCards(self, 1, rng);
+      log(state, playerIdx, phase, "Nature's Rest!: Druid Form, drew 1");
+      return;
+    }
+    if (card.id === "quick-morph") {
+      const g = grantShapeShift(self, 1);
+      log(state, playerIdx, phase, `Quick Morph!: +${g} Shape Shift`);
+      return;
+    }
+    if (card.id === "natures-cycle") {
+      if ((self.tokens.regen1 ?? 0) > 0) {
+        self.tokens.regen1 -= 1;
+        self.tokens.regen2 = (self.tokens.regen2 ?? 0) + 1;
+      }
+      log(state, playerIdx, phase, "Nature's Cycle!: flipped a Regenerate (1) to (2)");
+      return;
+    }
+    if (card.id === "fey-lure") {
+      grantRegen2(self, 1);
+      log(state, playerIdx, phase, "Fey Lure!: +Regenerate (2)");
+      return;
+    }
+    if (card.id === "strength-of-the-woods") {
+      if (formOf(self) !== "druid") {
+        log(state, playerIdx, phase, "Strength of the Woods!: no effect (not in Druid Form)");
+        return;
+      }
+      const sw = rollDie(rng);
+      if (sw <= 3) {
+        opp.hp -= 2;
+        log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> 2 dmg`);
+        checkGameOver(state);
+      } else if (sw <= 5) {
+        const g = grantShapeShift(self, 1);
+        log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> +${g} Shape Shift`);
+      } else {
+        self.hp = Math.min(self.hp + 3, 60);
+        log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> Heal 3`);
+      }
+      return;
+    }
     const eff = card.effect;
     if (!eff) {
       log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP \u2014 TODO(user): effect not structured yet, no game-state change applied`);
@@ -2788,8 +3405,8 @@ var Game = (() => {
     }
     resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: "mainPhase", phase }, rng, policies, enumerateWindowActions, applyWindowAction);
   }
-  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble", "broken-stillness"];
-  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary"];
+  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble", "broken-stillness", "quick-morph"];
+  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods"];
   function anyoneHasHead(state) {
     return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0;
   }
@@ -3106,7 +3723,13 @@ var Game = (() => {
     const policy = policies[defenderIdx];
     let hallowedUpgraded = false;
     let defenseDice;
-    if (defender.heroId === "rv") {
+    if (defender.heroId === "dr") {
+      if (!defender.humanControlled && formOf(defender) !== "bear" && (defender.tokens.shapeShift ?? 0) > 0 && incomingDamage >= 5) {
+        spendShapeShift(defender, "bear");
+        log(state, defenderIdx, "defense", "Shape Shift -> Bear Form (defense)");
+      }
+      defenseDice = rollDice(thickHideDiceCount(defender), rng);
+    } else if (defender.heroId === "rv") {
       defenseDice = rollDice(5, rng);
     } else if (defender.heroId === "nx") {
       defenseDice = [rollDie(rng)];
@@ -3136,7 +3759,13 @@ var Game = (() => {
     const attacker = state.players[attackerIdx];
     const defender = state.players[defenderIdx];
     let damagePrevented = 0;
-    if (defender.heroId === "rv") {
+    if (defender.heroId === "dr") {
+      const bear = formOf(defender) === "bear";
+      const effTH = thickHideEffects(finalDefenseDice, bear);
+      damagePrevented = effTH.prevented;
+      if (effTH.counterDamage > 0) queueDamage(state, attackerIdx, effTH.counterDamage);
+      log(state, defenderIdx, "defense", `Thick Hide${bear ? " (Bear)" : ""}: prevented ${effTH.prevented}, ${effTH.counterDamage} dmg back`);
+    } else if (defender.heroId === "rv") {
       const upgradedNM = defender.upgradesInPlay.includes("nothing-more-ii");
       const effNM = nothingMoreEffects(finalDefenseDice, upgradedNM);
       damagePrevented = effNM.prevented;
@@ -3200,7 +3829,7 @@ var Game = (() => {
     );
     finalizePendingAttackDamage(state);
   }
-  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil"];
+  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil", "shrug-off", "dont-poke-the-bear"];
   function eligibleDefensiveCardIds(defender, eludeEligible) {
     const hero = heroTemplateFor(defender.heroId);
     const ids = DEFENSIVE_CARD_IDS.filter((id) => defender.hand.includes(id));
@@ -3219,6 +3848,24 @@ var Game = (() => {
       const prevented = Math.min(remaining, 6);
       log(state, defenderIdx, "defense", `Not This Time!: prevented ${prevented} dmg`);
       return remaining - prevented;
+    }
+    if (cardId === "shrug-off") {
+      if (defender.form !== "bear") {
+        log(state, defenderIdx, "defense", "Shrug Off!: no effect (not in Bear Form)");
+        return remaining;
+      }
+      const prevented = Math.min(remaining, 2);
+      log(state, defenderIdx, "defense", `Shrug Off!: prevented ${prevented} dmg (Bear Form)`);
+      return remaining - prevented;
+    }
+    if (cardId === "dont-poke-the-bear") {
+      if (defender.form !== "bear") {
+        log(state, defenderIdx, "defense", "Don't Poke the Bear!: no effect (not in Bear Form)");
+        return remaining;
+      }
+      queueDamage(state, 1 - defenderIdx, 2);
+      log(state, defenderIdx, "defense", "Don't Poke the Bear!: 2 dmg back (Bear Form)");
+      return remaining;
     }
     if (cardId === "spirited-reprisal") {
       if (!hasHead(defender)) {
@@ -3241,13 +3888,16 @@ var Game = (() => {
     }
     return remaining;
   }
-  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike"];
+  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite"];
   function eligibleAttackModifierCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ATTACK_MODIFIER_CARD_IDS.filter((id) => {
       if (!self.hand.includes(id)) return false;
       const card = cardById(hero, id);
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
+      if (id === "lethal-swipe" || id === "surprise-bite") {
+        return self.heroId === "dr" && self.form === "cat";
+      }
       if (id === "stone-beak" || id === "talon-strike") {
         if (self.heroId !== "rv") return false;
         if (id === "stone-beak" && (self.tokens.nevermore ?? 0) > 0) return false;
@@ -3270,6 +3920,23 @@ var Game = (() => {
     self.cp -= card.cpCost ?? 0;
     self.hand.splice(self.hand.indexOf(cardId), 1);
     self.discard.push(cardId);
+    if (cardId === "lethal-swipe") {
+      if (!rng) {
+        return { ...current, dmg: current.dmg + 2 };
+      }
+      const lsRoll = rollDice(5, rng);
+      const claws = lsRoll.filter((d) => d <= 3).length;
+      const paws = lsRoll.filter((d) => d >= 4 && d <= 5).length;
+      if (paws >= 2) {
+        opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1);
+      }
+      log(state, playerIdx, "resolveAttack", `Lethal Swipe!: rolled [${lsRoll.join(",")}], +${claws} dmg${paws >= 2 ? ", Wound inflicted" : ""}`);
+      return { ...current, dmg: current.dmg + claws };
+    }
+    if (cardId === "surprise-bite") {
+      log(state, playerIdx, "resolveAttack", "Surprise Bite!: attack becomes undefendable (Cat Form)");
+      return { ...current, undefendable: true };
+    }
     if (cardId === "stone-beak") {
       log(state, playerIdx, "resolveAttack", "Stone Beak!: +1 dmg, attack becomes undefendable");
       return { dmg: current.dmg + 1, undefendable: true };
@@ -3573,6 +4240,7 @@ var Game = (() => {
     if (self.heroId === "hh") applyHHAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "fm") applyFMAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "rv") applyRVAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "dr") applyDRAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
@@ -3771,11 +4439,130 @@ var Game = (() => {
     }
     log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Raveness ability matched (${name})`);
   }
+  function applyDRAbility(state, playerIdx, name, dice, rng, policies) {
+    const self = state.players[playerIdx];
+    const opp = state.players[1 - playerIdx];
+    const policy = policies[playerIdx];
+    const has = (id) => self.upgradesInPlay.includes(id);
+    const willDamage = !name.startsWith("Wild Realignment") && !name.startsWith("Rainfall") && name !== "Whiff";
+    if (!self.humanControlled && willDamage && formOf(self) !== "cat" && (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0)) {
+      spendShapeShift(self, "cat");
+      log(state, playerIdx, "resolveAttack", "Shape Shift -> Cat Form (attack)");
+    }
+    const attack = (dmg, defendable, ultimate = false) => {
+      let result = { dmg, undefendable: !defendable || ultimate };
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
+      for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (formOf(self) === "cat" && result.dmg > 0) {
+        result = { ...result, dmg: result.dmg + 2 };
+        opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1);
+        log(state, playerIdx, "resolveAttack", "Cat Form: +2 dmg, Wound inflicted");
+      }
+      if (result.dmg <= 0) {
+        log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
+        return;
+      }
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
+      else resolveDefense(state, playerIdx, result.dmg, rng, policies);
+    };
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    const maxKind = Math.max(...counts.values());
+    const a = dice.filter((d) => d <= 3).length;
+    if (name.startsWith("Ferocity")) {
+      const up = has("ferocity-ii");
+      const dmg = (a >= 5 ? [6, 7] : a >= 4 ? [5, 6] : [4, 5])[up ? 1 : 0];
+      const trigger = up ? 3 : 4;
+      if (maxKind >= trigger) {
+        opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1);
+        log(state, playerIdx, "resolveAttack", `Ferocity: ${trigger}-of-a-kind -> Wound inflicted`);
+      }
+      attack(dmg, true);
+      return;
+    }
+    if (name.startsWith("Savage Maul") || name.startsWith("Maul")) {
+      if (name.startsWith("Savage Maul")) {
+        const g = grantShapeShift(self, 1);
+        log(state, playerIdx, "resolveAttack", `Savage Maul: +${g} Shape Shift \u2014 then Maul`);
+      }
+      const r = maulRoll(rng, formOf(self) === "bear");
+      log(state, playerIdx, "resolveAttack", `Maul roll [${r.dice.join(",")}]${r.rerolled ? " (Bear re-roll)" : ""} -> ${r.total} dmg`);
+      attack(r.total, true);
+      return;
+    }
+    if (name.startsWith("Nature's Cure")) {
+      grantRegen2(self, 1);
+      log(state, playerIdx, "resolveAttack", "Nature's Cure: +Regenerate (2)");
+      attack(5, true);
+      return;
+    }
+    if (name.startsWith("Wild Realignment")) {
+      grantCp(self, 1);
+      const g = grantShapeShift(self, 2);
+      let msg = `Wild Realignment: +1 CP, +${g} Shape Shift`;
+      if (formOf(self) === "druid") {
+        drawCards(self, 1, rng);
+        msg += ", drew 1 (Druid Form)";
+      }
+      log(state, playerIdx, "resolveAttack", msg);
+      return;
+    }
+    if (name.startsWith("Forest's Call")) {
+      const g = grantShapeShift(self, 1);
+      log(state, playerIdx, "resolveAttack", `Forest's Call: +${g} Shape Shift`);
+      attack(6, true);
+      return;
+    }
+    if (name.startsWith("Forest's Answer")) {
+      const g = grantShapeShift(self, 1);
+      const bonus = rollDie(rng);
+      let extra = 0;
+      let note = "";
+      if (bonus <= 3) {
+        extra = 2;
+        note = "+2 dmg";
+      } else if (bonus <= 5) {
+        grantShapeShift(self, 1);
+        note = "+1 Shape Shift";
+      } else {
+        grantRegen2(self, 1);
+        note = "+Regenerate (2)";
+      }
+      log(state, playerIdx, "resolveAttack", `Forest's Answer: +${g} Shape Shift, bonus die ${bonus} -> ${note}`);
+      attack(7 + extra, true);
+      return;
+    }
+    if (name.startsWith("Protect the Forest")) {
+      grantRegen2(self, 1);
+      const g = grantShapeShift(self, 1);
+      log(state, playerIdx, "resolveAttack", `Protect the Forest: +Regenerate (2), +${g} Shape Shift`);
+      attack(has("protect-the-forest-ii") ? 8 : 6, false);
+      return;
+    }
+    if (name.startsWith("Rainfall")) {
+      grantCp(self, 1);
+      grantRegen2(self, 2);
+      log(state, playerIdx, "resolveAttack", "Rainfall: +1 CP, +2 Regenerate (2)");
+      return;
+    }
+    if (name.startsWith("Wrath of Nature")) {
+      grantRegen2(self, 1);
+      const g = grantShapeShift(self, 2);
+      log(state, playerIdx, "resolveAttack", `Wrath of Nature: +Regenerate (2), +${g} Shape Shift`);
+      attack(12, false, true);
+      return;
+    }
+    log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Druid ability matched (${name})`);
+  }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
     if ((self.tokens.hex ?? 0) > 0) {
       self.tokens.hex = 0;
       log(state, playerIdx, "endOfTurn", "Hex removed (end of afflicted turn)");
+    }
+    if (self.heroId === "dr" && formOf(self) === "druid") {
+      grantRegen2(self, 1);
+      log(state, playerIdx, "endOfTurn", "Druid Form: gained Regenerate (2)");
     }
     if (self.hoardedDice > 0) {
       log(state, playerIdx, "endOfTurn", `Hoarding: ${self.hoardedDice} stolen die returned`);
@@ -3817,7 +4604,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
@@ -3840,6 +4627,7 @@ var Game = (() => {
       hoardedDice: 0,
       nevermoreDial: 0,
       featherCapBonus: 0,
+      form: heroId === "dr" ? "druid" : void 0,
       // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
       // "begin with any one Gold Armor" only applies with more than 1 opponent).
       forge: [],
@@ -4100,7 +4888,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : bwConfig;
     const state = oracleStateFor(self, opp);
     state.wildcards = {
       sixIt: self.hand.includes("six-it") && self.cp >= 1,
