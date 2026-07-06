@@ -33,6 +33,8 @@ import { STARTING_HP, HEAL_CAP_ABOVE_STARTING } from './data/config.js'
 import { grantCp } from './cp.js'
 import { isOre as fmIsOre, craftOptions as fmCraftOptions, craftSpecific as fmCraftSpecific } from './hero/fm.rules.js'
 import { nxAttackInfo } from './hero/nx.rules.js'
+import * as rvr from './hero/rv.rules.js'
+import { performNevermoreActivations } from './turn.js'
 import { hhConfig } from '../characters/horseman/config.js'
 import { bwConfig } from '../characters/black_widow/config.js'
 import { fmConfig } from '../characters/forgemaster/config.js'
@@ -510,6 +512,72 @@ export function nextDefenseDecision(g: HumanGame): DefensePrompt | null {
 
 // The human picked a defensive action (a card / instant from a DefensePrompt's options). Record it;
 // the caller then re-probes. (Pass = "stop defending" → caller skips straight to resolveAiAttack.)
+// ---- Fenêtre interactive du Nevermore Die Roll (Cull! + dépenses de Feathers) ----
+// Le jet a lieu à l'upkeep du DÉTENTEUR de Nevermore. Deux cas :
+//  A. humain = Raveness, l'IA détient -> fenêtre avant le tour de l'IA (manipulations humaines)
+//  B. humain = détenteur, l'IA = Raveness -> fenêtre avant ton tour (défausse au choix si face 4)
+export function nevermoreRollDue(g: HumanGame, beforeTurnOf: 'human' | 'ai'): boolean {
+  const human = g.state.players[g.humanIdx], ai = g.state.players[g.aiIdx]
+  if (beforeTurnOf === 'ai') return human.heroId === 'rv' && (ai.tokens.nevermore ?? 0) > 0
+  return ai.heroId === 'rv' && (human.tokens.nevermore ?? 0) > 0 && human.heroId !== 'rv'
+}
+
+export function humanNevermoreRollStart(g: HumanGame): number {
+  return 1 + Math.floor(g.rng() * 6)
+}
+
+// Manipulations de la Raveness HUMAINE : Cull! (1 CP, valeur au choix), 2 Feathers = ±1,
+// 1 Feather = relance. Retourne la nouvelle face.
+export function humanNevermoreCull(g: HumanGame, newFace: number): number {
+  const rvP = g.state.players.find(p => p.heroId === 'rv')!
+  const i = rvP.hand.indexOf('cull')
+  if (i < 0 || rvP.cp < 1) return newFace
+  rvP.cp -= 1
+  rvP.hand.splice(i, 1)
+  rvP.discard.push('cull')
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP) as 0 | 1, phase: 'upkeep', message: `Cull!: Nevermore Die Roll set to ${newFace}` })
+  return newFace
+}
+export function humanNevermoreFeatherShift(g: HumanGame, face: number, delta: 1 | -1): number {
+  const rvP = g.state.players.find(p => p.heroId === 'rv')!
+  if ((rvP.tokens.feather ?? 0) < 2) return face
+  const nf = Math.max(1, Math.min(6, face + delta))
+  if (nf === face) return face
+  rvP.tokens.feather -= 2
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP) as 0 | 1, phase: 'upkeep', message: `2 Feathers: Nevermore Die Roll ${face} -> ${nf}` })
+  return nf
+}
+export function humanNevermoreFeatherReroll(g: HumanGame, face: number): number {
+  const rvP = g.state.players.find(p => p.heroId === 'rv')!
+  if ((rvP.tokens.feather ?? 0) < 1) return face
+  rvP.tokens.feather -= 1
+  const nf = 1 + Math.floor(g.rng() * 6)
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP) as 0 | 1, phase: 'upkeep', message: `1 Feather: Nevermore Die Roll re-rolled ${face} -> ${nf}` })
+  return nf
+}
+
+// Applique la face finale. discardId : le choix du détenteur HUMAIN sur face 4.
+export function humanNevermoreFinish(g: HumanGame, face: number, discardId?: string): void {
+  const rvIdx = (g.state.players[0].heroId === 'rv' ? 0 : 1) as 0 | 1
+  const holderIdx = (1 - rvIdx) as 0 | 1
+  const rvP = g.state.players[rvIdx], holder = g.state.players[holderIdx]
+  const r = rvr.applyNevermoreDieFace(rvP, holder, face)
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: holderIdx, phase: 'upkeep', message: `Nevermore Die Roll: ${face}` +
+    (r.hexInflicted ? ' — gains Hex (6s are blanks this turn)' :
+     r.activations ? ` — Raveness activates Nevermore x${r.activations}` :
+     r.discards ? ' — must discard 1 of choice' :
+     r.cpStolen !== undefined ? ` — loses ${r.cpStolen} CP to the Raveness` :
+     ' — dial to 0, Nevermore returns (no heal)') })
+  if (r.activations) performNevermoreActivations(g.state, rvIdx, r.activations, g.rng, undefined)
+  if (r.discards && holder.hand.length) {
+    const pick = (discardId && holder.hand.includes(discardId)) ? discardId : holder.hand[0]
+    holder.hand.splice(holder.hand.indexOf(pick), 1)
+    holder.discard.push(pick)
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: holderIdx, phase: 'upkeep', message: `Nevermore: discarded ${pick}` })
+  }
+  g.state.nevermoreRollResolved = true
+}
+
 export function humanSetRoarDiscard(g: HumanGame, cardId: string): void {
   if (g.def) g.def.roarDiscard = cardId
 }

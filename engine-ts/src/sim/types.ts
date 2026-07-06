@@ -54,6 +54,8 @@ export interface PlayerState {
   // (Birds of a Feather). Le porteur de Nevermore = tokens.nevermore > 0.
   nevermoreDial?: number
   featherCapBonus?: number
+  // Stratégie d'activation choisie par le joueur humain rv ('auto' = heuristique)
+  nevermoreMode?: 'absorb' | 'move'
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be
@@ -118,6 +120,8 @@ export interface GameState {
   pendingDefenseRoll: { attackerIdx: 0 | 1; incomingDamage: number } | null
   // Mode boss : Naraxus lance 2 dés d'attaque et prend le plus haut (hard mode, planche vérifiée).
   bossHard?: boolean
+  // Le Nevermore Die Roll de cet upkeep a déjà été résolu par la fenêtre interactive (Cull!/Feathers)
+  nevermoreRollResolved?: boolean
 }
 
 export interface AbilityCandidate {

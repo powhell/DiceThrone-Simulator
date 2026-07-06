@@ -676,6 +676,19 @@
   // ---------- controls per phase ----------
   function btn(label, cls, on, disabled){ const b=document.createElement('button'); b.className='btn'+(cls?' '+cls:'');
     b.textContent=label; if(disabled) b.disabled=true; else b.onclick=on; return b; }
+  function nvModeLabel(){
+    const m = g.state.players[g.humanIdx].nevermoreMode;
+    return m==='absorb' ? '🩸 Absorber' : m==='move' ? '✈️ Déplacer' : '🤖 Auto';
+  }
+  function addNvToggle(c){
+    if (HUMAN!=='rv') return;
+    c.appendChild(btn(`🐦‍⬛ Nevermore : ${nvModeLabel()}`,'', ()=>{
+      const p=g.state.players[g.humanIdx];
+      p.nevermoreMode = p.nevermoreMode===undefined ? 'absorb' : p.nevermoreMode==='absorb' ? 'move' : undefined;
+      log(`🐦‍⬛ Stratégie Nevermore : <b>${nvModeLabel()}</b>`);
+      renderControls();
+    }));
+  }
   function renderControls() {
     const c = $('controls'); c.innerHTML='';
     // While it's the AI's turn (except the defense window, which IS yours to act in), never show
@@ -739,6 +752,7 @@
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
       else {
+        addNvToggle(c);
         if (ttaCharges > 0) {
           const s0=document.createElement('span'); s0.className='rolls';
           s0.textContent='Try Try Again : 2e relance gratuite (même dé permis) —';
@@ -1243,7 +1257,43 @@
     setTimeout(aiTurn, 550);
   }
   // The AI's turn, decomposed so YOU defend interactively when it attacks (see interactive.ts).
+  function nvRollWindow(afterFn, beforeTurnOf){
+    let face = G.humanNevermoreRollStart(g);
+    phase='nvroll';
+    const render = ()=>{
+      renderAll();
+      const c=$('controls'); c.innerHTML='';
+      const you=g.state.players[g.humanIdx];
+      const s0=document.createElement('span'); s0.className='rolls';
+      s0.textContent=`🐦‍⬛ Nevermore Die Roll : ${face} — (1:Hex · 2:Activ.×2 · 3:Activ. · 4:défausse · 5:vol CP · 6:retour sans soin)`;
+      c.appendChild(s0);
+      if (HUMAN==='rv' && beforeTurnOf==='ai') {
+        if (you.hand.includes('cull') && you.cp>=1)
+          for (let v=1;v<=6;v++){ if (v!==face) c.appendChild(btn(`Cull! → ${v} · 1 CP`,'', ((vv)=>()=>{ face=G.humanNevermoreCull(g,vv); render(); })(v))); }
+        if ((you.tokens.feather||0)>=2){
+          if (face<6) c.appendChild(btn('🪶×2 : +1','', ()=>{ face=G.humanNevermoreFeatherShift(g,face,1); render(); }));
+          if (face>1) c.appendChild(btn('🪶×2 : −1','', ()=>{ face=G.humanNevermoreFeatherShift(g,face,-1); render(); }));
+        }
+        if ((you.tokens.feather||0)>=1) c.appendChild(btn('🪶×1 : relancer','', ()=>{ face=G.humanNevermoreFeatherReroll(g,face); render(); }));
+      }
+      const finish=(discardId)=>{ G.humanNevermoreFinish(g, face, discardId); renderAll(); afterFn(); };
+      if (beforeTurnOf==='human' && face===4 && you.hand.length){
+        const hero=G.heroTemplateFor(HUMAN);
+        you.hand.forEach(id=>{
+          const cd=G.cardById(hero,id)||{name:id};
+          c.appendChild(btn(`Défausser ${cd.name}`,'primary', ()=>finish(id)));
+        });
+      } else {
+        c.appendChild(btn('Résoudre →','gold', ()=>finish()));
+      }
+    };
+    render();
+  }
   function aiTurn(){
+    if (G.nevermoreRollDue(g,'ai')) return nvRollWindow(()=>aiTurnInner(),'ai');
+    aiTurnInner();
+  }
+  function aiTurnInner(){
     const r0 = G.runAiTurnUpToAlter(g);
     if (g.state.gameOver) { renderAll(); return end(); }
     if (r0.done) { renderAll(); return startHumanTurn(); }
@@ -1398,6 +1448,10 @@
   }
   function defenseLabel(a){ return actionLabel(a); }
   function startHumanTurn(){
+    if (G.nevermoreRollDue(g,'human')) return nvRollWindow(()=>startHumanTurnInner(),'human');
+    startHumanTurnInner();
+  }
+  function startHumanTurnInner(){
     lastDefDice = null;
     // Ton attaque du tour PRÉCÉDENT est finie : ses dés n'ont plus rien à faire à l'écran.
     // (Ils restaient affichés pendant le prompt Time Bomb/upkeep et masquaient le jet de

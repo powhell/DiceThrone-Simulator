@@ -70,6 +70,11 @@ var Game = (() => {
     humanMainOptions: () => humanMainOptions,
     humanMinePeek: () => humanMinePeek,
     humanMinesDraw: () => humanMinesDraw,
+    humanNevermoreCull: () => humanNevermoreCull,
+    humanNevermoreFeatherReroll: () => humanNevermoreFeatherReroll,
+    humanNevermoreFeatherShift: () => humanNevermoreFeatherShift,
+    humanNevermoreFinish: () => humanNevermoreFinish,
+    humanNevermoreRollStart: () => humanNevermoreRollStart,
     humanPlayRollCard: () => humanPlayRollCard,
     humanScrap: () => humanScrap,
     humanScrapDie: () => humanScrapDie,
@@ -78,6 +83,7 @@ var Game = (() => {
     matchedAbilities: () => matchedAbilities,
     mulberry32: () => mulberry32,
     mulberry32Stateful: () => mulberry32Stateful,
+    nevermoreRollDue: () => nevermoreRollDue,
     newHumanGame: () => newHumanGame,
     nextDefenseDecision: () => nextDefenseDecision,
     offensiveAlterOptions: () => offensiveAlterOptions,
@@ -2421,7 +2427,7 @@ var Game = (() => {
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
     self.minesDrawUsedThisTurn = false;
-    if (self.heroId !== "rv" && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === "rv") {
+    if (self.heroId !== "rv" && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === "rv" && !state.nevermoreRollResolved) {
       const face = rollDie(rng);
       const r = applyNevermoreDieFace(opp, self, face);
       log(state, playerIdx, "upkeep", `Nevermore Die Roll: ${face}` + (r.hexInflicted ? " \u2014 gains Hex (6s are blanks this turn)" : r.activations ? ` \u2014 Raveness activates Nevermore x${r.activations}` : r.discards ? " \u2014 must discard 1 of choice" : r.cpStolen !== void 0 ? ` \u2014 loses ${r.cpStolen} CP to the Raveness` : " \u2014 dial to 0, Nevermore returns (no heal)"));
@@ -2436,6 +2442,7 @@ var Game = (() => {
       }
       if (checkGameOver(state)) return;
     }
+    if (state.nevermoreRollResolved) state.nevermoreRollResolved = false;
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
@@ -3644,6 +3651,7 @@ var Game = (() => {
       let choice;
       const hook = policy?.chooseNevermoreActivation;
       if (hook) choice = hook(state, rvIdx);
+      else if (rvP.nevermoreMode) choice = rvP.nevermoreMode;
       else if (rvIsHolder) choice = "move";
       else if ((rvP.nevermoreDial ?? 0) >= NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = "move";
       else choice = "absorb";
@@ -4092,7 +4100,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : bwConfig;
     const state = oracleStateFor(self, opp);
     state.wildcards = {
       sixIt: self.hand.includes("six-it") && self.cp >= 1,
@@ -4224,6 +4232,56 @@ var Game = (() => {
     const probe = { captured: null };
     resolveAbilityPhase(clone, g.aiIdx, d.finalDice, cloneRng, order(g, g.ai, defensePolicy(d.script, probe, d.roarDiscard)));
     return probe.captured;
+  }
+  function nevermoreRollDue(g, beforeTurnOf) {
+    const human = g.state.players[g.humanIdx], ai = g.state.players[g.aiIdx];
+    if (beforeTurnOf === "ai") return human.heroId === "rv" && (ai.tokens.nevermore ?? 0) > 0;
+    return ai.heroId === "rv" && (human.tokens.nevermore ?? 0) > 0 && human.heroId !== "rv";
+  }
+  function humanNevermoreRollStart(g) {
+    return 1 + Math.floor(g.rng() * 6);
+  }
+  function humanNevermoreCull(g, newFace) {
+    const rvP = g.state.players.find((p) => p.heroId === "rv");
+    const i = rvP.hand.indexOf("cull");
+    if (i < 0 || rvP.cp < 1) return newFace;
+    rvP.cp -= 1;
+    rvP.hand.splice(i, 1);
+    rvP.discard.push("cull");
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP), phase: "upkeep", message: `Cull!: Nevermore Die Roll set to ${newFace}` });
+    return newFace;
+  }
+  function humanNevermoreFeatherShift(g, face, delta) {
+    const rvP = g.state.players.find((p) => p.heroId === "rv");
+    if ((rvP.tokens.feather ?? 0) < 2) return face;
+    const nf = Math.max(1, Math.min(6, face + delta));
+    if (nf === face) return face;
+    rvP.tokens.feather -= 2;
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP), phase: "upkeep", message: `2 Feathers: Nevermore Die Roll ${face} -> ${nf}` });
+    return nf;
+  }
+  function humanNevermoreFeatherReroll(g, face) {
+    const rvP = g.state.players.find((p) => p.heroId === "rv");
+    if ((rvP.tokens.feather ?? 0) < 1) return face;
+    rvP.tokens.feather -= 1;
+    const nf = 1 + Math.floor(g.rng() * 6);
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.state.players.indexOf(rvP), phase: "upkeep", message: `1 Feather: Nevermore Die Roll re-rolled ${face} -> ${nf}` });
+    return nf;
+  }
+  function humanNevermoreFinish(g, face, discardId) {
+    const rvIdx = g.state.players[0].heroId === "rv" ? 0 : 1;
+    const holderIdx = 1 - rvIdx;
+    const rvP = g.state.players[rvIdx], holder = g.state.players[holderIdx];
+    const r = applyNevermoreDieFace(rvP, holder, face);
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: holderIdx, phase: "upkeep", message: `Nevermore Die Roll: ${face}` + (r.hexInflicted ? " \u2014 gains Hex (6s are blanks this turn)" : r.activations ? ` \u2014 Raveness activates Nevermore x${r.activations}` : r.discards ? " \u2014 must discard 1 of choice" : r.cpStolen !== void 0 ? ` \u2014 loses ${r.cpStolen} CP to the Raveness` : " \u2014 dial to 0, Nevermore returns (no heal)") });
+    if (r.activations) performNevermoreActivations(g.state, rvIdx, r.activations, g.rng, void 0);
+    if (r.discards && holder.hand.length) {
+      const pick = discardId && holder.hand.includes(discardId) ? discardId : holder.hand[0];
+      holder.hand.splice(holder.hand.indexOf(pick), 1);
+      holder.discard.push(pick);
+      g.state.log.push({ turn: g.state.turnNumber, playerIdx: holderIdx, phase: "upkeep", message: `Nevermore: discarded ${pick}` });
+    }
+    g.state.nevermoreRollResolved = true;
   }
   function humanSetRoarDiscard(g, cardId) {
     if (g.def) g.def.roarDiscard = cardId;

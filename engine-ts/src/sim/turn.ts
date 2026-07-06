@@ -149,7 +149,9 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.minesDrawUsedThisTurn = false
 
   // Nevermore Die Roll (leaflet verifie) : le detenteur NON-rv lance 1 de a son upkeep.
-  if (self.heroId !== 'rv' && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === 'rv') {
+  // (skippé si la fenêtre interactive Cull!/Feathers l'a déjà résolu ce tour)
+  if (self.heroId !== 'rv' && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === 'rv'
+      && !state.nevermoreRollResolved) {
     const face = rollDie(rng)
     const r = rv.applyNevermoreDieFace(opp, self, face)
     log(state, playerIdx, 'upkeep', `Nevermore Die Roll: ${face}` +
@@ -170,6 +172,7 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
     }
     if (checkGameOver(state)) return
   }
+  if (state.nevermoreRollResolved) state.nevermoreRollResolved = false
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -1680,6 +1683,7 @@ export function performNevermoreActivations(state: GameState, rvIdx: 0 | 1, time
     let choice: 'move' | 'absorb'
     const hook = policy?.chooseNevermoreActivation
     if (hook) choice = hook(state, rvIdx)
+    else if (rvP.nevermoreMode) choice = rvP.nevermoreMode // toggle UI du joueur humain
     else if (rvIsHolder) choice = 'move'
     else if ((rvP.nevermoreDial ?? 0) >= rv.NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = 'move'
     else choice = 'absorb'
