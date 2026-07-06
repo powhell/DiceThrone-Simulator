@@ -228,7 +228,7 @@
     $(elId).innerHTML =
       `<div class="crest">${def.crest}</div>
        <div class="who"><div class="name">${def.name}<small>${isHuman ? 'toi' : 'IA'}</small></div>
-         <div class="hpbar"><i style="width:${pct}%"></i><span>${Math.max(0,p.hp)} / ${hpMax}</span></div></div>
+         <div class="hpbar"><i style="width:${pct}%"></i><span${p.hp>hpMax?' style="color:var(--gold);font-weight:700"':''}>${Math.max(0,p.hp)} / ${hpMax}</span></div></div>
        <div class="tokens">${tokenChips(p, isHuman)}${ups}</div>`;
   }
   function renderFighters() {
@@ -509,10 +509,10 @@
       // sub-abilities (altAbility) unlocked by upgrades — previously invisible on the panel.
       const rows = [];
       for (const a of REFERENCE[HUMAN]) {
-        const upId = REF_UPGRADE[a.name];
-        const upgraded = upId && self.upgradesInPlay.includes(upId);
-        rows.push({ name: a.name + (upgraded ? ' II' : ''), matchName: a.name, req: a.req,
-          dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg, on: isOn(a.name),
+        const up = refUpgradeInfo(a.name, self.upgradesInPlay);
+        rows.push({ name: a.name + (up ? up.suffix : ''), matchName: a.name,
+          req: (up && up.req) || a.req,
+          dmg: (up && up.dmg) || a.dmg, on: isOn(a.name),
           eff: boardRowEffects(HUMAN, g.humanIdx, a.name) });
       }
       for (const card of hero.cards) {
@@ -600,10 +600,9 @@
     const aiHeroT = G.heroTemplateFor(AI_HERO);
     const aiRows = [];
     for (const a of REFERENCE[AI_HERO]) {
-      const upId = REF_UPGRADE[a.name];
-      const upgraded = upId && ai.upgradesInPlay.includes(upId);
-      aiRows.push({ name: a.name + (upgraded ? ' II' : ''), req: a.req,
-        dmg: upgraded ? (REF_II_DMG[a.name] || a.dmg) : a.dmg,
+      const up = refUpgradeInfo(a.name, ai.upgradesInPlay);
+      aiRows.push({ name: a.name + (up ? up.suffix : ''), req: (up && up.req) || a.req,
+        dmg: (up && up.dmg) || a.dmg,
         eff: boardRowEffects(AI_HERO, g.aiIdx, a.name) });
     }
     for (const card of aiHeroT.cards) {
@@ -1807,14 +1806,44 @@
     'Cleave':'5–8','Ride Down':'6 ·+3 Grim','Reap':'4 ·+Dread','Sow Despair':'7–10',
     'Horrify':'6 ·+3D+2G','Spectral Assault':'9 +jet',
     'Baton Strike':'6–8',"Widow's Gauntlets":'7 ·+CP','Hacked':'6 ·+Bomb','Grapple':'7 indéf.',
+    // Raveness
+    'Peck':'6-8 ·3-kind: Activ.','Raven Sight':'3 indéf. ·Activ.×2','Craven':'9 ·+2 Feather',
+    'Beguile':'9 ·+3 F ·Activ.×2','Fowl Friend':'pioche+MAX F ·Activ.×3',
+    'Murder of Crows':'6 +jet 5 ·F/Aile','Chamber':'7 indéf. ·Activ.×3',
+    // Druid
+    'Ferocity':'5-7 ·3-kind: Wound','Maul':'2d6 ·reroll (Ours)','Protect the Forest':'8 indéf. ·+Regen+SS',
+    // Thor (Hammered a deux paliers — ':iii' = Hammered III)
+    'Hammered':'5/6/7 ·🔨 T/R ·4-kind: EK','Hammered:iii':'5/6/8 ·🔨 T/R ·3-kind: EK',
+    'Mighty Summon':'+2 GB ·Heal 3 ·EK/coll. 4','Chain Lightning':'4d6: 2 meilleurs +3 coll.',
+    'Odinforce':'6 +5d6 effets ·relance ·+EK','Bottled Lightning':'8+EK ·🔨×3 ·+2 GB',
+    'Lightning Rod':'9 ·🔨 ·+1 EK','Thunder Bolt':'12 ·🔨 ·+2 EK',
   };
+  // Exigence modifiée par l'upgrade (seul cas connu : Fowl Friend II passe à BBB — ruling user)
+  const REF_II_REQ = { 'Fowl Friend':'BBB' };
   // Which upgrade card marks each base ability as "II" on the side panel.
   const REF_UPGRADE = {
     'Cleave':'cleave-ii','Ride Down':'ride-down-ii','Reap':'reap-ii','Sow Despair':'sow-despair-ii',
     'Horrify':'horrify-ii','Spectral Assault':'spectral-assault-ii',
     'Baton Strike':'baton-strike-ii',"Widow's Gauntlets":'widows-gauntlets-ii','Hacked':'hacked-ii',
     'Grapple':'grapple-ii','Vengeance':'vengeance-ii','Infiltrate':'infiltrate-ii',
+    'Peck':'peck-ii','Raven Sight':'raven-sight-ii','Craven':'craven-ii','Beguile':'beguile-ii',
+    'Fowl Friend':'fowl-friend-ii','Murder of Crows':'murder-of-crows-ii','Chamber':'chamber-ii',
+    'Ferocity':'ferocity-ii','Maul':'maul-ii','Protect the Forest':'protect-the-forest-ii',
+    'Hammered':['hammered-ii','hammered-iii'],'Mighty Summon':'mighty-summon-ii',
+    'Chain Lightning':'chain-lightning-ii','Odinforce':'odinforce-ii',
+    'Bottled Lightning':'bottled-lightning-ii','Lightning Rod':'lightning-rod-ii','Thunder Bolt':'thunder-bolt-ii',
   };
+  // Résout le tier actif d'une habileté (gère les paliers multiples type Hammered II/III).
+  function refUpgradeInfo(name, upgradesInPlay){
+    const ids = REF_UPGRADE[name];
+    const list = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+    const active = list.filter(id => upgradesInPlay.includes(id)).pop();
+    if (!active) return null;
+    const iii = active.endsWith('-iii');
+    return { suffix: iii ? ' III' : ' II',
+             dmg: (iii && REF_II_DMG[name + ':iii']) || REF_II_DMG[name] || null,
+             req: REF_II_REQ[name] || null };
+  }
   // Static ability reference (dice pattern -> name/dmg) for the side panel when not choosing.
   const REFERENCE = {
     hh:[ {name:'Cleave',req:'AAA',dmg:'4–7'},{name:'Ride Down',req:'AAABB',dmg:'6 ·+Grim'},
