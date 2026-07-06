@@ -110,8 +110,7 @@ if (baseFm.size) {
 import { ARMS } from './arms.mjs'
 const cardArms = Object.keys(ARMS).filter(a => a.startsWith('card_'))
 if (cardArms.length && load(cardArms[0]).size) {
-  console.log('
-=== Valeur d'une carte en main (départ) — triée, vs vente 1 CP (~0.75) ===')
+  console.log('\n=== Valeur d\'une carte en main (départ) — triée, vs vente 1 CP (~0.75) ===')
   const rows = []
   for (const arm of cardArms) {
     const hero = arm.startsWith('card_bw_') ? 'bw' : 'hh'
