@@ -547,8 +547,8 @@
   }
 
   // ---- Vrais scans de cartes (plan C) : mapping cardId -> chemin, modal au clic 🔍 ----
-  let CARD_IMG = {};
-  fetch('card-images.json').then(r=>r.json()).then(j=>{ CARD_IMG=j; }).catch(()=>{});
+  // fetch() est bloqué en file:// (CORS) — le mapping vient de card-images.js (balise script).
+  const CARD_IMG = window.CARD_IMG || {};
   function showCardImage(id, name){
     const src = CARD_IMG[id]; if (!src) return;
     let ov = document.getElementById('card-modal');
