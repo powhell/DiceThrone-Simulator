@@ -438,7 +438,14 @@
         if (i>=0) tryVariant(`So Wild! sur le dé ${i+1} (${vals[i]}→${mode})`, vals.map((v,j)=>j===i?mode:v));
       }
     } catch(e) {}
-    document.getElementById('coach-evs').innerHTML = banner + rows + cardLines +
+    // Filet de sécurité actif ? Les % d'atterrissage sont AVANT réparation par tes cartes.
+    const youW = g.state.players[g.humanIdx];
+    const nets = [['twice-as-wild',3,'Twice As Wild'],['six-it',1,'Six-It'],['so-wild',2,'So Wild'],['samesies',1,'Samesies'],['tip-it',1,'Tip It']]
+      .filter(([id,c])=>youW.hand.includes(id)&&youW.cp>=c).map(([,,n])=>n);
+    const netNote = nets.length
+      ? `<div class="dist" style="padding:2px 8px;color:var(--gold)">🃏 Filet actif : ${nets.join(', ')} — l'EV inclut la réparation au jet final, les % « Raté » NON (ils sont avant carte).</div>`
+      : '';
+    document.getElementById('coach-evs').innerHTML = banner + rows + cardLines + netNote +
       `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.</div>`;
   }
 
