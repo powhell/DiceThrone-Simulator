@@ -5,13 +5,14 @@
 import { hhConfig, type HHState } from '../characters/horseman/config.js'
 import { bwConfig, type BWState } from '../characters/black_widow/config.js'
 import { fmConfig, type FMState } from '../characters/forgemaster/config.js'
+import { rvConfig, type RVState } from '../characters/raveness/config.js'
 import { heroTemplateFor, resolvedAbilityByBoardName } from './data/load.js'
 import type { AbilityCandidate, HeroId } from './types.js'
 
 export function resolveMatchedAbilities(
   heroId: HeroId,
   dice: number[],
-  oracleState: HHState | BWState | FMState,
+  oracleState: HHState | BWState | FMState | RVState,
 ): AbilityCandidate[] {
   const template = heroTemplateFor(heroId)
   const upgradeIds = oracleState.upgradeIds ?? []
@@ -19,7 +20,9 @@ export function resolveMatchedAbilities(
     ? hhConfig.buildAbilityBoard(dice, oracleState as HHState)
     : heroId === 'fm'
       ? fmConfig.buildAbilityBoard(dice, oracleState as FMState)
-      : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
+      : heroId === 'rv'
+        ? rvConfig.buildAbilityBoard(dice, oracleState as RVState)
+        : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
 
   return board
     .filter(e => e.matched && e.name !== 'Whiff')

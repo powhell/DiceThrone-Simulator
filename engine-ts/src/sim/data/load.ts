@@ -4,11 +4,13 @@ import type { HeroTemplate, CommonCardsTemplate, AbilityTemplate, CardTemplate }
 import hhHeroJson from './characters/hh/hero.json'
 import bwHeroJson from './characters/bw/hero.json'
 import fmHeroJson from './characters/fm/hero.json'
+import rvHeroJson from './characters/rv/hero.json'
 import commonCardsJson from './common-cards.json'
 
 export const hhHero = hhHeroJson as unknown as HeroTemplate
 export const bwHero = bwHeroJson as unknown as HeroTemplate
 export const fmHero = fmHeroJson as unknown as HeroTemplate
+export const rvHero = rvHeroJson as unknown as HeroTemplate
 export const commonCards = commonCardsJson as unknown as CommonCardsTemplate
 
 // Naraxus (boss) : template minimal construit en dur — pas de cartes, pas d'habiletés de
@@ -23,8 +25,8 @@ export const nxHero: HeroTemplate = {
   cards: [],
 }
 
-export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'nx'): HeroTemplate {
-  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : heroId === 'nx' ? nxHero : bwHero
+export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'rv' | 'nx'): HeroTemplate {
+  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : heroId === 'rv' ? rvHero : heroId === 'nx' ? nxHero : bwHero
 }
 
 // Searches both the hero's base abilities and every card's altAbility (e.g. Cleave II's

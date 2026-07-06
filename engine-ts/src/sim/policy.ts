@@ -61,6 +61,10 @@ export interface Policy {
   // the subset (in play order) to play; [] to play none.
   chooseAttackModifierCards(state: GameState, playerIdx: 0 | 1, dmg: number, eligibleCardIds: string[]): string[]
 
+  // Raveness : choix d'une activation de Nevermore ('move' = deplacer, 'absorb' = cadran+1
+  // et 1 degat isole). OPTIONNEL — defaut heuristique dans turn.ts.
+  chooseNevermoreActivation?(state: GameState, rvIdx: 0 | 1): 'move' | 'absorb'
+
   // Headless Horseman's Grim Pursuit spend, mode (b): "after attacking, roll 1 die and add that
   // many dmg as an Attack Modifier" (once per turn). Called from applyAttackModifiers when the
   // attacker holds >=1 Grim Pursuit and hasn't spent mode (b) this turn. Return true to spend 1

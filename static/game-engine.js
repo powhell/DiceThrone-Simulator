@@ -146,7 +146,7 @@ var Game = (() => {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
   function emptyBag() {
-    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0 };
+    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0 };
   }
   function hasHead(p) {
     return p.tokens.head > 0;
@@ -1054,9 +1054,189 @@ var Game = (() => {
     }
   };
 
+  // src/characters/raveness/constants.ts
+  var NEVERMORE_ACTIVATION_VALUE = 1.3;
+  var FEATHER_VALUE = 0.8;
+  var FEATHER_CAP = 5;
+  var HEX_VALUE = 1.5;
+  var CARD_DRAW_VALUE3 = 1.3;
+  var PECK_DMG = [5, 6, 7];
+  var PECK_DMG_UPGRADED = [6, 7, 8];
+  var RAVEN_SIGHT_DMG = 3;
+  var CRAVEN_DMG = 8;
+  var CRAVEN_DMG_UPGRADED = 9;
+  var BEGUILE_DMG = 9;
+  var MURDER_DMG = 5;
+  var MURDER_DMG_UPGRADED = 6;
+  var CHAMBER_DMG = 7;
+  var AVIARY_DMG = 2;
+  var PLUCK_DMG = 9;
+  var FANTASTIC_TERRORS_DMG = 13;
+
+  // src/characters/raveness/abilities.ts
+  function rvFaceToSymbol(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function classify4(dice, hexed) {
+    let A = 0, B = 0, C = 0;
+    for (const d of dice) {
+      if (d <= 3) A += 1;
+      else if (d <= 5) B += 1;
+      else if (!hexed) C += 1;
+    }
+    return { A, B, C };
+  }
+  function hasStraight4(dice, len) {
+    const uniq = [...new Set(dice)].sort((a, b) => a - b);
+    let run = 1;
+    for (let i = 1; i < uniq.length; i++) {
+      run = uniq[i] === uniq[i - 1] + 1 ? run + 1 : 1;
+      if (run >= len) return true;
+    }
+    return uniq.length >= len && run >= len;
+  }
+  function maxOfAKind(dice) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    return Math.max(...counts.values());
+  }
+  function featherGainValue(current, gain, cap = FEATHER_CAP) {
+    return Math.min(gain, Math.max(0, cap - current)) * FEATHER_VALUE;
+  }
+  function getCandidates4(dice, feathers, nevermoreOnOpponent, hexed, upgradeIds = [], defenseTax = 0) {
+    const { A: a, B: b, C: c } = classify4(dice, hexed);
+    const has = (id) => upgradeIds.includes(id);
+    const out = [];
+    const act = NEVERMORE_ACTIVATION_VALUE + (nevermoreOnOpponent ? 0.2 : 0);
+    const tax = (defendable) => defendable ? defenseTax : 0;
+    const peckUp = has("peck-ii");
+    const dmgs = peckUp ? PECK_DMG_UPGRADED : PECK_DMG;
+    const kindNeeded = peckUp ? 3 : 4;
+    const kindBonus = maxOfAKind(dice) >= kindNeeded ? act : 0;
+    if (a >= 5) out.push([`Peck 5T (AAAAA)`, dmgs[2] + kindBonus - tax(true), dmgs[2]]);
+    else if (a >= 4) out.push([`Peck 4T (AAAA)`, dmgs[1] + kindBonus - tax(true), dmgs[1]]);
+    else if (a >= 3) out.push([`Peck 3T (AAA)`, dmgs[0] + kindBonus - tax(true), dmgs[0]]);
+    if (a >= 2 && c >= 2) {
+      const acts = has("raven-sight-ii") ? 2 : 1;
+      out.push(["Raven Sight (AACC)", RAVEN_SIGHT_DMG + acts * act, RAVEN_SIGHT_DMG]);
+    }
+    if (hasStraight4(dice, 4)) {
+      const up = has("craven-ii");
+      const dmg = up ? CRAVEN_DMG_UPGRADED : CRAVEN_DMG;
+      const f = up ? 2 : 1;
+      out.push(["Craven (4-straight)", dmg + featherGainValue(feathers, f) - tax(true), dmg]);
+    }
+    if (hasStraight4(dice, 5)) {
+      const up = has("beguile-ii");
+      const f = up ? 3 : 2;
+      const acts = up ? 2 : 1;
+      out.push(["Beguile (5-straight)", BEGUILE_DMG + featherGainValue(feathers, f) + acts * act - tax(true), BEGUILE_DMG]);
+    }
+    const ffUp = has("fowl-friend-ii");
+    const ffNeed = ffUp ? 3 : 4;
+    if (b >= ffNeed) {
+      const fGain = ffUp ? Math.max(0, FEATHER_CAP - feathers) : 4;
+      const acts = ffUp ? 3 : 2;
+      const name = ffUp ? "Fowl Friend II (BBB)" : "Fowl Friend (BBBB)";
+      out.push([name, CARD_DRAW_VALUE3 + featherGainValue(feathers, fGain) + acts * act, 0]);
+    }
+    if (a >= 2 && b >= 3) {
+      const up = has("murder-of-crows-ii");
+      const dmg = up ? MURDER_DMG_UPGRADED : MURDER_DMG;
+      const n = up ? 5 : 4;
+      const eTalon = n / 2;
+      const eFeather = n / 3;
+      const pEye = 1 - Math.pow(5 / 6, n);
+      const val = dmg + eTalon + featherGainValue(feathers, Math.round(eFeather)) + pEye * act - tax(true);
+      out.push(["Murder of Crows (AABBB)", val, dmg]);
+    }
+    if (c >= 4) {
+      const acts = has("chamber-ii") ? 3 : 2;
+      out.push(["Chamber (CCCC)", CHAMBER_DMG + acts * act, CHAMBER_DMG]);
+    } else if (c >= 3 && has("chamber-ii")) {
+      out.push(["Aviary (CCC)", AVIARY_DMG + featherGainValue(feathers, 4), AVIARY_DMG]);
+    }
+    if (b >= 3 && c >= 2 && has("beguile-ii")) {
+      out.push(["Pluck (BBBCC)", PLUCK_DMG + HEX_VALUE - tax(true), PLUCK_DMG]);
+    }
+    if (b >= 5 && has("fowl-friend-ii")) {
+      const ffVal = CARD_DRAW_VALUE3 + featherGainValue(feathers, FEATHER_CAP + 1 - feathers, FEATHER_CAP + 1) + 3 * act;
+      out.push(["Birds of a Feather (BBBBB)", 0.3 + ffVal, 0]);
+    }
+    if (c >= 5) {
+      out.push(["Fantastic Terrors (CCCCC)", FANTASTIC_TERRORS_DMG + 3 * act + HEX_VALUE, FANTASTIC_TERRORS_DMG]);
+    }
+    out.push(["Whiff", 0, 0]);
+    return out;
+  }
+  function bestAbilityValue4(dice, feathers, nvOnOpp, hexed, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates4(dice, feathers, nvOnOpp, hexed, upgradeIds, defenseTax).map(([, v]) => v));
+  }
+  function bestAbilityName4(dice, feathers, nvOnOpp, hexed, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates4(dice, feathers, nvOnOpp, hexed, upgradeIds, defenseTax);
+    let best = cands[0];
+    for (const cand of cands) if (cand[1] > best[1]) best = cand;
+    return best[0];
+  }
+  function buildAbilityBoard4(dice, feathers, nvOnOpp, hexed, upgradeIds = [], defenseTax = 0) {
+    const matched = new Map(getCandidates4(dice, feathers, nvOnOpp, hexed, upgradeIds, defenseTax).map(([n, v, d]) => [n, [v, d]]));
+    const all = [
+      "Peck 3T (AAA)",
+      "Peck 4T (AAAA)",
+      "Peck 5T (AAAAA)",
+      "Raven Sight (AACC)",
+      "Craven (4-straight)",
+      "Beguile (5-straight)",
+      upgradeIds.includes("fowl-friend-ii") ? "Fowl Friend II (BBB)" : "Fowl Friend (BBBB)",
+      "Murder of Crows (AABBB)",
+      "Chamber (CCCC)",
+      "Fantastic Terrors (CCCCC)"
+    ];
+    if (upgradeIds.includes("chamber-ii")) all.push("Aviary (CCC)");
+    if (upgradeIds.includes("beguile-ii")) all.push("Pluck (BBBCC)");
+    if (upgradeIds.includes("fowl-friend-ii")) all.push("Birds of a Feather (BBBBB)");
+    return all.map((name) => {
+      const hit = matched.get(name);
+      return { name, matched: !!hit, value: hit ? hit[0] : 0, baseDamage: hit ? hit[1] : 0 };
+    });
+  }
+
+  // src/characters/raveness/config.ts
+  var rvConfig = {
+    id: "rv",
+    faceToSymbol(face) {
+      return rvFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      const base = bestAbilityValue4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue4(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0)
+      );
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      const w = state.wildcards || {};
+      const wc = (w.sixIt ? 1 : 0) + (w.soWild ? 2 : 0) + (w.twiceAsWild ? 4 : 0) + (w.samesies ? 8 : 0) + (w.tipIt ? 16 : 0);
+      return `${Math.min(state.feathers, 6)}|${state.nevermoreOnOpponent ? 1 : 0}|${state.hexed ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgrades}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -1297,6 +1477,313 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/rv/hero.json
+  var hero_default4 = {
+    id: "rv",
+    name: "Raveness",
+    diceAnatomy: "1-3 = Talon (A), 4-5 = Wing (B), 6 = Raven Eye (C). V\xE9rifi\xE9 leaflet (photo user 2026-07-06).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    source: "Board + leaflet + 14 cartes scann\xE9s par l'user 2026-07-06. Rulings user : d\xE9fense = seuils UNE fois ; face 6 du Nevermore Die Roll = pas de soin ; Fowl Friend II = WWW.",
+    tokens: [
+      { id: "feather", name: "Feather", startingCount: 0, stackCap: 5, description: "Positive Status Effect. Spend at any time: 1 = force the Nevermore Die Roll to be re-rolled; 2 = +/-1 on the Nevermore Die Roll; 3 = Activate Nevermore." },
+      { id: "hex", name: "Hex", startingCount: 0, stackCap: 1, description: "Unique Status Effect. 6's are considered blanks: afflicted player treats all die faces showing 6 as completely blank. Removed at the conclusion of their turn. May not be transferred (but can be removed)." },
+      { id: "nevermore", name: "Nevermore", startingCount: 1, stackCap: 1, description: "Companion. Starts on the Raveness' board with dial at 0. Activated = choose: move to a chosen player, OR Absorb Vitality (only while on an opponent: dial +1 (max 3), that opponent takes 1 isolated undefendable dmg). When moved TO the Raveness: heal the dial amount, then dial to 0. Opponent holding Nevermore rolls the Nevermore Die Roll at their Upkeep: 1 = they gain Hex; 2 = Raveness may Activate x2; 3 = Activate x1; 4 = they discard 1 of choice; 5 = they lose 1 CP, Raveness gains 1 CP; 6 = dial to 0 THEN return to Raveness (NO heal, ruling user)." }
+    ],
+    flags: [],
+    abilities: [
+      {
+        id: "peck_3t",
+        boardName: "Peck 3T (AAA)",
+        dicePattern: "AAA",
+        baseDamage: 5,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, activateNevermore: 1 },
+        upgradedBy: { upgradeId: "peck-ii", baseDamage: 6, numberMatchOfAKind: 3 },
+        notes: "On 4-of-a-kind (#'s), Activate Nevermore. Peck II: 6/7/8 dmg et le d\xE9clencheur passe \xE0 3-of-a-kind.",
+        verified: true
+      },
+      {
+        id: "peck_4t",
+        boardName: "Peck 4T (AAAA)",
+        dicePattern: "AAAA",
+        baseDamage: 6,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, activateNevermore: 1 },
+        upgradedBy: { upgradeId: "peck-ii", baseDamage: 7, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "peck_5t",
+        boardName: "Peck 5T (AAAAA)",
+        dicePattern: "AAAAA",
+        baseDamage: 7,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, activateNevermore: 1 },
+        upgradedBy: { upgradeId: "peck-ii", baseDamage: 8, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "raven_sight",
+        boardName: "Raven Sight (AACC)",
+        dicePattern: "AACC",
+        baseDamage: 3,
+        defendable: false,
+        activateNevermore: 1,
+        upgradedBy: { upgradeId: "raven-sight-ii", activateNevermore: 2 },
+        notes: "Pattern r\xE9el : 2 Talons + 2 Raven Eyes (AACC). Activate Nevermore (II : two times). Deal 3 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "craven",
+        boardName: "Craven (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 8,
+        defendable: true,
+        tokensGrantedToSelf: { feather: 1 },
+        upgradedBy: { upgradeId: "craven-ii", baseDamage: 9, tokensGrantedToSelf: { feather: 2 } },
+        verified: true
+      },
+      {
+        id: "beguile",
+        boardName: "Beguile (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 9,
+        defendable: true,
+        tokensGrantedToSelf: { feather: 2 },
+        activateNevermore: 1,
+        upgradedBy: { upgradeId: "beguile-ii", tokensGrantedToSelf: { feather: 3 }, activateNevermore: 2 },
+        verified: true
+      },
+      {
+        id: "fowl_friend",
+        boardName: "Fowl Friend (BBBB)",
+        dicePattern: "BBBB",
+        baseDamage: 0,
+        defendable: true,
+        drawCards: 1,
+        tokensGrantedToSelf: { feather: 4 },
+        activateNevermore: 2,
+        upgradedBy: { upgradeId: "fowl-friend-ii", dicePattern: "BBB", activateNevermore: 3, feathersToMax: true },
+        notes: "Base : Draw 1, Gain 4 Feather, Activate x2 \u2014 aucune attaque. II (WWW, ruling user) : Draw 1, Gain MAX Feather, Activate x3.",
+        verified: true
+      },
+      {
+        id: "murder_of_crows",
+        boardName: "Murder of Crows (AABBB)",
+        dicePattern: "AABBB",
+        baseDamage: 5,
+        defendable: true,
+        bonusRoll: { dice: 4, damagePerTalon: 1, featherPerWing: 1, activateNevermorePerEye: 1, eyeCap: 1 },
+        upgradedBy: { upgradeId: "murder-of-crows-ii", baseDamage: 6, bonusRollDice: 5 },
+        notes: "Deal 5 & roll 4 (II : 6 & roll 5) : +1 d\xE9g\xE2t par Talon, +1 Feather par Wing, sur Raven Eye Activate Nevermore.",
+        verified: true
+      },
+      {
+        id: "chamber",
+        boardName: "Chamber (CCCC)",
+        dicePattern: "CCCC",
+        baseDamage: 7,
+        defendable: false,
+        activateNevermore: 2,
+        upgradedBy: { upgradeId: "chamber-ii", activateNevermore: 3 },
+        notes: "7 ind\xE9fendables + Activate x2 (II : x3).",
+        verified: true
+      },
+      {
+        id: "fantastic_terrors",
+        boardName: "Fantastic Terrors (CCCCC)",
+        dicePattern: "CCCCC",
+        baseDamage: 13,
+        defendable: false,
+        ultimate: true,
+        activateNevermore: 3,
+        tokensInflictedOnOpponent: { hex: 1 },
+        notes: "ULTIMATE. Activate Nevermore three times. Inflict Hex. Deal 13 dmg. (Ind\xE9fendable de par la r\xE8gle Ultimate.)",
+        verified: true
+      }
+    ],
+    altAbilities: [
+      {
+        id: "aviary",
+        boardName: "Aviary (CCC)",
+        dicePattern: "CCC",
+        baseDamage: 2,
+        defendable: false,
+        requiresUpgradeId: "chamber-ii",
+        tokensGrantedToSelf: { feather: 4 },
+        notes: "Alt de Chamber II : Gain 4 Feather. Deal 2 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "pluck",
+        boardName: "Pluck (BBBCC)",
+        dicePattern: "BBBCC",
+        baseDamage: 9,
+        defendable: true,
+        requiresUpgradeId: "beguile-ii",
+        tokensInflictedOnOpponent: { hex: 1 },
+        notes: "Alt de Beguile II : Inflict Hex. Then deal 9 dmg.",
+        verified: true
+      },
+      {
+        id: "birds_of_a_feather",
+        boardName: "Birds of a Feather (BBBBB)",
+        dicePattern: "BBBBB",
+        baseDamage: 0,
+        defendable: true,
+        requiresUpgradeId: "fowl-friend-ii",
+        increaseFeatherCap: 1,
+        thenActivateFowlFriendII: true,
+        notes: "Alt de Fowl Friend II : Increase Feather Stack Limit by 1. Then activate FOWL FRIEND II (draw 1, max Feather, Activate x3).",
+        verified: true
+      }
+    ],
+    passives: [
+      {
+        id: "nevermore_die_roll",
+        name: "Nevermore Die Roll",
+        trigger: "Upkeep de l'adversaire qui d\xE9tient Nevermore",
+        text: "1 = gains Hex; 2 = Raveness may Activate Nevermore two times; 3 = Activate once; 4 = discards 1 of their choice; 5 = loses 1 CP, Raveness gains 1 CP; 6 = reduce dial to 0, then return Nevermore to the Raveness (no heal).",
+        verified: true
+      }
+    ],
+    defense: {
+      name: "Nothing More",
+      diceCount: "5",
+      text: "Defense Roll 5: On 2+ Talons, deal 2 dmg (ONCE, ruling user). On 2+ Wings, prevent 2 dmg (ONCE). On 2+ Raven Eyes, Activate Nevermore (ONCE). Nothing More II: deal 1 dmg PER Talon; the Wing/Eye pair thresholds unchanged.",
+      verified: true
+    },
+    cards: [
+      {
+        id: "cull",
+        name: "Cull!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "instant",
+        text: "Instant Action. Change the value of the Nevermore Die Roll.",
+        verified: true
+      },
+      {
+        id: "nevermore-attack",
+        name: "Nevermore Attack!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Activate Nevermore. Then choose if the player that Nevermore is on Heals 2 or receives 2 dmg.",
+        verified: true
+      },
+      {
+        id: "midnight-dreary",
+        name: "Midnight Dreary!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Roll 5 dice: Gain 1 x Feather per Wing. On Raven Eye, Activate Nevermore.",
+        verified: true
+      },
+      {
+        id: "stone-beak",
+        name: "Stone Beak!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Play only if Nevermore is on the target of your Attack. Add 1 dmg. This Attack becomes undefendable.",
+        verified: true
+      },
+      {
+        id: "broken-stillness",
+        name: "Broken Stillness!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "instant",
+        text: "Instant Action. Activate Nevermore.",
+        verified: true
+      },
+      {
+        id: "talon-strike",
+        name: "Talon Strike!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Roll 5 dice: Add 1 x Talon dmg. Gain Feather.",
+        verified: true
+      },
+      {
+        id: "chamber-ii",
+        name: "Chamber II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "chamber",
+        text: "CCCC: Activate Nevermore three times. Deal 7 undefendable dmg. Adds alt-ability AVIARY (CCC): Gain 4 Feather. Deal 2 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "fowl-friend-ii",
+        name: "Fowl Friend II",
+        kind: "upgrade",
+        cpCost: 3,
+        upgradeSlot: "fowl_friend",
+        text: "BBB (ruling user): Draw 1. Gain max Feather. Activate Nevermore three times. Adds alt-ability BIRDS OF A FEATHER (BBBBB): Increase Feather Stack Limit by 1. Then activate FOWL FRIEND II.",
+        verified: true
+      },
+      {
+        id: "raven-sight-ii",
+        name: "Raven Sight II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "raven_sight",
+        text: "AACC: Activate Nevermore two times. Deal 3 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "peck-ii",
+        name: "Peck II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "peck",
+        text: "AAA: 6 dmg. AAAA: 7 dmg. AAAAA: 8 dmg. On 3-of-a-kind (#'s), Activate Nevermore.",
+        verified: true
+      },
+      {
+        id: "beguile-ii",
+        name: "Beguile II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "beguile",
+        text: "Large Straight: Gain 3 Feather. Activate Nevermore two times. Deal 9 dmg. Adds alt-ability PLUCK (BBBCC): Inflict Hex. Then deal 9 dmg.",
+        verified: true
+      },
+      {
+        id: "craven-ii",
+        name: "Craven II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "craven",
+        text: "Small Straight: Gain 2 Feather. Deal 9 dmg.",
+        verified: true
+      },
+      {
+        id: "nothing-more-ii",
+        name: "Nothing More II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "defense",
+        text: "Defense Roll 5: Deal 1 x Talon dmg. On 2 Wings, prevent 2 dmg (once). On 2 Raven Eyes, Activate Nevermore (once).",
+        verified: true
+      },
+      {
+        id: "murder-of-crows-ii",
+        name: "Murder of Crows II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "murder_of_crows",
+        text: "AABBB: Deal 6 dmg & roll 5: Add 1 x Talon dmg. Gain 1 x Feather per Wing. On Raven Eye, Activate Nevermore.",
+        verified: true
+      }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -1325,6 +1812,7 @@ var Game = (() => {
   var hhHero = hero_default;
   var bwHero = hero_default2;
   var fmHero = hero_default3;
+  var rvHero = hero_default4;
   var commonCards = common_cards_default;
   var nxHero = {
     id: "nx",
@@ -1341,7 +1829,7 @@ var Game = (() => {
     cards: []
   };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "nx" ? nxHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const base = hero.abilities.find((a) => a.boardName === boardName);
@@ -1373,7 +1861,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -1749,6 +2237,85 @@ var Game = (() => {
     return 5;
   }
 
+  // src/sim/hero/rv.rules.ts
+  var FEATHER_CAP_BASE = 5;
+  var NEVERMORE_DIAL_CAP = 3;
+  function createInitialRVTokens() {
+    return { ...emptyBag(), nevermore: 1 };
+  }
+  function rvFaceToSymbol2(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function featherCap(self) {
+    return FEATHER_CAP_BASE + (self.featherCapBonus ?? 0);
+  }
+  function grantFeathers(self, n) {
+    const cap = featherCap(self);
+    const before = self.tokens.feather ?? 0;
+    const after = Math.min(cap, before + n);
+    self.tokens.feather = after;
+    return after - before;
+  }
+  function nevermoreHolder(state) {
+    return (state.players[0].tokens.nevermore ?? 0) > 0 ? 0 : 1;
+  }
+  function applyNevermoreActivation(rv, opp, rvIsHolder, choice) {
+    if (choice === "absorb") {
+      rv.nevermoreDial = Math.min(NEVERMORE_DIAL_CAP, (rv.nevermoreDial ?? 0) + 1);
+      return { choice: "absorb", absorbDamage: 1, dialAfter: rv.nevermoreDial };
+    }
+    if (rvIsHolder) {
+      rv.tokens.nevermore = 0;
+      opp.tokens.nevermore = 1;
+      return { choice: "moveToOpponent" };
+    }
+    opp.tokens.nevermore = 0;
+    rv.tokens.nevermore = 1;
+    const healed = rv.nevermoreDial ?? 0;
+    rv.hp = Math.min(rv.hp + healed, 60);
+    rv.nevermoreDial = 0;
+    return { choice: "moveToSelf", healed };
+  }
+  function applyNevermoreDieFace(rv, holder, face) {
+    switch (face) {
+      case 1:
+        holder.tokens.hex = 1;
+        return { face, hexInflicted: true };
+      case 2:
+        return { face, activations: 2 };
+      case 3:
+        return { face, activations: 1 };
+      case 4:
+        return { face, discards: 1 };
+      case 5: {
+        const stolen = Math.min(1, holder.cp);
+        holder.cp -= stolen;
+        rv.cp = Math.min(15, rv.cp + stolen);
+        return { face, cpStolen: stolen };
+      }
+      default: {
+        rv.nevermoreDial = 0;
+        holder.tokens.nevermore = 0;
+        rv.tokens.nevermore = 1;
+        return { face, returned: true };
+      }
+    }
+  }
+  function nothingMoreEffects(dice, upgraded) {
+    let a = 0, b = 0, c = 0;
+    for (const d of dice) {
+      const s = rvFaceToSymbol2(d);
+      if (s === "A") a += 1;
+      else if (s === "B") b += 1;
+      else c += 1;
+    }
+    return {
+      counterDamage: upgraded ? a : a >= 2 ? 2 : 0,
+      prevented: b >= 2 ? 2 : 0,
+      activations: c >= 2 ? 1 : 0
+    };
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
@@ -1756,6 +2323,9 @@ var Game = (() => {
   function defenseTaxFor(opponent) {
     if (opponent.heroId === "bw") {
       return opponent.upgradesInPlay.includes("sabotage-ii") ? 2.67 : 2;
+    }
+    if (opponent.heroId === "rv") {
+      return 2 * 0.8125 + 2 * 0.539;
     }
     if (opponent.heroId === "nx") {
       return 3;
@@ -1778,6 +2348,16 @@ var Game = (() => {
     };
   }
   function oracleStateFor(player, opponent) {
+    if (player.heroId === "rv") {
+      return {
+        feathers: player.tokens.feather,
+        nevermoreOnOpponent: (opponent.tokens.nevermore ?? 0) > 0,
+        hexed: (player.tokens.hex ?? 0) > 0,
+        upgradeIds: player.upgradesInPlay,
+        defenseTax: defenseTaxFor(opponent),
+        wildcards: wildcardFlagsFor(player)
+      };
+    }
     if (player.heroId === "hh") {
       const t = player.tokens;
       return {
@@ -1841,6 +2421,21 @@ var Game = (() => {
     self.covertOpsUsedThisTurn = false;
     self.grimPursuitRerollUsedThisTurn = false;
     self.minesDrawUsedThisTurn = false;
+    if (self.heroId !== "rv" && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === "rv") {
+      const face = rollDie(rng);
+      const r = applyNevermoreDieFace(opp, self, face);
+      log(state, playerIdx, "upkeep", `Nevermore Die Roll: ${face}` + (r.hexInflicted ? " \u2014 gains Hex (6s are blanks this turn)" : r.activations ? ` \u2014 Raveness activates Nevermore x${r.activations}` : r.discards ? " \u2014 must discard 1 of choice" : r.cpStolen !== void 0 ? ` \u2014 loses ${r.cpStolen} CP to the Raveness` : " \u2014 dial to 0, Nevermore returns (no heal)"));
+      if (r.activations) performNevermoreActivations(state, 1 - playerIdx, r.activations, rng, void 0);
+      if (r.discards && self.hand.length) {
+        const heroT2 = heroTemplateFor(self.heroId);
+        const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice());
+        const pick = chosen && self.hand.includes(chosen) ? chosen : self.hand.slice().sort((x, y) => (cardById(heroT2, x)?.cpCost ?? 0) - (cardById(heroT2, y)?.cpCost ?? 0))[0];
+        self.hand.splice(self.hand.indexOf(pick), 1);
+        self.discard.push(pick);
+        log(state, playerIdx, "upkeep", `Nevermore: discarded ${pick}`);
+      }
+      if (checkGameOver(state)) return;
+    }
     if (self.heroId === "hh") {
       const eligible = canTerrorize(self);
       const choice = policy.chooseHeadlessMayhem(state, playerIdx, eligible);
@@ -2038,6 +2633,35 @@ var Game = (() => {
       log(state, playerIdx, phase, `Cunning!: took ${upgrades.length} Ability Upgrade(s) to hand from the top 5`);
       return;
     }
+    if (card.id === "nevermore-attack") {
+      performNevermoreActivations(state, playerIdx, 1, rng, void 0);
+      const holderIdx = nevermoreHolder(state);
+      const holder = state.players[holderIdx];
+      const mode = holderIdx === playerIdx ? "heal" : "damage";
+      if (mode === "heal") {
+        holder.hp = Math.min(holder.hp + 2, 60);
+        log(state, playerIdx, phase, `Nevermore Attack!: ${holderIdx === playerIdx ? "self" : "opponent"} heals 2`);
+      } else {
+        holder.hp -= 2;
+        log(state, playerIdx, phase, "Nevermore Attack!: holder receives 2 dmg");
+        checkGameOver(state);
+      }
+      return;
+    }
+    if (card.id === "midnight-dreary") {
+      const rolls5 = rollDice(5, rng);
+      const wings5 = rolls5.filter((d) => d >= 4 && d <= 5).length;
+      const eyes5 = rolls5.filter((d) => d === 6).length;
+      const gained5 = grantFeathers(self, wings5);
+      log(state, playerIdx, phase, `Midnight Dreary!: rolled [${rolls5.join(",")}] \u2014 +${gained5} Feather${eyes5 > 0 ? ", Raven Eye -> Activate Nevermore" : ""}`);
+      if (eyes5 > 0) performNevermoreActivations(state, playerIdx, 1, rng, void 0);
+      return;
+    }
+    if (card.id === "broken-stillness") {
+      log(state, playerIdx, phase, "Broken Stillness!: Activate Nevermore");
+      performNevermoreActivations(state, playerIdx, 1, rng, void 0);
+      return;
+    }
     const eff = card.effect;
     if (!eff) {
       log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP \u2014 TODO(user): effect not structured yet, no game-state change applied`);
@@ -2157,8 +2781,8 @@ var Game = (() => {
     }
     resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: "mainPhase", phase }, rng, policies, enumerateWindowActions, applyWindowAction);
   }
-  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble"];
-  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning"];
+  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble", "broken-stillness"];
+  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary"];
   function anyoneHasHead(state) {
     return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0;
   }
@@ -2475,7 +3099,9 @@ var Game = (() => {
     const policy = policies[defenderIdx];
     let hallowedUpgraded = false;
     let defenseDice;
-    if (defender.heroId === "nx") {
+    if (defender.heroId === "rv") {
+      defenseDice = rollDice(5, rng);
+    } else if (defender.heroId === "nx") {
       defenseDice = [rollDie(rng)];
     } else if (defender.heroId === "fm") {
       defenseDice = [rollMasterworkDie(rng)];
@@ -2503,7 +3129,14 @@ var Game = (() => {
     const attacker = state.players[attackerIdx];
     const defender = state.players[defenderIdx];
     let damagePrevented = 0;
-    if (defender.heroId === "nx") {
+    if (defender.heroId === "rv") {
+      const upgradedNM = defender.upgradesInPlay.includes("nothing-more-ii");
+      const effNM = nothingMoreEffects(finalDefenseDice, upgradedNM);
+      damagePrevented = effNM.prevented;
+      if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage);
+      log(state, defenderIdx, "defense", `Nothing More${upgradedNM ? " II" : ""}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ""}`);
+      if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx]);
+    } else if (defender.heroId === "nx") {
       damagePrevented = dragonScalesPrevent(finalDefenseDice[0]);
       log(state, defenderIdx, "defense", `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`);
     } else if (defender.heroId === "fm") {
@@ -2601,13 +3234,18 @@ var Game = (() => {
     }
     return remaining;
   }
-  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves"];
+  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike"];
   function eligibleAttackModifierCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ATTACK_MODIFIER_CARD_IDS.filter((id) => {
       if (!self.hand.includes(id)) return false;
       const card = cardById(hero, id);
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
+      if (id === "stone-beak" || id === "talon-strike") {
+        if (self.heroId !== "rv") return false;
+        if (id === "stone-beak" && (self.tokens.nevermore ?? 0) > 0) return false;
+        return true;
+      }
       if (id === "unescapable" && self.tokens.grimPursuit < 1) {
         const canConvert = self.hand.includes("thundering-hooves") && self.cp >= 2;
         if (!canConvert) return false;
@@ -2615,7 +3253,7 @@ var Game = (() => {
       return true;
     });
   }
-  function applyAttackModifierCard(state, playerIdx, cardId, current) {
+  function applyAttackModifierCard(state, playerIdx, cardId, current, rng) {
     const self = state.players[playerIdx];
     const opp = state.players[1 - playerIdx];
     const hero = heroTemplateFor(self.heroId);
@@ -2625,6 +3263,21 @@ var Game = (() => {
     self.cp -= card.cpCost ?? 0;
     self.hand.splice(self.hand.indexOf(cardId), 1);
     self.discard.push(cardId);
+    if (cardId === "stone-beak") {
+      log(state, playerIdx, "resolveAttack", "Stone Beak!: +1 dmg, attack becomes undefendable");
+      return { dmg: current.dmg + 1, undefendable: true };
+    }
+    if (cardId === "talon-strike") {
+      if (!rng) {
+        grantFeathers(self, 1);
+        return { ...current, dmg: current.dmg + 2 };
+      }
+      const tsRoll = rollDice(5, rng);
+      const tsTalons = tsRoll.filter((d) => d <= 3).length;
+      const g = grantFeathers(self, 1);
+      log(state, playerIdx, "resolveAttack", `Talon Strike!: rolled [${tsRoll.join(",")}], +${tsTalons} dmg, +${g} Feather`);
+      return { ...current, dmg: current.dmg + tsTalons };
+    }
     if (cardId === "unescapable") {
       spendGrimPursuit(self, 1);
       log(state, playerIdx, "resolveAttack", "Unescapable!: spent 1 Grim Pursuit, attack is now undefendable");
@@ -2895,6 +3548,11 @@ var Game = (() => {
       resolveNaraxusAbility(state, playerIdx, dice, rng, policies);
       return;
     }
+    if ((self.tokens.hex ?? 0) > 0 && dice.includes(6)) {
+      const filtered = dice.filter((d) => d !== 6);
+      log(state, playerIdx, "resolveAttack", `Hex: ${dice.length - filtered.length} die/dice showing 6 are blank this turn`);
+      dice = filtered;
+    }
     const opp = state.players[1 - playerIdx];
     const oState = oracleStateFor(self, opp);
     const candidates = resolveMatchedAbilities(self.heroId, dice, oState);
@@ -2907,6 +3565,7 @@ var Game = (() => {
     log(state, playerIdx, "resolveAttack", `Chose ability: ${chosenName}`);
     if (self.heroId === "hh") applyHHAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "fm") applyFMAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "rv") applyRVAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
@@ -2976,8 +3635,140 @@ var Game = (() => {
     if (state.gameOver || !dice.length) return;
     resolveNaraxusAbility(state, bossIdx, dice, rng, policies);
   }
+  function performNevermoreActivations(state, rvIdx, times, rng, policy) {
+    const rvP = state.players[rvIdx];
+    const opp = state.players[1 - rvIdx];
+    for (let i = 0; i < times; i++) {
+      if (state.gameOver) return;
+      const rvIsHolder = (rvP.tokens.nevermore ?? 0) > 0;
+      let choice;
+      const hook = policy?.chooseNevermoreActivation;
+      if (hook) choice = hook(state, rvIdx);
+      else if (rvIsHolder) choice = "move";
+      else if ((rvP.nevermoreDial ?? 0) >= NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = "move";
+      else choice = "absorb";
+      if (choice === "absorb" && rvIsHolder) choice = "move";
+      const r = applyNevermoreActivation(rvP, opp, rvIsHolder, choice);
+      if (r.choice === "absorb") {
+        opp.hp -= 1;
+        log(state, rvIdx, "resolveAttack", `Nevermore absorbs: dial ${r.dialAfter}, 1 undefendable dmg (isolated)`);
+        if (checkGameOver(state)) return;
+      } else if (r.choice === "moveToOpponent") {
+        log(state, rvIdx, "resolveAttack", "Nevermore flies to the opponent");
+      } else {
+        log(state, rvIdx, "resolveAttack", `Nevermore returns to the Raveness: healed ${r.healed}, dial to 0`);
+      }
+    }
+  }
+  function applyRVAbility(state, playerIdx, name, dice, rng, policies) {
+    const self = state.players[playerIdx];
+    const opp = state.players[1 - playerIdx];
+    const policy = policies[playerIdx];
+    const has = (id) => self.upgradesInPlay.includes(id);
+    const acts = (n) => performNevermoreActivations(state, playerIdx, n, rng, policy);
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    const maxKind = Math.max(...counts.values());
+    const a = dice.filter((d) => d <= 3).length;
+    const attack = (dmg, defendable, ultimate = false) => {
+      let result = { dmg, undefendable: !defendable || ultimate };
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
+      for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (result.dmg <= 0) {
+        log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
+        return;
+      }
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
+      else resolveDefense(state, playerIdx, result.dmg, rng, policies);
+    };
+    if (name.startsWith("Peck")) {
+      const up = has("peck-ii");
+      const dmg = (a >= 5 ? [7, 8] : a >= 4 ? [6, 7] : [5, 6])[up ? 1 : 0];
+      const trigger = up ? 3 : 4;
+      if (maxKind >= trigger) {
+        log(state, playerIdx, "resolveAttack", `Peck: ${trigger}-of-a-kind -> Activate Nevermore`);
+        acts(1);
+      }
+      attack(dmg, true);
+      return;
+    }
+    if (name.startsWith("Raven Sight")) {
+      acts(has("raven-sight-ii") ? 2 : 1);
+      attack(3, false);
+      return;
+    }
+    if (name.startsWith("Craven")) {
+      const up = has("craven-ii");
+      const g = grantFeathers(self, up ? 2 : 1);
+      log(state, playerIdx, "resolveAttack", `Craven: +${g} Feather`);
+      attack(up ? 9 : 8, true);
+      return;
+    }
+    if (name.startsWith("Beguile")) {
+      const up = has("beguile-ii");
+      const g = grantFeathers(self, up ? 3 : 2);
+      log(state, playerIdx, "resolveAttack", `Beguile: +${g} Feather`);
+      acts(up ? 2 : 1);
+      attack(9, true);
+      return;
+    }
+    if (name.startsWith("Fowl Friend") || name.startsWith("Birds of a Feather")) {
+      if (name.startsWith("Birds of a Feather")) {
+        self.featherCapBonus = (self.featherCapBonus ?? 0) + 1;
+        log(state, playerIdx, "resolveAttack", `Birds of a Feather: Feather cap +1 (now ${featherCap(self)}) \u2014 then Fowl Friend II`);
+      }
+      const up = has("fowl-friend-ii");
+      drawCards(self, 1, rng);
+      const g = up ? grantFeathers(self, 99) : grantFeathers(self, 4);
+      log(state, playerIdx, "resolveAttack", `Fowl Friend${up ? " II" : ""}: drew 1, +${g} Feather`);
+      acts(up ? 3 : 2);
+      return;
+    }
+    if (name.startsWith("Murder of Crows")) {
+      const up = has("murder-of-crows-ii");
+      const n = up ? 5 : 4;
+      const rolls = rollDice(n, rng);
+      const talons = rolls.filter((d) => d <= 3).length;
+      const wings = rolls.filter((d) => d >= 4 && d <= 5).length;
+      const eyes = rolls.filter((d) => d === 6).length;
+      const g = grantFeathers(self, wings);
+      log(state, playerIdx, "resolveAttack", `Murder of Crows${up ? " II" : ""} bonus roll [${rolls.join(",")}]: +${talons} dmg, +${g} Feather${eyes ? ", Raven Eye -> Activate Nevermore" : ""}`);
+      if (eyes > 0) acts(1);
+      attack((up ? 6 : 5) + talons, true);
+      return;
+    }
+    if (name.startsWith("Aviary")) {
+      const g = grantFeathers(self, 4);
+      log(state, playerIdx, "resolveAttack", `Aviary: +${g} Feather`);
+      attack(2, false);
+      return;
+    }
+    if (name.startsWith("Pluck")) {
+      opp.tokens.hex = 1;
+      log(state, playerIdx, "resolveAttack", "Pluck: Hex inflicted (6s are blanks)");
+      attack(9, true);
+      return;
+    }
+    if (name.startsWith("Chamber")) {
+      acts(has("chamber-ii") ? 3 : 2);
+      attack(7, false);
+      return;
+    }
+    if (name.startsWith("Fantastic Terrors")) {
+      acts(3);
+      opp.tokens.hex = 1;
+      log(state, playerIdx, "resolveAttack", "Fantastic Terrors: Hex inflicted");
+      attack(13, false, true);
+      return;
+    }
+    log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Raveness ability matched (${name})`);
+  }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
+    if ((self.tokens.hex ?? 0) > 0) {
+      self.tokens.hex = 0;
+      log(state, playerIdx, "endOfTurn", "Hex removed (end of afflicted turn)");
+    }
     if (self.hoardedDice > 0) {
       log(state, playerIdx, "endOfTurn", `Hoarding: ${self.hoardedDice} stolen die returned`);
       self.hoardedDice = 0;
@@ -3018,7 +3809,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
@@ -3039,6 +3830,8 @@ var Game = (() => {
       grimPursuitRerollUsedThisTurn: false,
       minesDrawUsedThisTurn: false,
       hoardedDice: 0,
+      nevermoreDial: 0,
+      featherCapBonus: 0,
       // Forgemaster zones (inert for other heroes). 1v1 setup: NO starting Armor (the leaflet's
       // "begin with any one Gold Armor" only applies with more than 1 opponent).
       forge: [],

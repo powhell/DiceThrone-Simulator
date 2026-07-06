@@ -5,14 +5,15 @@ import * as core from '../core/evaluator.js'
 import { hhConfig, type HHState } from '../characters/horseman/config.js'
 import { bwConfig, type BWState } from '../characters/black_widow/config.js'
 import { fmConfig, type FMState } from '../characters/forgemaster/config.js'
+import { rvConfig, type RVState } from '../characters/raveness/config.js'
 import type { HeroId } from './types.js'
 import type { RNG } from './rng.js'
 import { rollDice } from './rng.js'
 
-export type OracleState = HHState | BWState | FMState
+export type OracleState = HHState | BWState | FMState | RVState
 
 function cfgFor(heroId: HeroId): any {
-  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : bwConfig
+  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : heroId === 'rv' ? rvConfig : bwConfig
 }
 
 export interface RollStep {

@@ -6,8 +6,9 @@ import { resolveResponseWindow } from './decision.js'
 import type { HHState } from '../characters/horseman/config.js'
 import type { BWState } from '../characters/black_widow/config.js'
 import type { FMState } from '../characters/forgemaster/config.js'
+import type { RVState } from '../characters/raveness/config.js'
 import type { RNG } from './rng.js'
-import { shuffle, rollDie } from './rng.js'
+import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
 import type { RollStep, RollStepUpdate } from './oracle.js'
 import { runOffensiveRoll } from './oracle.js'
@@ -18,6 +19,7 @@ import * as hh from './hero/hh.rules.js'
 import * as bw from './hero/bw.rules.js'
 import * as fm from './hero/fm.rules.js'
 import * as nx from './hero/nx.rules.js'
+import * as rv from './hero/rv.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -35,6 +37,11 @@ export function defenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'bw') {
     // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
     return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
+  }
+  if (opponent.heroId === 'rv') {
+    // Nothing More (5 des, seuils UNE fois — ruling user) : contre 2 x P(>=2 Talons | p=1/2,
+    // 5 des) = 2 x .8125 ; prevention 2 x P(>=2 Wings | p=1/3) = 2 x .539.
+    return 2 * 0.8125 + 2 * 0.539
   }
   if (opponent.heroId === 'nx') {
     // Dragon Scales : E[prevention] = (1 + 4x3 + 5)/6 = 3.0 (aucun contre-degat)
@@ -61,7 +68,14 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState {
+  if (player.heroId === 'rv') {
+    return {
+      feathers: player.tokens.feather, nevermoreOnOpponent: (opponent.tokens.nevermore ?? 0) > 0,
+      hexed: (player.tokens.hex ?? 0) > 0, upgradeIds: player.upgradesInPlay,
+      defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'hh') {
     const t = player.tokens
     return {
@@ -133,6 +147,29 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
   self.minesDrawUsedThisTurn = false
+
+  // Nevermore Die Roll (leaflet verifie) : le detenteur NON-rv lance 1 de a son upkeep.
+  if (self.heroId !== 'rv' && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === 'rv') {
+    const face = rollDie(rng)
+    const r = rv.applyNevermoreDieFace(opp, self, face)
+    log(state, playerIdx, 'upkeep', `Nevermore Die Roll: ${face}` +
+      (r.hexInflicted ? ' — gains Hex (6s are blanks this turn)' :
+       r.activations ? ` — Raveness activates Nevermore x${r.activations}` :
+       r.discards ? ' — must discard 1 of choice' :
+       r.cpStolen !== undefined ? ` — loses ${r.cpStolen} CP to the Raveness` :
+       ' — dial to 0, Nevermore returns (no heal)'))
+    if (r.activations) performNevermoreActivations(state, (1 - playerIdx) as 0 | 1, r.activations, rng, undefined)
+    if (r.discards && self.hand.length) {
+      const heroT2 = heroTemplateFor(self.heroId)
+      const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice())
+      const pick = (chosen && self.hand.includes(chosen)) ? chosen
+        : self.hand.slice().sort((x, y) => (cardById(heroT2, x)?.cpCost ?? 0) - (cardById(heroT2, y)?.cpCost ?? 0))[0]
+      self.hand.splice(self.hand.indexOf(pick), 1)
+      self.discard.push(pick)
+      log(state, playerIdx, 'upkeep', `Nevermore: discarded ${pick}`)
+    }
+    if (checkGameOver(state)) return
+  }
 
   if (self.heroId === 'hh') {
     const eligible = hh.canTerrorize(self)
@@ -396,6 +433,30 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     return
   }
 
+  if (card.id === 'nevermore-attack') {
+    // "Activate Nevermore. Then choose if the player that Nevermore is on Heals 2 or receives 2 dmg."
+    performNevermoreActivations(state, playerIdx, 1, rng, undefined)
+    const holderIdx = rv.nevermoreHolder(state)
+    const holder = state.players[holderIdx]
+    const mode = holderIdx === playerIdx ? 'heal' : 'damage'
+    if (mode === 'heal') { holder.hp = Math.min(holder.hp + 2, 60); log(state, playerIdx, phase, `Nevermore Attack!: ${holderIdx === playerIdx ? 'self' : 'opponent'} heals 2`) }
+    else { holder.hp -= 2; log(state, playerIdx, phase, 'Nevermore Attack!: holder receives 2 dmg'); checkGameOver(state) }
+    return
+  }
+  if (card.id === 'midnight-dreary') {
+    const rolls5 = rollDice(5, rng)
+    const wings5 = rolls5.filter((d: number) => d >= 4 && d <= 5).length
+    const eyes5 = rolls5.filter((d: number) => d === 6).length
+    const gained5 = rv.grantFeathers(self, wings5)
+    log(state, playerIdx, phase, `Midnight Dreary!: rolled [${rolls5.join(',')}] — +${gained5} Feather${eyes5 > 0 ? ', Raven Eye -> Activate Nevermore' : ''}`)
+    if (eyes5 > 0) performNevermoreActivations(state, playerIdx, 1, rng, undefined)
+    return
+  }
+  if (card.id === 'broken-stillness') {
+    log(state, playerIdx, phase, 'Broken Stillness!: Activate Nevermore')
+    performNevermoreActivations(state, playerIdx, 1, rng, undefined)
+    return
+  }
   const eff = card.effect
   if (!eff) {
     log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP — TODO(user): effect not structured yet, no game-state change applied`)
@@ -561,11 +622,11 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness']
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -937,7 +998,9 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // not baked into the roll. Active player (the attacker) has priority.
   let hallowedUpgraded = false
   let defenseDice: number[]
-  if (defender.heroId === 'nx') {
+  if (defender.heroId === 'rv') {
+    defenseDice = rollDice(5, rng) // Nothing More : 5 des
+  } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
   } else if (defender.heroId === 'fm') {
     // Masterwork (verifie board) : Defense Roll 1 de - resolu sur le de FINAL apres la
@@ -983,7 +1046,14 @@ export function finalizeDefenseRoll(
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
-  if (defender.heroId === 'nx') {
+  if (defender.heroId === 'rv') {
+    const upgradedNM = defender.upgradesInPlay.includes('nothing-more-ii')
+    const effNM = rv.nothingMoreEffects(finalDefenseDice, upgradedNM)
+    damagePrevented = effNM.prevented
+    if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage)
+    log(state, defenderIdx, 'defense', `Nothing More${upgradedNM ? ' II' : ''}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ''}`)
+    if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx])
+  } else if (defender.heroId === 'nx') {
     damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
     log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
   } else if (defender.heroId === 'fm') {
@@ -1109,7 +1179,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike']
 
 function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1117,6 +1187,11 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
     if (!self.hand.includes(id)) return false
     const card = cardById(hero, id)
     if (!card || self.cp < (card.cpCost ?? 0)) return false
+    if (id === 'stone-beak' || id === 'talon-strike') {
+      if (self.heroId !== 'rv') return false
+      if (id === 'stone-beak' && (self.tokens.nevermore ?? 0) > 0) return false // doit etre sur la CIBLE
+      return true
+    }
     if (id === 'unescapable' && self.tokens.grimPursuit < 1) {
       // Combo user-caught : Thundering Hooves! (CP -> Grim Pursuit) se résout AVANT dans la
       // même fenêtre, donc Unescapable! reste proposable à 0 jeton si TH peut en fournir
@@ -1140,7 +1215,7 @@ export interface AttackModifierResult {
 // Assumes the card is in `self.hand` and eligible (guaranteed by eligibleAttackModifierCardIds —
 // but, same caveat as applyDefensiveCard, that only checks each card in ISOLATION; re-checks
 // affordability immediately before debiting so a multi-card Policy choice can't overspend).
-export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, cardId: string, current: AttackModifierResult): AttackModifierResult {
+export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, cardId: string, current: AttackModifierResult, rng?: RNG): AttackModifierResult {
   const self = state.players[playerIdx]
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   const hero = heroTemplateFor(self.heroId)
@@ -1153,6 +1228,19 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
   self.hand.splice(self.hand.indexOf(cardId), 1)
   self.discard.push(cardId)
 
+  if (cardId === 'stone-beak') {
+    // "Play only if Nevermore is on the target of your Attack" — verifie a l'eligibilite.
+    log(state, playerIdx, 'resolveAttack', 'Stone Beak!: +1 dmg, attack becomes undefendable')
+    return { dmg: current.dmg + 1, undefendable: true }
+  }
+  if (cardId === 'talon-strike') {
+    if (!rng) { rv.grantFeathers(self, 1); return { ...current, dmg: current.dmg + 2 } } // scoring : E[talons] ~ 2.5
+    const tsRoll = rollDice(5, rng)
+    const tsTalons = tsRoll.filter(d => d <= 3).length
+    const g = rv.grantFeathers(self, 1)
+    log(state, playerIdx, 'resolveAttack', `Talon Strike!: rolled [${tsRoll.join(',')}], +${tsTalons} dmg, +${g} Feather`)
+    return { ...current, dmg: current.dmg + tsTalons }
+  }
   if (cardId === 'unescapable') {
     hh.spendGrimPursuit(self, 1)
     log(state, playerIdx, 'resolveAttack', 'Unescapable!: spent 1 Grim Pursuit, attack is now undefendable')
@@ -1476,6 +1564,12 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   const policy = policies[playerIdx]
   const self = state.players[playerIdx]
   if (self.heroId === 'nx') { resolveNaraxusAbility(state, playerIdx, dice, rng, policies); return }
+  // Hex (Raveness, verifie) : les 6 de l'afflige sont des faces BLANCHES — retirees du matching.
+  if ((self.tokens.hex ?? 0) > 0 && dice.includes(6)) {
+    const filtered = dice.filter(d => d !== 6)
+    log(state, playerIdx, 'resolveAttack', `Hex: ${dice.length - filtered.length} die/dice showing 6 are blank this turn`)
+    dice = filtered
+  }
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   const oState = oracleStateFor(self, opp)
 
@@ -1491,6 +1585,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
 
   if (self.heroId === 'hh') applyHHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'fm') applyFMAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'rv') applyRVAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -1571,8 +1666,145 @@ export function playNaraxusTurn(state: GameState, bossIdx: 0 | 1, rng: RNG, poli
   resolveNaraxusAbility(state, bossIdx, dice, rng, policies)
 }
 
+
+// --- Raveness ------------------------------------------------------------------------------
+// Execute N activations de Nevermore pour la Raveness (rvIdx). Choix par la Policy si le hook
+// existe, sinon heuristique : chez soi -> l'envoyer chez l'adversaire ; chez l'adversaire ->
+// absorber (cadran+1, 1 degat isole) jusqu'au cadran plein, puis rapatrier si le soin est utile.
+export function performNevermoreActivations(state: GameState, rvIdx: 0 | 1, times: number, rng: RNG, policy?: Policy): void {
+  const rvP = state.players[rvIdx]
+  const opp = state.players[(1 - rvIdx) as 0 | 1]
+  for (let i = 0; i < times; i++) {
+    if (state.gameOver) return
+    const rvIsHolder = (rvP.tokens.nevermore ?? 0) > 0
+    let choice: 'move' | 'absorb'
+    const hook = policy?.chooseNevermoreActivation
+    if (hook) choice = hook(state, rvIdx)
+    else if (rvIsHolder) choice = 'move'
+    else if ((rvP.nevermoreDial ?? 0) >= rv.NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = 'move'
+    else choice = 'absorb'
+    if (choice === 'absorb' && rvIsHolder) choice = 'move' // Absorb exige Nevermore sur un adversaire
+    const r = rv.applyNevermoreActivation(rvP, opp, rvIsHolder, choice)
+    if (r.choice === 'absorb') {
+      opp.hp -= 1 // source isolee, indefendable (leaflet verifie)
+      log(state, rvIdx, 'resolveAttack', `Nevermore absorbs: dial ${r.dialAfter}, 1 undefendable dmg (isolated)`)
+      if (checkGameOver(state)) return
+    } else if (r.choice === 'moveToOpponent') {
+      log(state, rvIdx, 'resolveAttack', 'Nevermore flies to the opponent')
+    } else {
+      log(state, rvIdx, 'resolveAttack', `Nevermore returns to the Raveness: healed ${r.healed}, dial to 0`)
+    }
+  }
+}
+
+// Resout une habilete Raveness choisie (board verifie scans 2026-07-06).
+function applyRVAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const opp = state.players[(1 - playerIdx) as 0 | 1]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+  const acts = (n: number) => performNevermoreActivations(state, playerIdx, n, rng, policy)
+
+  const counts = new Map<number, number>()
+  for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+  const maxKind = Math.max(...counts.values())
+  const a = dice.filter(d => d <= 3).length
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    // Modificateurs d'attaque (Stone Beak!/Talon Strike! + communs) via le systeme standard.
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Peck')) {
+    const up = has('peck-ii')
+    const dmg = (a >= 5 ? [7, 8] : a >= 4 ? [6, 7] : [5, 6])[up ? 1 : 0]
+    const trigger = up ? 3 : 4
+    if (maxKind >= trigger) { log(state, playerIdx, 'resolveAttack', `Peck: ${trigger}-of-a-kind -> Activate Nevermore`); acts(1) }
+    attack(dmg, true)
+    return
+  }
+  if (name.startsWith('Raven Sight')) {
+    acts(has('raven-sight-ii') ? 2 : 1)
+    attack(3, false)
+    return
+  }
+  if (name.startsWith('Craven')) {
+    const up = has('craven-ii')
+    const g = rv.grantFeathers(self, up ? 2 : 1)
+    log(state, playerIdx, 'resolveAttack', `Craven: +${g} Feather`)
+    attack(up ? 9 : 8, true)
+    return
+  }
+  if (name.startsWith('Beguile')) {
+    const up = has('beguile-ii')
+    const g = rv.grantFeathers(self, up ? 3 : 2)
+    log(state, playerIdx, 'resolveAttack', `Beguile: +${g} Feather`)
+    acts(up ? 2 : 1)
+    attack(9, true)
+    return
+  }
+  if (name.startsWith('Fowl Friend') || name.startsWith('Birds of a Feather')) {
+    if (name.startsWith('Birds of a Feather')) {
+      self.featherCapBonus = (self.featherCapBonus ?? 0) + 1
+      log(state, playerIdx, 'resolveAttack', `Birds of a Feather: Feather cap +1 (now ${rv.featherCap(self)}) — then Fowl Friend II`)
+    }
+    const up = has('fowl-friend-ii')
+    drawCards(self, 1, rng)
+    const g = up ? rv.grantFeathers(self, 99) : rv.grantFeathers(self, 4)
+    log(state, playerIdx, 'resolveAttack', `Fowl Friend${up ? ' II' : ''}: drew 1, +${g} Feather`)
+    acts(up ? 3 : 2)
+    return
+  }
+  if (name.startsWith('Murder of Crows')) {
+    const up = has('murder-of-crows-ii')
+    const n = up ? 5 : 4
+    const rolls = rollDice(n, rng)
+    const talons = rolls.filter(d => d <= 3).length
+    const wings = rolls.filter(d => d >= 4 && d <= 5).length
+    const eyes = rolls.filter(d => d === 6).length
+    const g = rv.grantFeathers(self, wings)
+    log(state, playerIdx, 'resolveAttack', `Murder of Crows${up ? ' II' : ''} bonus roll [${rolls.join(',')}]: +${talons} dmg, +${g} Feather${eyes ? ', Raven Eye -> Activate Nevermore' : ''}`)
+    if (eyes > 0) acts(1)
+    attack((up ? 6 : 5) + talons, true)
+    return
+  }
+  if (name.startsWith('Aviary')) {
+    const g = rv.grantFeathers(self, 4)
+    log(state, playerIdx, 'resolveAttack', `Aviary: +${g} Feather`)
+    attack(2, false)
+    return
+  }
+  if (name.startsWith('Pluck')) {
+    opp.tokens.hex = 1
+    log(state, playerIdx, 'resolveAttack', 'Pluck: Hex inflicted (6s are blanks)')
+    attack(9, true)
+    return
+  }
+  if (name.startsWith('Chamber')) {
+    acts(has('chamber-ii') ? 3 : 2)
+    attack(7, false)
+    return
+  }
+  if (name.startsWith('Fantastic Terrors')) {
+    acts(3)
+    opp.tokens.hex = 1
+    log(state, playerIdx, 'resolveAttack', 'Fantastic Terrors: Hex inflicted')
+    attack(13, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Raveness ability matched (${name})`)
+}
+
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
   const self = state.players[playerIdx]
+  if ((self.tokens.hex ?? 0) > 0) {
+    self.tokens.hex = 0
+    log(state, playerIdx, 'endOfTurn', 'Hex removed (end of afflicted turn)')
+  }
   if (self.hoardedDice > 0) {
     log(state, playerIdx, 'endOfTurn', `Hoarding: ${self.hoardedDice} stolen die returned`)
     self.hoardedDice = 0

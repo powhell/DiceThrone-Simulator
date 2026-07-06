@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'nx' // nx = Naraxus (boss, non jouable)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'nx' // rv = Raveness ; nx = Naraxus (boss, non jouable)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -50,6 +50,10 @@ export interface PlayerState {
   // Naraxus HOARDING : des voles au heros (reduit SA defense contre cette attaque et son
   // tour entier - v1 : defense implementee, jet offensif a 5 des conserve, TODO fidele).
   hoardedDice: number
+  // Raveness : cadran de Nevermore (0-3, soigné au retour) + bonus de cap Feather
+  // (Birds of a Feather). Le porteur de Nevermore = tokens.nevermore > 0.
+  nevermoreDial?: number
+  featherCapBonus?: number
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

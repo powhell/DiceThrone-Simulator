@@ -54,6 +54,12 @@
     fm: { name:'Forgemaster', crest:'FM', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:GLYPH.pick,B:GLYPH.forgehammer,C:GLYPH.anvil}, symName:{A:'Pioche',B:'Forge',C:'Enclume'},
       col:{A:'#a9d6e8',B:'#f0a03a',C:'#f3ede2'} },
+    rv: { name:'Raveness', crest:'RV', cls:v=>v<=3?'A':v<=5?'B':'C',
+      sym:{A:'<g class="glyph"><path d="M20 44 L32 20 L44 44 M26 36 L38 36" stroke-width="4" fill="none"/></g>',
+           B:'<g class="glyph"><path d="M16 40 Q32 12 48 28 Q40 34 34 34 Q40 40 30 42 Q36 46 24 46 Z"/></g>',
+           C:'<g class="glyph"><circle cx="32" cy="32" r="12" fill="none" stroke-width="4"/><circle cx="32" cy="32" r="5"/></g>'},
+      symName:{A:'Talon',B:'Aile',C:'Œil'},
+      col:{A:'#e8e26a',B:'#8fd6a0',C:'#e87ab8'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -63,7 +69,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -165,6 +171,13 @@
     if (t.covertOps)   out.push(`<span class="tok covert"><span class="dot"></span><b>Covert</b> ${t.covertOps}</span>`);
     if (t.head)        out.push(`<span class="tok head"><span class="dot" style="background:var(--gold)"></span><b>Haunted Head</b></span>`);
     (p.timeBombs || []).forEach(pos => out.push(`<span class="tok bomb"><span class="dot"></span><b>Time Bomb</b> ${pos}</span>`));
+    if (t.feather) out.push(`<span class="tok" style="border-color:#3f7a4f"><b>🪶 Feather</b> ${t.feather}</span>`);
+    if (t.hex) out.push(`<span class="tok" style="border-color:#8a4fbf"><b>⬡ Hex</b> (tes 6 = blancs ce tour)</span>`);
+    if (t.nevermore) {
+      const rvP = g.state.players.find(x=>x.heroId==='rv');
+      const dial = rvP ? (rvP.nevermoreDial||0) : 0;
+      out.push(`<span class="tok" style="border-color:#4a4a6a"><b>🐦‍⬛ Nevermore</b> cadran ${dial}</span>`);
+    }
     if (p.heroId === 'fm') {
       const ORE_SHORT = { 'gold-ore':'Or', 'diamond-ore':'Diamant', 'ultimanium-ore':'Ultimanium' };
       const counts = {};
@@ -498,6 +511,12 @@
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
   // II-aware ("je ne vois toujours pas sur le board la défense", reported).
   function defBoxHTML(heroKey, p){
+    if (heroKey==='rv'){
+      const up = p.upgradesInPlay.includes('nothing-more-ii');
+      return `<div class="defbox"><b>🛡️ Nothing More${up?' II':''}</b><br>
+        Lance 5 dés : ${up?'1 contre-dégât PAR Talon':'≥2 Talons = 2 contre-dégâts (une fois)'}<br>
+        ≥2 Ailes = préviens 2 (une fois) · ≥2 Œils = Active Nevermore</div>`;
+    }
     if (heroKey==='nx'){
       return `<div class="defbox"><b>🛡️ Dragon Scales</b><br>
         Lance 1 dé : 1 = prévient 1 · 2-5 = prévient 3 · 6 = prévient 5<br>
@@ -1550,6 +1569,27 @@
       return `<b>${m[1].replace(/\s*\([A-C5-]+\)$/,'')}</b> : va chercher <b>${m[2]}</b> → la Forge (deck mélangé)`;
     if ((m = msg.match(/^(.+?): mined — revealed (.+) to The Forge/)))
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> : mine — révèle <b>${m[2]}</b> → la Forge`;
+    if ((m = msg.match(/^Nevermore Die Roll: (\d)(.*)$/))) {
+      const suites={' — gains Hex (6s are blanks this turn)':' — tu gagnes Hex (tes 6 sont blancs ce tour)',
+        ' — must discard 1 of choice':' — tu dois défausser 1 carte',
+        ' — dial to 0, Nevermore returns (no heal)':' — cadran à 0, Nevermore repart (sans soin)'};
+      let tail=m[2];
+      for (const k in suites) if (tail===k) tail=suites[k];
+      tail=tail.replace(/ — Raveness activates Nevermore x(\d)/,' — la Raveness active Nevermore ×$1')
+               .replace(/ — loses (\d) CP to the Raveness/,' — tu perds $1 CP au profit de la Raveness');
+      return `🐦‍⬛ <b>Nevermore</b> (dé d'upkeep) : ${m[1]}${tail}`;
+    }
+    if ((m = msg.match(/^Nevermore absorbs: dial (\d), 1 undefendable dmg/))) return `🐦‍⬛ Nevermore <b>absorbe</b> : cadran ${m[1]}, 1 dégât indéfendable isolé`;
+    if (/^Nevermore flies to the opponent/.test(msg)) return `🐦‍⬛ Nevermore s'envole chez l'adversaire`;
+    if ((m = msg.match(/^Nevermore returns to the Raveness: healed (\d+)/))) return `🐦‍⬛ Nevermore revient : <b>soigne ${m[1]}</b>, cadran à 0`;
+    if ((m = msg.match(/^Nevermore: discarded (.+)$/))) return `🐦‍⬛ Nevermore : défausse <b>${m[1]}</b>`;
+    if ((m = msg.match(/^Hex: (\d) die\/dice showing 6 are blank/))) return `⬡ <b>Hex</b> : ${m[1]} dé(s) à 6 comptent comme BLANCS ce tour`;
+    if (/^Hex removed/.test(msg)) return `⬡ Hex retiré (fin du tour)`;
+    if ((m = msg.match(/^(Craven|Beguile|Aviary|Fowl Friend[^:]*|Murder of Crows[^:]*): (.+)$/))) return `<b>${m[1]}</b> : ${m[2].replace('drew 1','pioche 1').replace('Feather','Feather 🪶')}`;
+    if (/^Pluck: Hex inflicted/.test(msg)) return `<b>Pluck</b> : ⬡ Hex infligé (ses 6 = blancs)`;
+    if (/^Fantastic Terrors: Hex inflicted/.test(msg)) return `<b>Fantastic Terrors</b> : ⬡ Hex infligé`;
+    if ((m = msg.match(/^Nothing More( II)?: prevented (\d+), (\d+) dmg back(.*)$/))) return `🛡️ <b>Nothing More${m[1]||''}</b> : prévient ${m[2]}, ${m[3]} contre-dégât(s)${m[4]?' · Active Nevermore':''}`;
+    if ((m = msg.match(/^Peck: (\d)-of-a-kind -> Activate Nevermore/))) return `<b>Peck</b> : ${m[1]} identiques → Active Nevermore`;
     if ((m = msg.match(/^Naraxus: rolled \[([\d,]+)\] -> (.+) \((\d)\)/)))
       return `🐲 <b>Naraxus</b> lance [${m[1]}] → <b>${m[2]}</b>`;
     if ((m = msg.match(/^Swoop: removed (\w+)/))) return `🐲 Swoop : retire son jeton ${m[1]}`;
@@ -1609,6 +1649,14 @@
     fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBB',dmg:'5 +1d6'},
       {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
       {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
+    rv:[ {name:'Peck',req:'AAA+',dmg:'5-7 ·4-kind: Activ.'},
+      {name:'Raven Sight',req:'AACC',dmg:'3 indéf. ·Activ.'},
+      {name:'Craven',req:'SUITE 4',dmg:'8 ·+1 Feather'},
+      {name:'Beguile',req:'SUITE 5',dmg:'9 ·+2 F ·Activ.'},
+      {name:'Fowl Friend',req:'BBBB',dmg:'pioche+4 F ·Activ.x2'},
+      {name:'Murder of Crows',req:'AABBB',dmg:'5 +jet 4'},
+      {name:'Chamber',req:'CCCC',dmg:'7 indéf. ·Activ.x2'},
+      {name:'Fantastic Terrors',req:'CCCCC',dmg:'13 ·Hex ·ULT'} ],
     nx:[ {name:'1 · Swoop',req:'—',dmg:'3 indéf. ·soin 4 ·-1 statut'},
       {name:'2 · Ember Spark',req:'—',dmg:'8 ·mill 3'},
       {name:'3 · Gashing Bite',req:'—',dmg:'4d6: top2'},
@@ -1627,9 +1675,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>

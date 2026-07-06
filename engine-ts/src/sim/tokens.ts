@@ -15,7 +15,7 @@ export function countToken(p: PlayerState, kind: TransferableToken): number {
 // Hero-specific starting tokens (HH's Haunted Head, BW's starting Covert Ops) are layered on top by
 // the hero createInitial* helpers (hero/hh.rules.ts, hero/bw.rules.ts).
 export function emptyBag(): Tokens {
-  return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0 }
+  return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0 }
 }
 
 // The Haunted Head is a 0-or-1 token (HH's, but it can move onto an opponent). Read it by name so
