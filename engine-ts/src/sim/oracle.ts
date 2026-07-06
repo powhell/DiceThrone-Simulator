@@ -7,14 +7,15 @@ import { bwConfig, type BWState } from '../characters/black_widow/config.js'
 import { fmConfig, type FMState } from '../characters/forgemaster/config.js'
 import { rvConfig, type RVState } from '../characters/raveness/config.js'
 import { drConfig, type DRState } from '../characters/druid/config.js'
+import { thConfig, type THState } from '../characters/thor/config.js'
 import type { HeroId } from './types.js'
 import type { RNG } from './rng.js'
 import { rollDice } from './rng.js'
 
-export type OracleState = HHState | BWState | FMState | RVState | DRState
+export type OracleState = HHState | BWState | FMState | RVState | DRState | THState
 
 function cfgFor(heroId: HeroId): any {
-  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : heroId === 'rv' ? rvConfig : heroId === 'dr' ? drConfig : bwConfig
+  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : heroId === 'rv' ? rvConfig : heroId === 'dr' ? drConfig : heroId === 'th' ? thConfig : bwConfig
 }
 
 export interface RollStep {

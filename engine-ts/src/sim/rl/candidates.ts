@@ -105,6 +105,11 @@ function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoic
         if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
       }
     }
+  } else if (cardId === 'he-is-worthy') {
+    // Thor : change 1 de tes des en 4 ou 5 (carte verifiee)
+    for (let i = 0; i < n; i++) {
+      for (const v of [4, 5]) if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
+    }
   } else if (cardId === 'samesies') {
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {

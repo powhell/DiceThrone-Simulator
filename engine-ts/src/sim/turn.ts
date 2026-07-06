@@ -8,6 +8,7 @@ import type { BWState } from '../characters/black_widow/config.js'
 import type { FMState } from '../characters/forgemaster/config.js'
 import type { RVState } from '../characters/raveness/config.js'
 import type { DRState } from '../characters/druid/config.js'
+import type { THState } from '../characters/thor/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -22,6 +23,7 @@ import * as fm from './hero/fm.rules.js'
 import * as nx from './hero/nx.rules.js'
 import * as rv from './hero/rv.rules.js'
 import * as dr from './hero/dr.rules.js'
+import * as th from './hero/th.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -39,6 +41,10 @@ export function defenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'bw') {
     // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
     return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
+  }
+  if (opponent.heroId === 'th') {
+    // Thunder Wheel : previent 2 x E[dignes] = 2 sur 3 des (2.7 sur 4 en II) + gains EK/navette
+    return opponent.upgradesInPlay.includes('thunder-wheel-ii') ? 2.7 : 2.0
   }
   if (opponent.heroId === 'dr') {
     // Thick Hide : hors Bear 2 des, contre 1/Claw (E=1), AUCUNE prevention ; Bear 4 des :
@@ -75,12 +81,22 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState {
   if (player.heroId === 'dr') {
     return {
       form: dr.formOf(player), shapeShift: player.tokens.shapeShift ?? 0,
       upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
       wildcards: wildcardFlagsFor(player),
+    }
+  }
+  if (player.heroId === 'th') {
+    return {
+      mjolnirHome: th.mjolnirHome(player),
+      // EK bucketise (0/2/4) : cache solveur chaud — l'exact ne vaut que ±1 dmg sur 2 habiletes
+      electrokinesis: Math.min(4, Math.round((player.tokens.electrokinesis ?? 0) / 2) * 2),
+      guardBreak: player.tokens.guardBreak ?? 0, upgradeIds: player.upgradesInPlay,
+      defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player),
+      heIsWorthy: player.hand.includes('he-is-worthy') && player.cp >= 1,
     }
   }
   if (player.heroId === 'rv') {
@@ -161,6 +177,8 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.covertOpsUsedThisTurn = false
   self.grimPursuitRerollUsedThisTurn = false
   self.minesDrawUsedThisTurn = false
+  self.thrownThisTurn = 0
+  self.ekDrawUsedThisTurn = false
 
   // Regenerate (soigne, flip/retire) + Wound (1 dmg + d6 4-6 retire) — jetons Druid,
   // portables par n'importe qui (Wound s'inflige a l'adversaire).
@@ -483,6 +501,29 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     performNevermoreActivations(state, playerIdx, 1, rng, undefined)
     return
   }
+  if (card.id === 'power-trip') {
+    drawCards(self, 1, rng)
+    th.gainEk(self, 2)
+    log(state, playerIdx, phase, 'Power Trip!: drew 1, +2 EK')
+    return
+  }
+  if (card.id === 'time-to-hammer') {
+    if (self.mjolnirAway === true) {
+      const r = th.shuttleOnce(self) // Retrieve
+      grantCp(self, 1)
+      th.gainEk(self, 1)
+      log(state, playerIdx, phase, `Time to Hammer!: Retrieve Mjolnir, +1 CP, +${1 + r.ekGained} EK`)
+    }
+    return
+  }
+  if (card.id === 'stormbreak') {
+    drawCards(self, 1, rng)
+    grantCp(self, 1)
+    th.gainGb(self, 1)
+    th.gainEk(self, 1)
+    log(state, playerIdx, phase, 'Stormbreak!: drew 1, +1 CP, +1 Guard Break, +1 EK')
+    return
+  }
   if (card.id === 'hibernate') {
     if (dr.formOf(self) !== 'bear') { self.form = 'bear' }
     dr.grantRegen2(self, 1)
@@ -615,7 +656,7 @@ export function resolveOffensiveAlterWindow(state: GameState, rollerIdx: 0 | 1, 
 // "instant" cards per isCardPlayableNow's TODO; Better D! needs a "Defensive Roll Phase" with
 // its own keep/reroll decision, but defense here is a single deterministic dice roll with no
 // reroll step at all — see resolveDefense/hh.resolveHallowedReckoning/bw.resolveSabotage).
-const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies']
+const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy']
 
 function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -662,6 +703,18 @@ export function applyRollManipulationCard(
 // without changing this call site. Behaviour matches the old chooseMainPhaseCards for greedy:
 // the window re-enumerates after each play, so every affordable upgrade still gets played.
 export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1' | 'main2', policies: [Policy, Policy], rng: RNG): void {
+  {
+    // Thor : 1x/tour, depenser 4 Electrokinesis pour piocher 1 (leaflet verifie).
+    // Regle : seulement si la main est courte (l'EK vaut aussi +1 dmg x EK sur BL/Odinforce).
+    const self = state.players[playerIdx]
+    if (self.heroId === 'th' && !self.humanControlled && !self.ekDrawUsedThisTurn
+        && (self.tokens.electrokinesis ?? 0) >= 4 && self.hand.length <= 2) {
+      self.tokens.electrokinesis -= 4
+      self.ekDrawUsedThisTurn = true
+      drawCards(self, 1, rng)
+      log(state, playerIdx, phase, 'Electrokinesis x4 spent: drew 1')
+    }
+  }
   // Two participants now: the active player (upgrades/Main-Phase Actions/cross-player cards) and the
   // opponent, present to interrupt with Instant Actions. The opponent only ever gets Instant/pass
   // options here (enumerateWindowActions gates the turn-only plays on state.activePlayerIdx), so a
@@ -689,7 +742,15 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak']
+
+// Conditions d'eligibilite propres aux instants Thor (textes verifies).
+function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolean {
+  const self = state.players[playerIdx]
+  if (id === 'time-to-hammer') return self.mjolnirAway === true // Retrieve : il doit etre chez l'adversaire
+  if (id === 'stormbreak') return (self.thrownThisTurn ?? 0) >= 2
+  return true
+}
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
@@ -770,7 +831,7 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
     player.hand.includes(id) && player.cp >= (cardById(hero, id)?.cpCost ?? 0)
 
   // Instant self-buffs — any window, any participant.
-  for (const id of INSTANT_SELFBUFF_IDS) if (canAfford(id)) options.push({ kind: 'playInstant', cardId: id })
+  for (const id of INSTANT_SELFBUFF_IDS) if (canAfford(id) && instantEligible(state, playerIdx, id)) options.push({ kind: 'playInstant', cardId: id })
   // Rolling Pumpkin! — move the Haunted Head to a chosen player (only meaningful if a head exists).
   if (canAfford('rolling-pumpkin') && anyoneHasHead(state)) {
     for (const to of [0, 1] as const) options.push({ kind: 'moveHead', cardId: 'rolling-pumpkin', toIdx: to })
@@ -856,6 +917,11 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
       // roll (user-caught: had Samesies! + CP on a defense roll and was never offered it).
       // One More Time! stays offensive-only (its printed text; Better D! is the defense twin).
       if (playerIdx === pr.rollerIdx) {
+        if (canAfford('he-is-worthy')) {
+          pr.dice.forEach((v, i) => {
+            for (const val of [4, 5]) if (v !== val) options.push({ kind: 'setDie', cardId: 'he-is-worthy', sets: [{ dieIndex: i, value: val }] })
+          })
+        }
         if (canAfford('six-it')) {
           pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'six-it', sets: [{ dieIndex: i, value: 6 }] }) })
         }
@@ -1065,7 +1131,9 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // not baked into the roll. Active player (the attacker) has priority.
   let hallowedUpgraded = false
   let defenseDice: number[]
-  if (defender.heroId === 'dr') {
+  if (defender.heroId === 'th') {
+    defenseDice = rollDice(defender.upgradesInPlay.includes('thunder-wheel-ii') ? 4 : 3, rng) // Thunder Wheel
+  } else if (defender.heroId === 'dr') {
     // Auto-morph IA : passer Bear avant une grosse defense si Shape Shift dispo.
     if (!defender.humanControlled && dr.formOf(defender) !== 'bear' && (defender.tokens.shapeShift ?? 0) > 0 && incomingDamage >= 5) {
       dr.spendShapeShift(defender, 'bear')
@@ -1120,7 +1188,19 @@ export function finalizeDefenseRoll(
 
   // DRP4: resolve the defense roll's effects on the final dice.
   let damagePrevented = 0
-  if (defender.heroId === 'dr') {
+  if (defender.heroId === 'th') {
+    const twUp = defender.upgradesInPlay.includes('thunder-wheel-ii')
+    const eff = th.thunderWheelEffects(finalDefenseDice, twUp)
+    damagePrevented = eff.prevented
+    let thrownBack = 0
+    for (let i = 0; i < eff.shuttles; i++) {
+      const r = th.shuttleOnce(defender)
+      if (r.action === 'throw') thrownBack += r.damage
+    }
+    if (thrownBack > 0) queueDamage(state, attackerIdx, thrownBack)
+    if (eff.ekGain > 0) th.gainEk(defender, eff.ekGain)
+    log(state, defenderIdx, 'defense', `Thunder Wheel${twUp ? ' II' : ''}: prevented ${eff.prevented}, ${eff.shuttles} Mjolnir move(s)${thrownBack ? ` (${thrownBack} dmg back)` : ''}, +${eff.ekGain} EK`)
+  } else if (defender.heroId === 'dr') {
     const bear = dr.formOf(defender) === 'bear'
     const effTH = dr.thickHideEffects(finalDefenseDice, bear)
     damagePrevented = effTH.prevented
@@ -1205,7 +1285,7 @@ export function finalizeDefenseRoll(
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
@@ -1232,6 +1312,22 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     const prevented = Math.min(remaining, 6)
     log(state, defenderIdx, 'defense', `Not This Time!: prevented ${prevented} dmg`)
     return remaining - prevented
+  }
+  if (cardId === 'invulnerability') {
+    if ((defender.tokens.electrokinesis ?? 0) < 2) { log(state, defenderIdx, 'defense', 'Invulnerability!: no effect (needs 2 EK)'); return remaining }
+    defender.tokens.electrokinesis -= 2
+    log(state, defenderIdx, 'defense', `Invulnerability!: -2 EK, ALL ${remaining} dmg prevented`)
+    return 0
+  }
+  if (cardId === 'indomitable-will') {
+    if (defender.hp - remaining > 0) { log(state, defenderIdx, 'defense', 'Indomitable Will!: attack is not lethal — no effect'); return remaining }
+    const d = rollDie(rng)
+    if (d === 4 || d === 5) {
+      log(state, defenderIdx, 'defense', `Indomitable Will!: rolled ${d} (Worthy) — Health set to 1`)
+      return defender.hp - 1
+    }
+    log(state, defenderIdx, 'defense', `Indomitable Will!: rolled ${d} — failed`)
+    return remaining
   }
   if (cardId === 'shrug-off') {
     if (defender.form !== 'bear') { log(state, defenderIdx, 'defense', 'Shrug Off!: no effect (not in Bear Form)'); return remaining }
@@ -1695,6 +1791,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'fm') applyFMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'rv') applyRVAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'dr') applyDRAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'th') applyTHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -2020,6 +2117,157 @@ function applyDRAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     return
   }
   log(state, playerIdx, 'resolveAttack', `Whiff — no Druid ability matched (${name})`)
+}
+
+
+// --- Thor ----------------------------------------------------------------------------------
+// Resout une habilete Thor (SPEC.md verifiee + rulings user). Les navettes Mjolnir infligent
+// leurs Throws en dmg isole indefendable (queueDamage) ; Guard Break se tente sur les grosses
+// attaques defendables (d6 4-5 => indefendable, jetons depenses un a un).
+function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+  const ekOf = () => Math.min(4, self.tokens.electrokinesis ?? 0)
+
+  const doShuttle = (times: number, label: string) => {
+    const r = th.shuttle(self, times)
+    if (r.damage > 0) queueDamage(state, oppIdx, r.damage)
+    if (r.throws + r.retrieves > 0) {
+      log(state, playerIdx, 'resolveAttack', `${label}: Mjolnir x${r.throws + r.retrieves} (${r.throws} throw = ${r.damage} dmg, ${r.retrieves} retrieve = +${r.ekGained} EK)`)
+    }
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    // Guard Break : a la conclusion d'une attaque defendable (heuristique : >= 5 dmg)
+    if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && result.dmg >= 5) {
+      const gb = th.tryGuardBreak(self, rng)
+      log(state, playerIdx, 'resolveAttack', `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(',')}] — ${gb.success ? 'attack is UNDEFENDABLE' : 'failed'}`)
+      if (gb.success) result = { ...result, undefendable: true }
+    }
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Hammered')) {
+    const a = dice.filter(d => d <= 3).length
+    const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0
+    const table = has('hammered-iii') ? [5, 6, 8] : has('hammered-ii') ? [5, 6, 7] : [4, 5, 7]
+    const upgraded = has('hammered-ii') || has('hammered-iii')
+    if (upgraded) doShuttle(1, 'Hammered')
+    else if (th.mjolnirHome(self)) { // I : Throw seulement
+      const r = th.shuttleOnce(self)
+      queueDamage(state, oppIdx, r.damage)
+      log(state, playerIdx, 'resolveAttack', 'Hammered: Mjolnir thrown (1 dmg)')
+    }
+    const kindNeed = has('hammered-iii') ? 3 : has('hammered-ii') ? 4 : 99
+    const counts = new Map<number, number>()
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+    if (Math.max(...counts.values()) >= kindNeed) {
+      th.gainEk(self, 1)
+      log(state, playerIdx, 'resolveAttack', `Hammered: ${kindNeed}-of-a-kind -> +1 EK`)
+    }
+    attack(table[tier], true)
+    return
+  }
+  if (name.startsWith('Mighty Summon')) {
+    const up = has('mighty-summon-ii')
+    th.gainGb(self, 2)
+    self.hp = Math.min(self.hp + (up ? 3 : 2), 60)
+    if (th.mjolnirHome(self)) {
+      th.gainEk(self, 3)
+      log(state, playerIdx, 'resolveAttack', `Mighty Summon: +2 Guard Break, Heal ${up ? 3 : 2}, +3 EK (Mjolnir home)`)
+    } else {
+      const r = th.shuttleOnce(self) // Retrieve (+1 EK standard)
+      const coll = up ? 4 : 3
+      queueDamage(state, oppIdx, coll)
+      log(state, playerIdx, 'resolveAttack', `Mighty Summon: +2 Guard Break, Heal ${up ? 3 : 2}, Retrieve -> ${coll} collateral (+${r.ekGained} EK)`)
+    }
+    return
+  }
+  if (name.startsWith('Boom Boom!')) {
+    th.gainEk(self, 2)
+    log(state, playerIdx, 'resolveAttack', 'Boom Boom!: +2 EK')
+    attack(6, true)
+    return
+  }
+  if (name.startsWith('Chain Lightning')) {
+    const up = has('chain-lightning-ii')
+    const r = th.chainLightningRoll(rng, up ? 4 : 3)
+    const coll = up ? 3 : 2
+    queueDamage(state, oppIdx, coll)
+    log(state, playerIdx, 'resolveAttack', `Chain Lightning: rolled [${r.dice.join(',')}] -> ${r.total} dmg + ${coll} collateral`)
+    attack(r.total, true)
+    return
+  }
+  if (name.startsWith('Odinforce')) {
+    const base = has('odinforce-ii') ? 6 : 5
+    let r = th.odinforceRoll(rng)
+    log(state, playerIdx, 'resolveAttack', `Odinforce roll [${r.dice.join(',')}]`)
+    if (has('odinforce-ii')) {
+      const score = (r.hammers >= 2 ? 1 : 0) + (r.worthies >= 2 ? 1 : 0) + r.thunders
+      if (score <= 1) { // relance optionnelle (une fois) si le jet est pauvre
+        r = th.odinforceRoll(rng)
+        log(state, playerIdx, 'resolveAttack', `Odinforce II re-roll -> [${r.dice.join(',')}]`)
+      }
+    }
+    if (r.hammers >= 2) doShuttle(1, 'Odinforce')
+    if (r.worthies >= 2) { grantCp(self, 1); log(state, playerIdx, 'resolveAttack', 'Odinforce: +1 CP (2+ Worthy)') }
+    if (r.thunders > 0) { th.gainEk(self, r.thunders); log(state, playerIdx, 'resolveAttack', `Odinforce: +${r.thunders} EK (Thunder)`) }
+    attack(base + ekOf(), true)
+    return
+  }
+  if (name.startsWith('Bottled Lightning')) {
+    const up = has('bottled-lightning-ii')
+    doShuttle(up ? 3 : 2, 'Bottled Lightning')
+    th.gainGb(self, 2)
+    log(state, playerIdx, 'resolveAttack', 'Bottled Lightning: +2 Guard Break')
+    attack((up ? 8 : 7) + ekOf(), true)
+    return
+  }
+  if (name.startsWith('Ricochet!')) {
+    doShuttle(6, 'Ricochet!')
+    return
+  }
+  if (name.startsWith('Lightning Rod')) {
+    if (has('lightning-rod-ii')) {
+      doShuttle(1, 'Lightning Rod')
+      th.gainEk(self, 1)
+      attack(9, true)
+    } else if (!th.mjolnirHome(self)) { // l'adversaire a Mjolnir
+      log(state, playerIdx, 'resolveAttack', 'Lightning Rod: opponent has Mjolnir -> 9 dmg')
+      attack(9, true)
+    } else {
+      th.gainEk(self, 1)
+      log(state, playerIdx, 'resolveAttack', 'Lightning Rod: +1 EK')
+      attack(7, true)
+    }
+    return
+  }
+  if (name.startsWith('Thunder Bolt')) {
+    doShuttle(1, 'Thunder Bolt')
+    th.gainEk(self, 2)
+    attack(has('thunder-bolt-ii') ? 12 : 10, true)
+    return
+  }
+  if (name.startsWith('Asgardian Brawn')) {
+    self.hp = Math.min(self.hp + 4, 60)
+    log(state, playerIdx, 'resolveAttack', 'Asgardian Brawn: Heal 4')
+    return
+  }
+  if (name.startsWith('For Asgard!')) {
+    th.gainGb(self, 1)
+    doShuttle(4, 'For Asgard!')
+    attack(14, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Thor ability matched (${name})`)
 }
 
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {

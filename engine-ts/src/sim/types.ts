@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'nx' // rv = Raveness ; dr = Druid ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -60,6 +60,10 @@ export interface PlayerState {
   // auto-morphs heuristiques de l'IA)
   form?: string
   humanControlled?: boolean
+  // Thor : Mjolnir est-il chez l'adversaire ? (absent/false = sur son board) + compteurs de tour
+  mjolnirAway?: boolean
+  thrownThisTurn?: number
+  ekDrawUsedThisTurn?: boolean
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

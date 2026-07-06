@@ -9,6 +9,7 @@ import { createInitialFMTokens } from './hero/fm.rules.js'
 import { createInitialNXTokens, NX_HP_BY_HEROES } from './hero/nx.rules.js'
 import { createInitialRVTokens } from './hero/rv.rules.js'
 import { createInitialDRTokens } from './hero/dr.rules.js'
+import { createInitialTHTokens } from './hero/th.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
@@ -41,6 +42,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     : heroId === 'nx' ? createInitialNXTokens()
     : heroId === 'rv' ? createInitialRVTokens()
     : heroId === 'dr' ? createInitialDRTokens()
+    : heroId === 'th' ? createInitialTHTokens()
     : createInitialBWTokens()
   // Verified leaflet setup rule (HH "Hero Setup"): "Begin the game with the Haunted Head on
   // your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful." No

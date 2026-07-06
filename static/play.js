@@ -60,6 +60,12 @@
            C:'<g class="glyph"><path d="M32 14 Q46 28 32 50 Q18 28 32 14 Z M32 20 L32 44" stroke-width="2"/></g>'},
       symName:{A:'Griffe',B:'Patte',C:'Nature'},
       col:{A:'#e8d94a',B:'#b07a4a',C:'#6fcf6f'} },
+    th: { name:'Thor', crest:'TH', cls:v=>v<=3?'A':v<=5?'B':'C',
+      sym:{A:'<g class="glyph"><rect x="16" y="14" width="30" height="15" rx="3"/><rect x="29" y="29" width="7" height="22" rx="2.5"/></g>',
+           B:'<g class="glyph"><path d="M13 47 Q8 20 23 12 Q21 28 28 35 L36 35 Q43 28 41 12 Q56 20 51 47 Q42 39 32 39 Q22 39 13 47 Z"/></g>',
+           C:'<g class="glyph"><path d="M37 8 L19 36 L29 36 L25 56 L45 26 L34 26 Z"/></g>'},
+      symName:{A:'Marteau',B:'Digne',C:'Tonnerre'},
+      col:{A:'#9fc3e8',B:'#e87a7a',C:'#f2d24b'} },
     rv: { name:'Raveness', crest:'RV', cls:v=>v<=3?'A':v<=5?'B':'C',
       sym:{A:'<g class="glyph"><path d="M17 15 Q31 25 35 49 M31 12 Q42 24 42 47 M45 15 Q53 28 48 43" fill="none" stroke-width="4.5" stroke-linecap="round"/></g>',
            B:'<g class="glyph"><path d="M14 42 Q28 13 51 21 Q45 28 37 29 Q43 33 33 36 Q39 40 27 42 Q32 45 19 46 Z"/></g>',
@@ -75,7 +81,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -178,6 +184,11 @@
     if (t.covertOps)   out.push(`<span class="tok covert"><span class="dot"></span><b>Covert</b> ${t.covertOps}</span>`);
     if (t.head)        out.push(`<span class="tok head"><span class="dot" style="background:var(--gold)"></span><b>Haunted Head</b></span>`);
     (p.timeBombs || []).forEach(pos => out.push(`<span class="tok bomb"><span class="dot"></span><b>Time Bomb</b> ${pos}</span>`));
+    if (p.heroId==='th') {
+      out.push(`<span class="tok" style="border-color:#7aa3d0"><b>🔨 Mjölnir</b> ${p.mjolnirAway?'chez l\u2019adversaire':'sur ton board'}</span>`);
+    }
+    if (t.electrokinesis) out.push(`<span class="tok" style="border-color:#c9b23a"><b>⚡ Electrokinesis</b> ${t.electrokinesis}/4</span>`);
+    if (t.guardBreak) out.push(`<span class="tok" style="border-color:#5a8fd0"><b>🛡️⚡ Guard Break</b> ${t.guardBreak}</span>`);
     if (p.heroId==='dr') {
       const F = {druid:'🧙 Druide', cat:'🐆 Chat', bear:'🐻 Ours'};
       out.push(`<span class="tok" style="border-color:#6a8f3f"><b>${F[p.form||'druid']}</b></span>`);
@@ -525,6 +536,12 @@
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
   // II-aware ("je ne vois toujours pas sur le board la défense", reported).
   function defBoxHTML(heroKey, p){
+    if (heroKey==='th'){
+      const up = (p.upgradesInPlay||[]).includes('thunder-wheel-ii');
+      return `<div class="defbox"><b>🛡️ Thunder Wheel${up?' II':''}</b><br>
+        Lance ${up?4:3} dés : préviens 2 par Digne<br>
+        ${up?'CHAQUE paire':'≥2'} Marteaux : navette Mjölnir · +1 EK par Tonnerre</div>`;
+    }
     if (heroKey==='dr'){
       const bear = p.form==='bear';
       return `<div class="defbox"><b>🛡️ Thick Hide${bear?' (Ours 🐻)':''}</b><br>
@@ -700,6 +717,32 @@
     const m = g.state.players[g.humanIdx].nevermoreMode;
     return m==='absorb' ? '🩸 Absorber' : m==='move' ? '✈️ Déplacer' : '🤖 Auto';
   }
+  function addThorBtns(c){
+    if (HUMAN!=='th') return;
+    const you=g.state.players[g.humanIdx], ai=g.state.players[1-g.humanIdx];
+    if (you.hand.length>0){
+      const act = you.mjolnirAway ? 'Retrieve (+1 EK)' : 'Throw (1 dmg)';
+      c.appendChild(btn(`🔨 ${act} — défausse 1 carte`,'', ()=>{
+        const names=you.hand.map((id,i)=>`${i+1}. ${(cardNameOf(id)||id)}`).join('\n');
+        const k=parseInt(prompt(`Mjölnir : ${act}\nQuelle carte défausser ?\n${names}`,'1'));
+        if(!(k>=1&&k<=you.hand.length)) return;
+        const cid=you.hand.splice(k-1,1)[0]; you.discard.push(cid);
+        if (you.mjolnirAway){ you.mjolnirAway=false; you.tokens.electrokinesis=Math.min(4,(you.tokens.electrokinesis||0)+1);
+          log(`🔨 <b>Retrieve Mjölnir</b> (défausse ${cardNameOf(cid)||cid}) : +1 ⚡EK.`); }
+        else { you.mjolnirAway=true; you.thrownThisTurn=(you.thrownThisTurn||0)+1; ai.hp-=1;
+          log(`🔨 <b>Throw Mjölnir</b> (défausse ${cardNameOf(cid)||cid}) : 1 dégât isolé indéfendable.`); if (ai.hp<=0){ g.state.gameOver=true; g.state.winner=g.humanIdx; } }
+        renderAll();
+      }));
+    }
+    if ((you.tokens.electrokinesis||0)>=4 && !you.ekDrawUsedThisTurn){
+      c.appendChild(btn('⚡×4 → pioche 1','', ()=>{
+        you.tokens.electrokinesis-=4; you.ekDrawUsedThisTurn=true;
+        if (you.deck.length>0){ you.hand.push(you.deck.shift()); }
+        log('⚡ <b>Electrokinesis ×4</b> dépensés : pioche 1.');
+        renderAll();
+      }));
+    }
+  }
   function addMorphBtns(c){
     if (HUMAN!=='dr') return;
     const you=g.state.players[g.humanIdx];
@@ -739,6 +782,7 @@
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = a && a.abilityName ? `${formatAbility(aiHero,a.abilityName).name} arrive (${a.defendable?`~${a.incomingDamage} dégâts, défendable`:'indéfendable !'}) :` : 'Attaque entrante :';
       addMorphBtns(c); // 🐻 passer Ours AVANT de lancer ta défense (Shape Shift à tout moment)
+      addThorBtns(c); // 🔨 navette Mjölnir possible à tout moment (défausse 1 carte)
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
     } else if (phase==='upkeep' && HUMAN==='fm') {
@@ -789,6 +833,7 @@
       else {
         addNvToggle(c);
         addMorphBtns(c);
+        addThorBtns(c);
         if (ttaCharges > 0) {
           const s0=document.createElement('span'); s0.className='rolls';
           s0.textContent='Try Try Again : 2e relance gratuite (même dé permis) —';
@@ -1659,6 +1704,17 @@
       return `<b>${m[1].replace(/\s*\([A-C5-]+\)$/,'')}</b> : va chercher <b>${m[2]}</b> → la Forge (deck mélangé)`;
     if ((m = msg.match(/^(.+?): mined — revealed (.+) to The Forge/)))
       return `<b>${m[1].replace(/\s*\([A-C]+\)$/,'')}</b> : mine — révèle <b>${m[2]}</b> → la Forge`;
+    if ((m = msg.match(/^(.+?): Mjolnir x(\d+) \((\d+) throw = (\d+) dmg, (\d+) retrieve = \+(\d+) EK\)/))) return `🔨 <b>${m[1]}</b> : Mjölnir ×${m[2]} — ${m[3]} lancer(s) (${m[4]} dégât·s isolés), ${m[5]} retour(s) (+${m[6]} ⚡EK)`;
+    if ((m = msg.match(/^Thunder Wheel( II)?: prevented (\d+), (\d+) Mjolnir move\(s\)(?: \((\d+) dmg back\))?, \+(\d+) EK/))) return `🛡️ <b>Thunder Wheel${m[1]||''}</b> : prévient ${m[2]}${m[3]!=='0'?`, navette Mjölnir${m[4]?` (${m[4]} dégât en retour)`:''}`:''}${m[5]!=='0'?`, +${m[5]} ⚡EK`:''}`;
+    if ((m = msg.match(/^Guard Break: spent (\d+), rolls \[([\d,]+)\] — (.+)$/))) return `🛡️⚡ <b>Guard Break</b> : ${m[1]} jeton(s), dés [${m[2]}] — ${m[3].includes('UNDEFENDABLE')?'<b>attaque INDÉFENDABLE !</b>':'raté'}`;
+    if ((m = msg.match(/^Chain Lightning: rolled \[([\d,]+)\] -> (\d+) dmg \+ (\d+) collateral/))) return `⚡ <b>Chain Lightning</b> : [${m[1]}] → ${m[2]} dégâts + ${m[3]} collatéral`;
+    if ((m = msg.match(/^Odinforce roll \[([\d,]+)\]/))) return `<b>Odinforce</b> : jet [${m[1]}]`;
+    if ((m = msg.match(/^Odinforce II re-roll -> \[([\d,]+)\]/))) return `<b>Odinforce II</b> : relance → [${m[1]}]`;
+    if ((m = msg.match(/^Odinforce: (.+)$/))) return `<b>Odinforce</b> : ${m[1].replace('+1 CP (2+ Worthy)','+1 CP (2+ Dignes)').replace(/\+(\d+) EK \(Thunder\)/,'+$1 ⚡EK (Tonnerre)')}`;
+    if ((m = msg.match(/^Mighty Summon: (.+)$/))) return `<b>Mighty Summon</b> : ${m[1].replace('Heal','soigne').replace('(Mjolnir home)','(Mjölnir chez toi)').replace(/Retrieve -> (\d+) collateral/,'Retrieve → $1 collatéral')}`;
+    if ((m = msg.match(/^Hammered: (.+)$/))) return `<b>Hammered</b> : ${m[1].replace('Mjolnir thrown (1 dmg)','Mjölnir lancé (1 dégât)').replace(/(\d)-of-a-kind -> \+1 EK/,'$1 identiques → +1 ⚡EK')}`;
+    if ((m = msg.match(/^(Bottled Lightning|Lightning Rod|Boom Boom!|Asgardian Brawn|Stormbreak!|Power Trip!|Time to Hammer!|Invulnerability!|Indomitable Will!): (.+)$/))) return `<b>${m[1]}</b> : ${m[2]}`;
+    if (/^Electrokinesis x4 spent: drew 1/.test(msg)) return `⚡ <b>Electrokinesis ×4</b> dépensés → pioche 1`;
     if ((m = msg.match(/^Shape Shift -> (\w+) Form \((\w+)\)/))) return `🔄 Shape Shift → <b>${{bear:'Ours 🐻',cat:'Chat 🐆',druid:'Druide 🧙'}[m[1].toLowerCase()]||m[1]}</b> (${m[2]==='attack'?'attaque':'défense'})`;
     if ((m = msg.match(/^Regenerate: healed (\d+)/))) return `🌿 <b>Regenerate</b> : soigne ${m[1]}`;
     if ((m = msg.match(/^Wound: (\d+) dmg, rolls \[([\d,]+)\], (\d+) removed/))) return `🩸 <b>Wound</b> : ${m[1]} dégât(s), dés [${m[2]}], ${m[3]} retiré(s)`;
@@ -1757,6 +1813,14 @@
       {name:"Forest's Answer",req:'SUITE 5',dmg:'7 +dé bonus'},
       {name:'Protect the Forest',req:'CCCC',dmg:'6 indéf. ·+Regen+SS'},
       {name:'Wrath of Nature',req:'CCCCC',dmg:'12 ·ULT'} ],
+    th:[ {name:'Hammered',req:'AAA+',dmg:'4-7 ·Throw 🔨'},
+      {name:'Mighty Summon',req:'ABBC',dmg:'+2 GB ·Heal 2 ·EK/coll.'},
+      {name:'Chain Lightning',req:'AAACC',dmg:'3d6: 2 meilleurs +2 coll.'},
+      {name:'Odinforce',req:'AABBB',dmg:'5 +5d6 effets +EK dmg'},
+      {name:'Bottled Lightning',req:'CCCC',dmg:'7+EK ·🔨×2 ·+2 GB'},
+      {name:'Lightning Rod',req:'SUITE 4',dmg:'7 (9 si 🔨 chez lui)'},
+      {name:'Thunder Bolt',req:'SUITE 5',dmg:'10 ·🔨 ·+2 EK'},
+      {name:'For Asgard!',req:'CCCCC',dmg:'14 ·ULT ·🔨×4'} ],
     rv:[ {name:'Peck',req:'AAA+',dmg:'5-7 ·4-kind: Activ.'},
       {name:'Raven Sight',req:'AACC',dmg:'3 indéf. ·Activ.'},
       {name:'Craven',req:'SUITE 4',dmg:'8 ·+1 Feather'},
@@ -1783,9 +1847,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv','dr'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv','dr'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr','th'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>
