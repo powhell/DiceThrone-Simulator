@@ -3353,7 +3353,18 @@ var Game = (() => {
       if (checkGameOver(state)) return;
     }
     if (self.heroId !== "rv" && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === "rv" && !state.nevermoreRollResolved) {
-      const face = rollDie(rng);
+      let face = rollDie(rng);
+      if (face === 6 && (opp.nevermoreDial ?? 0) > 0) {
+        if ((opp.tokens.feather ?? 0) >= 2) {
+          opp.tokens.feather -= 2;
+          face = 5;
+          log(state, 1 - playerIdx, "upkeep", "Feathers x2 spent: Nevermore Die shifted 6 -> 5");
+        } else if ((opp.tokens.feather ?? 0) >= 1) {
+          opp.tokens.feather -= 1;
+          face = rollDie(rng);
+          log(state, 1 - playerIdx, "upkeep", `Feather spent: Nevermore Die re-rolled -> ${face}`);
+        }
+      }
       const r = applyNevermoreDieFace(opp, self, face);
       log(state, playerIdx, "upkeep", `Nevermore Die Roll: ${face}` + (r.hexInflicted ? " \u2014 gains Hex (6s are blanks this turn)" : r.activations ? ` \u2014 Raveness activates Nevermore x${r.activations}` : r.discards ? " \u2014 must discard 1 of choice" : r.cpStolen !== void 0 ? ` \u2014 loses ${r.cpStolen} CP to the Raveness` : " \u2014 dial to 0, Nevermore returns (no heal)"));
       if (r.activations) performNevermoreActivations(state, 1 - playerIdx, r.activations, rng, void 0);

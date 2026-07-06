@@ -193,7 +193,22 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   // (skippé si la fenêtre interactive Cull!/Feathers l'a déjà résolu ce tour)
   if (self.heroId !== 'rv' && (self.tokens.nevermore ?? 0) > 0 && opp.heroId === 'rv'
       && !state.nevermoreRollResolved) {
-    const face = rollDie(rng)
+    let face = rollDie(rng)
+    // Plumes de l'IA rv (jeton verifie : 1 plume = relance forcee, 2 = ±1) : VETO sur la
+    // face 6 (cadran efface, retour sans soin — la seule mauvaise face). 2 plumes -> 6
+    // devient 5 (vol de CP, cadran sauve) ; sinon 1 plume -> relance. (Avant : l'IA ne
+    // depensait JAMAIS une plume — ressource dormante, pattern Grim Pursuit.)
+    if (face === 6 && (opp.nevermoreDial ?? 0) > 0) {
+      if ((opp.tokens.feather ?? 0) >= 2) {
+        opp.tokens.feather -= 2
+        face = 5
+        log(state, (1 - playerIdx) as 0 | 1, 'upkeep', 'Feathers x2 spent: Nevermore Die shifted 6 -> 5')
+      } else if ((opp.tokens.feather ?? 0) >= 1) {
+        opp.tokens.feather -= 1
+        face = rollDie(rng)
+        log(state, (1 - playerIdx) as 0 | 1, 'upkeep', `Feather spent: Nevermore Die re-rolled -> ${face}`)
+      }
+    }
     const r = rv.applyNevermoreDieFace(opp, self, face)
     log(state, playerIdx, 'upkeep', `Nevermore Die Roll: ${face}` +
       (r.hexInflicted ? ' — gains Hex (6s are blanks this turn)' :
