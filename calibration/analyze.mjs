@@ -106,6 +106,28 @@ if (baseFm.size) {
   console.log(`base_fm : ${baseFm.size} parties · FM gagne ${(100 * wfm / baseFm.size).toFixed(1)}% vs BW`)
 }
 
+// ---- EV PAR CARTE (verdict garder/vendre : la vente rapporte 1 CP ~ 0.75 dmg-equiv) ----
+import { ARMS } from './arms.mjs'
+const cardArms = Object.keys(ARMS).filter(a => a.startsWith('card_'))
+if (cardArms.length && load(cardArms[0]).size) {
+  console.log('
+=== Valeur d'une carte en main (départ) — triée, vs vente 1 CP (~0.75) ===')
+  const rows = []
+  for (const arm of cardArms) {
+    const hero = arm.startsWith('card_bw_') ? 'bw' : 'hh'
+    const delta = pairedDelta(arm, 'base', hero)
+    if (delta === null) continue
+    const eq = dmgEquiv(delta, hero)
+    const id = arm.replace(/^card_(hh|bw|c)_/, '').replace(/_/g, '-')
+    rows.push([id, arm.startsWith('card_bw_') ? 'BW' : arm.startsWith('card_hh_') ? 'HH' : 'commune', eq])
+  }
+  rows.sort((a, b) => (b[2]?.v ?? -99) - (a[2]?.v ?? -99))
+  for (const [id, who, eq] of rows) {
+    const verdict = eq && eq.v !== null ? (eq.v < 0.75 ? '  → VENDRE' : eq.v < 1.5 ? '  (limite)' : '') : ''
+    console.log(`${id.padEnd(24)} [${who.padEnd(7)}]: ${fmtV(eq)} dmg-equiv${verdict}`)
+  }
+}
+
 // ---- santé du run ----
 const base = load('base')
 let to = 0, draws = 0, hhw = 0
