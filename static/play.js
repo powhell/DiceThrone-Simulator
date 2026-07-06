@@ -546,6 +546,22 @@
       + defBoxHTML(AI_HERO, ai);
   }
 
+  // ---- Vrais scans de cartes (plan C) : mapping cardId -> chemin, modal au clic 🔍 ----
+  let CARD_IMG = {};
+  fetch('card-images.json').then(r=>r.json()).then(j=>{ CARD_IMG=j; }).catch(()=>{});
+  function showCardImage(id, name){
+    const src = CARD_IMG[id]; if (!src) return;
+    let ov = document.getElementById('card-modal');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id='card-modal';
+      ov.style.cssText='position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:99;cursor:zoom-out';
+      ov.onclick = ()=>{ ov.style.display='none'; };
+      ov.innerHTML = '<img style="max-height:92vh;max-width:92vw;border-radius:10px;box-shadow:0 12px 60px #000">';
+      document.body.appendChild(ov);
+    }
+    ov.querySelector('img').src = src; ov.querySelector('img').alt = name||id;
+    ov.style.display='flex';
+  }
   function renderHand() {
     const p = g.state.players[g.humanIdx];
     const hero = G.heroTemplateFor(HUMAN);
@@ -559,9 +575,12 @@
       // Official rule: any hand card can be sold for 1 CP during your Main Phases.
       const sellBtn = inMain ? `<button class="btn sell" data-sell="${idx}" style="margin-top:6px;font-size:.72rem;padding:3px 8px">Vendre +1 CP</button>` : '';
       return `<div class="card${canPlay?' playable':''}" data-id="${id}" data-idx="${idx}" ${canPlay?'role="button" tabindex="0"':''}>
-        <div class="ctop"><div class="cname">${c.name||id}</div><div class="cost">${c.cpCost!=null?c.cpCost:'·'}</div></div>
+        <div class="ctop"><div class="cname">${c.name||id} <span class="peek" data-peek="${id}" title="Voir le vrai scan" style="cursor:zoom-in;opacity:.65">🔍</span></div><div class="cost">${c.cpCost!=null?c.cpCost:'·'}</div></div>
         <div class="ctype">${labelKind(c)}</div><div class="ctext">${c.text||''}</div>${sellBtn}</div>`;
     }).join('');
+    $('hand').querySelectorAll('.peek').forEach(el=>{
+      el.onclick = (e)=>{ e.stopPropagation(); showCardImage(el.dataset.peek); };
+    });
     if (inMain) {
       $('hand').querySelectorAll('.card.playable').forEach(el=>{
         el.onclick = ()=>playMainCard(el.dataset.id);
