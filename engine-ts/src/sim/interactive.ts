@@ -311,6 +311,9 @@ export function humanKeepAdvice(
   state.wildcards = {
     sixIt: self.hand.includes('six-it') && self.cp >= 1,
     soWild: self.hand.includes('so-wild') && self.cp >= 2,
+    twiceAsWild: self.hand.includes('twice-as-wild') && self.cp >= 3,
+    samesies: self.hand.includes('samesies') && self.cp >= 1,
+    tipIt: self.hand.includes('tip-it') && self.cp >= 1,
   }
   const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, state)
   const top = r.topOptions[0]

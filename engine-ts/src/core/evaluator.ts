@@ -34,7 +34,7 @@ export function clearCache(): void {
 // Cartes de conversion en main (user-caught : "si j'ai 666 j'ai de quoi backer") :
 // au JET FINAL, Six-It!/So Wild! peuvent corriger un de — la valeur terminale d'une main
 // est donc max(main, meilleure variante - cout CP). Les flags viennent de l'etat du hero.
-export interface WildcardFlags { sixIt?: boolean; soWild?: boolean }
+export interface WildcardFlags { sixIt?: boolean; soWild?: boolean; twiceAsWild?: boolean; samesies?: boolean; tipIt?: boolean }
 export function augmentTerminalValue(
   dice: number[],
   base: number,
@@ -42,7 +42,7 @@ export function augmentTerminalValue(
   evalDice: (d: number[]) => number,
   cpToDmg = 0.75,
 ): number {
-  if (!flags || (!flags.sixIt && !flags.soWild)) return base
+  if (!flags || (!flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt)) return base
   let best = base
   const counts = new Map<number, number>()
   for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1)
@@ -58,6 +58,26 @@ export function augmentTerminalValue(
   for (let i = 0; i < dice.length; i++) {
     if (flags.sixIt) tryVariant(i, 6, 1)              // Six-It! : de -> 6, 1 CP
     if (flags.soWild) { tryVariant(i, 6, 2); tryVariant(i, mode, 2) } // So Wild! ~= ->6 ou ->majorite, 2 CP
+    if (flags.tipIt) {                                // Tip It! : ±1, 1 CP
+      if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1)
+      if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1)
+    }
+    if (flags.samesies) {                             // Samesies! : copie un autre de, 1 CP
+      for (const v of counts.keys()) tryVariant(i, v, 1)
+    }
+  }
+  // Twice As Wild! : DEUX des -> meme valeur (3 CP) — le plus gros filet ([6,6,6]+TAW = Ultimate).
+  if (flags.twiceAsWild) {
+    const tryPair = (i: number, j: number, v: number) => {
+      if (dice[i] === v && dice[j] === v) return
+      const d2 = dice.slice(); d2[i] = v; d2[j] = v
+      d2.sort((a, b) => a - b)
+      const val = evalDice(d2) - 3 * cpToDmg
+      if (val > best) best = val
+    }
+    for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
+      tryPair(i, j, 6); tryPair(i, j, mode)
+    }
   }
   return best
 }

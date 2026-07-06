@@ -34,7 +34,8 @@ export const fmConfig: CharacterConfig<FMState> = {
     return cands.some(([name]) => name !== 'Whiff')
   },
   stateKey(state) {
-    const wc = ((state as any).wildcards?.sixIt ? 1 : 0) + ((state as any).wildcards?.soWild ? 2 : 0)
+    const _w: any = (state as any).wildcards || {}
+    const wc = (_w.sixIt?1:0)+(_w.soWild?2:0)+(_w.twiceAsWild?4:0)+(_w.samesies?8:0)+(_w.tipIt?16:0)
     return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}`
   },
 }

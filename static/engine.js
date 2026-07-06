@@ -59,7 +59,7 @@ var Engine = (() => {
     distMemo.clear();
   }
   function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
-    if (!flags || !flags.sixIt && !flags.soWild) return base;
+    if (!flags || !flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt) return base;
     let best = base;
     const counts = /* @__PURE__ */ new Map();
     for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -78,6 +78,28 @@ var Engine = (() => {
       if (flags.soWild) {
         tryVariant(i, 6, 2);
         tryVariant(i, mode, 2);
+      }
+      if (flags.tipIt) {
+        if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1);
+        if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1);
+      }
+      if (flags.samesies) {
+        for (const v of counts.keys()) tryVariant(i, v, 1);
+      }
+    }
+    if (flags.twiceAsWild) {
+      const tryPair = (i, j, v) => {
+        if (dice[i] === v && dice[j] === v) return;
+        const d2 = dice.slice();
+        d2[i] = v;
+        d2[j] = v;
+        d2.sort((a, b) => a - b);
+        const val = evalDice(d2) - 3 * cpToDmg;
+        if (val > best) best = val;
+      };
+      for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
+        tryPair(i, j, 6);
+        tryPair(i, j, mode);
       }
     }
     return best;
@@ -484,7 +506,8 @@ var Engine = (() => {
     },
     stateKey(state) {
       const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
-      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
       return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${wc}|${upgrades}`;
     }
   };
@@ -758,7 +781,8 @@ var Engine = (() => {
     },
     stateKey(state) {
       const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(",");
-      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
       return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgradeIds}`;
     },
     directDamageByName(state) {
@@ -883,7 +907,8 @@ var Engine = (() => {
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
       return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}`;
     }
   };

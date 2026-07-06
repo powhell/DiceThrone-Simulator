@@ -46,7 +46,8 @@ export const hhConfig: CharacterConfig<HHState> = {
   stateKey(state) {
     const upgrades = (state.upgradeIds ?? []).slice().sort().join(',')
     // tax arrondie au 1/2 pour garder le cache DP compact
-    const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0)
+    const _w: any = state.wildcards || {}
+    const wc = (_w.sixIt?1:0)+(_w.soWild?2:0)+(_w.twiceAsWild?4:0)+(_w.samesies?8:0)+(_w.tipIt?16:0)
     return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${wc}|${upgrades}`
   },
 }

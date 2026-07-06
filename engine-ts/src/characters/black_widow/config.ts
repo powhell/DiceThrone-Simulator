@@ -37,7 +37,8 @@ export const bwConfig: CharacterConfig<BWState> = {
   },
   stateKey(state) {
     const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(',')
-    const wc = ((state as any).wildcards?.sixIt ? 1 : 0) + ((state as any).wildcards?.soWild ? 2 : 0)
+    const _w: any = (state as any).wildcards || {}
+    const wc = (_w.sixIt?1:0)+(_w.soWild?2:0)+(_w.twiceAsWild?4:0)+(_w.samesies?8:0)+(_w.tipIt?16:0)
     return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgradeIds}`
   },
   directDamageByName(state) {
