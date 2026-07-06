@@ -67,9 +67,9 @@
       symName:{A:'Marteau',B:'Digne',C:'Tonnerre'},
       col:{A:'#9fc3e8',B:'#e87a7a',C:'#f2d24b'} },
     rv: { name:'Raveness', crest:'RV', cls:v=>v<=3?'A':v<=5?'B':'C',
-      sym:{A:'<g class="glyph"><path d="M17 15 Q31 25 35 49 M31 12 Q42 24 42 47 M45 15 Q53 28 48 43" fill="none" stroke-width="4.5" stroke-linecap="round"/></g>',
-           B:'<g class="glyph"><path d="M14 42 Q28 13 51 21 Q45 28 37 29 Q43 33 33 36 Q39 40 27 42 Q32 45 19 46 Z"/></g>',
-           C:'<g class="glyph"><path d="M11 32 Q32 13 53 32 Q32 51 11 32 Z" fill="none" stroke-width="3.5"/><circle cx="32" cy="32" r="8"/><circle cx="36" cy="28" r="3" fill="none" stroke-width="2"/></g>'},
+      sym:{A:'<g class="glyph"><path d="M16 52 L50 12 M50 12 L36 12 M44 19 L30 17 M38 26 L24 23 M16 52 L26 49" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           B:'<g class="glyph"><path d="M56 16 Q30 6 8 32 L22 32 Q18 40 28 38 Q26 46 36 42 Q36 50 46 44 Q54 32 56 16 Z"/></g>',
+           C:'<g class="glyph"><path d="M16 22 Q36 10 56 28" fill="none" stroke-width="4" stroke-linecap="round"/><circle cx="37" cy="33" r="9" fill="none" stroke-width="5"/><circle cx="37" cy="33" r="3"/><path d="M8 50 L27 39 L33 49 Z"/></g>'},
       symName:{A:'Talon',B:'Aile',C:'Œil'},
       col:{A:'#e8e26a',B:'#8fd6a0',C:'#e87ab8'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
