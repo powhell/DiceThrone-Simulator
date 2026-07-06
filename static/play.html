@@ -74,6 +74,8 @@
   .die:hover{transform:translateY(-2px)} .die:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
   .die svg{width:52px; height:52px; color:#f3ede2}
   .glyph{fill:currentColor}
+  /* les glyphes en traits (Talon rv, Griffe dr...) déclarent stroke-width sans couleur : sans cette règle ils sont INVISIBLES (bug user : dés 1-3 rv vides) */
+  .glyph [stroke-width]{stroke:currentColor}
   /* verified from the HH die (leaflet): Axe = white, Horseshoe = cyan, Scare/pumpkin = orange */
   .die[data-cls="A"] svg{color:#f3ede2} .die[data-cls="B"] svg{color:#3fb6e8} .die[data-cls="C"] svg{color:#ef6b2b}
   /* mini symbol icons reused in ability lists */
