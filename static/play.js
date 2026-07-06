@@ -220,7 +220,9 @@
         `<div class="empty" style="width:100%">${defenseExplain(HUMAN, pendingDefense.defenseDice)}</div>`;
       $('tray').querySelectorAll('.die').forEach(el=>{
         el.onclick = () => { const i=+el.dataset.i;
-          if (defSel.has(i)) defSel.delete(i); else { if (defSel.size>=2) defSel.delete([...defSel][0]); defSel.add(i); }
+          // cap 5 (Better D relance jusqu'à 5 dés) — l'ancien cap 2 (paires Twice As Wild)
+          // empêchait d'en sélectionner 3 (user-caught, 2e rapport)
+          if (defSel.has(i)) defSel.delete(i); else { if (defSel.size>=5) defSel.delete([...defSel][0]); defSel.add(i); }
           renderDice(false); renderControls(); };
       });
       return;
@@ -781,7 +783,7 @@
       // dieIndices, seule l'UI n'offrait que tout-ou-un-seul (user-caught : impossible d'en
       // relancer 3).
       const bd = pendingDefense.options.find(o=>o.kind==='rerollAll' && o.cardId==='better-d');
-      if (bd && sel.length>=1) show.push({kind:'rerollAll', cardId:'better-d', dieIndices:sel});
+      if (bd && sel.length>=1 && !show.some(o=>o.kind==='rerollAll')) show.push({kind:'rerollAll', cardId:'better-d', dieIndices:sel});
       show.slice(0,10).forEach(o=>{
         if (o.kind==='rerollAll') {
           const n = defSel.size;
