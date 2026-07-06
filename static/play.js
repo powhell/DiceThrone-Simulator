@@ -562,6 +562,55 @@
     ov.querySelector('img').src = src; ov.querySelector('img').alt = name||id;
     ov.style.display='flex';
   }
+  // ---- Tracker deck/défausse (plan #1) : info publique du jeu physique ----
+  let cardsDrawerOpen = false;
+  function grpCounts(ids){
+    const m = new Map();
+    for (const id of ids) m.set(id, (m.get(id)||0)+1);
+    return [...m.entries()].sort((a,b)=>b[1]-a[1]);
+  }
+  function cardNameOf(id){
+    for (const hk of [HUMAN, AI_HERO]) {
+      if (hk==='nx') continue;
+      const c = G.cardById(G.heroTemplateFor(hk), id);
+      if (c) return c.name || id;
+    }
+    return id;
+  }
+  function trackerRows(ids, withProb){
+    const total = ids.length;
+    if (!total) return '<div class="empty" style="padding:4px 0">vide</div>';
+    return grpCounts(ids).map(([id,n])=>{
+      const p = withProb ? ` <span style="color:var(--muted)">· ${Math.round(100*n/total)} % au tirage</span>` : '';
+      const peek = CARD_IMG[id] ? ` <span class="peek" data-peek="${id}" style="cursor:zoom-in;opacity:.6">🔍</span>` : '';
+      return `<div style="padding:2px 0;border-bottom:1px solid #ffffff12">${cardNameOf(id)} <b>×${n}</b>${p}${peek}</div>`;
+    }).join('');
+  }
+  function renderCardsDrawer(){
+    let d = document.getElementById('cards-drawer');
+    if (!cardsDrawerOpen) { if (d) d.style.display='none'; return; }
+    if (!d) {
+      d = document.createElement('div'); d.id='cards-drawer';
+      d.style.cssText='position:fixed;top:60px;right:10px;width:340px;max-height:80vh;overflow-y:auto;'+
+        'background:var(--panel,#221b30);border:1px solid #3a2f52;border-radius:10px;padding:12px;z-index:60;'+
+        'font-size:12.5px;box-shadow:0 10px 40px #000a';
+      document.body.appendChild(d);
+    }
+    d.style.display='';
+    const you = g.state.players[g.humanIdx], ai = g.state.players[g.aiIdx];
+    d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+        <b>🂠 Cartes (info publique)</b>
+        <button class="btn" style="font-size:.7rem;padding:2px 8px" id="cd-close">✕</button></div>
+      <div style="margin-top:8px;color:var(--gold);font-weight:600">Ton deck restant (${you.deck.length})</div>
+      ${trackerRows(you.deck, true)}
+      <div style="margin-top:10px;color:var(--gold);font-weight:600">Ta défausse (${you.discard.length})</div>
+      ${trackerRows(you.discard, false)}
+      <div style="margin-top:10px;color:var(--gold);font-weight:600">Défausse de l'IA (${ai.discard.length})</div>
+      ${trackerRows(ai.discard, false)}
+      ${ai.heroId==='nx' ? '' : `<div style="margin-top:8px;color:var(--muted)">Deck IA : ${ai.deck.length} cartes · Main IA : ${ai.hand.length} (cachée)</div>`}`;
+    d.querySelector('#cd-close').onclick = ()=>{ cardsDrawerOpen=false; renderCardsDrawer(); };
+    d.querySelectorAll('.peek').forEach(el=>{ el.onclick=(e)=>{ e.stopPropagation(); showCardImage(el.dataset.peek); }; });
+  }
   function renderHand() {
     const p = g.state.players[g.humanIdx];
     const hero = G.heroTemplateFor(HUMAN);
@@ -1513,7 +1562,7 @@
   function addLog(html){ const l=document.createElement('div'); l.className='l'; l.innerHTML=html; logBox.prepend(l); }
   function log(html){ addLog(`<span class="t">→</span>${html}`); }
 
-  function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities(); renderHand(); drainEngineLog(); }
+  function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities(); renderHand(); renderCardsDrawer(); drainEngineLog(); }
 
   // Upgraded ("II") display numbers for the side panel — the verified card values, so the board
   // stops showing base damage once the II upgrade is in play (user-reported on Reap II).
@@ -1584,6 +1633,11 @@
     st.className='btn'; st.href='stats.html'; st.textContent='📈 Stats';
     st.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px;text-decoration:none';
     tag.parentNode.insertBefore(st, tag);
+    const cd = document.createElement('button');
+    cd.className='btn'; cd.textContent='🂠 Cartes';
+    cd.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px';
+    cd.onclick = ()=>{ cardsDrawerOpen=!cardsDrawerOpen; renderCardsDrawer(); };
+    tag.parentNode.insertBefore(cd, tag);
     const ex = document.createElement('button');
     ex.className='btn'; ex.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px';
     const histo = ()=>{ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } };
