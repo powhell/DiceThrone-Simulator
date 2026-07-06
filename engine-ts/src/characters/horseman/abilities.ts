@@ -45,12 +45,20 @@ function hasStraight(dice: number[], length: number): boolean {
   return false
 }
 
+// Plafond Grim Pursuit (cap 3, user-caught) : les jetons gagnés AU-DELÀ du stock max sont
+// perdus — leur valeur est nulle. gp = stock actuel du joueur (0 par défaut, anciens appels).
+const GRIM_PURSUIT_CAP_SOLVER = 3
+function gpGainValue(gp: number, gain: number): number {
+  return Math.min(gain, Math.max(0, GRIM_PURSUIT_CAP_SOLVER - gp)) * GRIM_PURSUIT_AVG_DMG
+}
+
 export function getCandidates(
   dice: number[],
   dreadful: number,
   hasHead: boolean,
   upgradeIds: string[] = [],
   defenseTax = 0,
+  gp = 0,
 ): Array<[string, number, number]> {
   const { A: a, B: b, C: c } = classify(dice)
   const out: Array<[string, number, number]> = []
@@ -61,11 +69,11 @@ export function getCandidates(
   const tax = defenseTax
 
   if (has('cleave-ii') && a >= 2 && b >= 1 && c >= 1) {
-    const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG
+    const val = GHOSTLY_CHARGE_DMG + gpGainValue(gp, GHOSTLY_CHARGE_GRIM_PURSUIT)
     out.push(['Ghostly Charge', val, GHOSTLY_CHARGE_DMG])
   }
   if (has('ride-down-ii') && b >= 3) {
-    const val = CURSED_GALLOP_DMG + CURSED_GALLOP_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG
+    const val = CURSED_GALLOP_DMG + gpGainValue(gp, CURSED_GALLOP_GRIM_PURSUIT)
     out.push(['Cursed Gallop', val, CURSED_GALLOP_DMG])
   }
   if (has('reap-ii') && b >= 3 && c >= 2) {
@@ -76,7 +84,7 @@ export function getCandidates(
     out.push(['Haunted Strike', HAUNTED_STRIKE_DMG, HAUNTED_STRIKE_DMG])
   }
   if (has('horrify-ii') && c >= 3) {
-    const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG
+    const val = SPOOKY_DMG + gpGainValue(gp, SPOOKY_GRIM_PURSUIT)
     out.push(['Spooky', val - tax, SPOOKY_DMG])
   }
 
@@ -88,8 +96,8 @@ export function getCandidates(
     const base = HORRIFY_BASE_UNDEFENDABLE
     const horrifyUpgraded = has('horrify-ii')
     let val = base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN)
-    if (horrifyUpgraded) val += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG
-    else if (hasHead) val += GRIM_PURSUIT_AVG_DMG
+    if (horrifyUpgraded) val += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED)
+    else if (hasHead) val += gpGainValue(gp, 1)
     out.push(['Horrify', val, base])
   }
   if (a >= 3 && c >= 2) {
@@ -114,7 +122,7 @@ export function getCandidates(
   // Widow's Gauntlets pattern. On 5 dice, a>=3 && b>=2 is exact (uses all five).
   if (a >= 3 && b >= 2) {
     const grimPursuit = has('ride-down-ii') ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT
-    const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG
+    const val = RIDE_DOWN_BASE + gpGainValue(gp, grimPursuit)
     out.push(['Ride Down', val - tax, RIDE_DOWN_BASE])
   }
   if (b >= 3 && c >= 1) {
@@ -136,22 +144,22 @@ export function getCandidates(
     out.push(['Sow Despair S', val - tax, SOW_SMALL_DMG])
   }
 
-  const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG
+  const whiffVal = gpGainValue(gp, WHIFF_PURSUIT_TOKENS)
   out.push(['Whiff', whiffVal, whiffVal])
   return out
 }
 
-export function bestAbilityValue(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): number {
-  return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([, v]) => v))
+export function bestAbilityValue(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0, gp = 0): number {
+  return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([, v]) => v))
 }
 
-export function bestAbilityName(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): string {
-  const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax)
+export function bestAbilityName(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0, gp = 0): string {
+  const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp)
   return cands.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
 }
 
-export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0): AbilityEntry[] {
-  const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([name]) => name))
+export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[] = [], defenseTax = 0, gp = 0): AbilityEntry[] {
+  const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([name]) => name))
   const tax = defenseTax
   const has = (id: string) => upgradeIds.includes(id)
 
@@ -171,8 +179,8 @@ export function buildAbilityBoard(dice: number[], dreadful: number, hasHead: boo
   const dc = dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN)
   const horrifyGain = dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN)
   let horrifyVal = HORRIFY_BASE_UNDEFENDABLE + horrifyGain
-  if (horrifyUpgraded) horrifyVal += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG
-  else if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG
+  if (horrifyUpgraded) horrifyVal += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED)
+  else if (hasHead) horrifyVal += gpGainValue(gp, 1)
   let reapVal = reapDmg + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN)
   if (hasHead) reapVal += CARD_DRAW_VALUE
   const sowLVal = sowLDmg + dreadfulValueOfGaining(dreadful, sowLDreadful)

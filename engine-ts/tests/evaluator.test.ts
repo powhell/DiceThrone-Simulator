@@ -79,6 +79,13 @@ describe('terminal states', () => {
     expect(evalState([1, 4, 4, 4, 6], 0, 3, false)).toBeCloseTo(4.4)
   })
 
+  it('Grim Pursuit cap 3 (user-caught) : les gains au-delà du stock ne valent rien', () => {
+    // Ride Down [1,1,2,4,4] : 6 + gpGainValue(gp, 2)
+    expect(evalState([1, 1, 2, 4, 4], 0, 0, false, 0)).toBeCloseTo(7.8, 2)  // gp=0 : +2×0.9
+    expect(evalState([1, 1, 2, 4, 4], 0, 0, false, 2)).toBeCloseTo(6.9, 2)  // gp=2 : +1×0.9
+    expect(evalState([1, 1, 2, 4, 4], 0, 0, false, 3)).toBeCloseTo(6.0, 2)  // cap plein : +0
+  })
+
   it('throws on invalid state (5 dice required at rolls=0)', () => {
     expect(() => evalState([], 0, 0, false)).toThrow()
   })

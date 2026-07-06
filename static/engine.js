@@ -280,17 +280,21 @@ var Engine = (() => {
     }
     return false;
   }
-  function getCandidates(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
+  var GRIM_PURSUIT_CAP_SOLVER = 3;
+  function gpGainValue(gp, gain) {
+    return Math.min(gain, Math.max(0, GRIM_PURSUIT_CAP_SOLVER - gp)) * GRIM_PURSUIT_AVG_DMG;
+  }
+  function getCandidates(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
     const { A: a, B: b, C: c } = classify(dice);
     const out = [];
     const has = (id) => upgradeIds.includes(id);
     const tax = defenseTax;
     if (has("cleave-ii") && a >= 2 && b >= 1 && c >= 1) {
-      const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = GHOSTLY_CHARGE_DMG + gpGainValue(gp, GHOSTLY_CHARGE_GRIM_PURSUIT);
       out.push(["Ghostly Charge", val, GHOSTLY_CHARGE_DMG]);
     }
     if (has("ride-down-ii") && b >= 3) {
-      const val = CURSED_GALLOP_DMG + CURSED_GALLOP_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = CURSED_GALLOP_DMG + gpGainValue(gp, CURSED_GALLOP_GRIM_PURSUIT);
       out.push(["Cursed Gallop", val, CURSED_GALLOP_DMG]);
     }
     if (has("reap-ii") && b >= 3 && c >= 2) {
@@ -301,7 +305,7 @@ var Engine = (() => {
       out.push(["Haunted Strike", HAUNTED_STRIKE_DMG, HAUNTED_STRIKE_DMG]);
     }
     if (has("horrify-ii") && c >= 3) {
-      const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = SPOOKY_DMG + gpGainValue(gp, SPOOKY_GRIM_PURSUIT);
       out.push(["Spooky", val - tax, SPOOKY_DMG]);
     }
     if (c >= 5) {
@@ -312,8 +316,8 @@ var Engine = (() => {
       const base = HORRIFY_BASE_UNDEFENDABLE;
       const horrifyUpgraded = has("horrify-ii");
       let val = base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
-      if (horrifyUpgraded) val += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
-      else if (hasHead) val += GRIM_PURSUIT_AVG_DMG;
+      if (horrifyUpgraded) val += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED);
+      else if (hasHead) val += gpGainValue(gp, 1);
       out.push(["Horrify", val, base]);
     }
     if (a >= 3 && c >= 2) {
@@ -334,7 +338,7 @@ var Engine = (() => {
     }
     if (a >= 3 && b >= 2) {
       const grimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
-      const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG;
+      const val = RIDE_DOWN_BASE + gpGainValue(gp, grimPursuit);
       out.push(["Ride Down", val - tax, RIDE_DOWN_BASE]);
     }
     if (b >= 3 && c >= 1) {
@@ -355,19 +359,19 @@ var Engine = (() => {
       const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, dreadfulGiven);
       out.push(["Sow Despair S", val - tax, SOW_SMALL_DMG]);
     }
-    const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG;
+    const whiffVal = gpGainValue(gp, WHIFF_PURSUIT_TOKENS);
     out.push(["Whiff", whiffVal, whiffVal]);
     return out;
   }
-  function bestAbilityValue(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([, v]) => v));
+  function bestAbilityValue(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([, v]) => v));
   }
-  function bestAbilityName(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax);
+  function bestAbilityName(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function buildAbilityBoard(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([name]) => name));
+  function buildAbilityBoard(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([name]) => name));
     const tax = defenseTax;
     const has = (id) => upgradeIds.includes(id);
     const cleaveUpgraded = has("cleave-ii");
@@ -385,8 +389,8 @@ var Engine = (() => {
     const dc = dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN);
     const horrifyGain = dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
     let horrifyVal = HORRIFY_BASE_UNDEFENDABLE + horrifyGain;
-    if (horrifyUpgraded) horrifyVal += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
-    else if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG;
+    if (horrifyUpgraded) horrifyVal += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED);
+    else if (hasHead) horrifyVal += gpGainValue(gp, 1);
     let reapVal = reapDmg + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
     if (hasHead) reapVal += CARD_DRAW_VALUE;
     const sowLVal = sowLDmg + dreadfulValueOfGaining(dreadful, sowLDreadful);
@@ -436,21 +440,21 @@ var Engine = (() => {
       return hhFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
       const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgrades}`;
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${upgrades}`;
     }
   };
 
@@ -840,8 +844,10 @@ var Engine = (() => {
   };
 
   // src/index.ts
-  function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIds) {
-    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds });
+  function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIdsOrGp, grimPursuit = 0) {
+    const upgradeIds = Array.isArray(upgradeIdsOrGp) ? upgradeIdsOrGp : void 0;
+    const gp = typeof upgradeIdsOrGp === "number" ? upgradeIdsOrGp : grimPursuit;
+    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds, grimPursuit: gp });
   }
   function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead, upgradeIds) {
     return calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead, upgradeIds });

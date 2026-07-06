@@ -17,9 +17,13 @@ export function evalState(
   rollsRemaining: number,
   dreadful: number,
   hasHead: boolean,
-  upgradeIds?: string[],
+  upgradeIdsOrGp?: string[] | number,
+  grimPursuit = 0,
 ): number {
-  return core.evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds })
+  // rétro-compat : 5e arg = upgradeIds (tableau) ou stock GP (nombre, tests)
+  const upgradeIds = Array.isArray(upgradeIdsOrGp) ? upgradeIdsOrGp : undefined
+  const gp = typeof upgradeIdsOrGp === 'number' ? upgradeIdsOrGp : grimPursuit
+  return core.evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds, grimPursuit: gp })
 }
 
 export function calculateOptimalKeep(

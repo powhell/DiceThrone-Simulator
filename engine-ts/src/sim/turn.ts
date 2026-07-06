@@ -54,7 +54,7 @@ export function defenseTaxFor(opponent: PlayerState): number {
 export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState {
   if (player.heroId === 'hh') {
     const t = player.tokens
-    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
+    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent), grimPursuit: t.grimPursuit }
   }
   if (player.heroId === 'fm') {
     return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
