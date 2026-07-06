@@ -3782,6 +3782,8 @@ var Game = (() => {
             const card = cardById(heroTemplateFor(self.heroId), o.cardId);
             return card?.kind === "upgrade";
           });
+          const rrt = upgradePlays.find((o) => o.cardId === "red-room-training-ii");
+          if (rrt) return rrt;
           if (upgradePlays.length === 1) return upgradePlays[0];
           if (upgradePlays.length > 1) request = { ...request, options: upgradePlays };
         }

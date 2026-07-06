@@ -127,6 +127,10 @@ export function createValueGreedyPolicy(network: Network): Policy {
           const card = cardById(heroTemplateFor(self.heroId), (o as any).cardId)
           return card?.kind === 'upgrade'
         })
+        // Red Room Training II se pose EN PREMIER : sa passive pioche sur chaque upgrade
+        // joué APRÈS elle (audit : posée 6x/12 parties mais 2 pioches déclenchées en tout).
+        const rrt = upgradePlays.find(o => (o as any).cardId === 'red-room-training-ii')
+        if (rrt) return rrt
         if (upgradePlays.length === 1) return upgradePlays[0]
         if (upgradePlays.length > 1) request = { ...request, options: upgradePlays }
       }
