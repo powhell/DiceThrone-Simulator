@@ -2,8 +2,8 @@
 
 Même flux que le Forge Master (vérification par photos AVANT tout encodage) :
 
-1. **Board du héros** (recto complet, lisible) → à la racine de ce dossier
-2. **Leaflet/carton de règles du perso** (les 2 faces si imprimées) → racine
+1. **Board du héros** (recto complet, lisible) → dans `board/`
+2. **Leaflet/carton de règles du perso** (les 2 faces si imprimées) → dans `leaflet/`
 3. **Cartes** → dans `cards/` :
    - les cartes PROPRES au héros (upgrades + actions uniques)
    - PAS les communes (déjà scannées dans `characters/common/`)
