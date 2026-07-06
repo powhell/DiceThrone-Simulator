@@ -51,17 +51,35 @@ export function defenseTaxFor(opponent: PlayerState): number {
   return (HELM[opponent.armor.helmet] + SHIELD[opponent.armor.shield]) * 1.33
 }
 
+export function wildcardFlagsFor(p: PlayerState) {
+  return {
+    sixIt: p.hand.includes('six-it') && p.cp >= 1,
+    soWild: p.hand.includes('so-wild') && p.cp >= 2,
+    twiceAsWild: p.hand.includes('twice-as-wild') && p.cp >= 3,
+    samesies: p.hand.includes('samesies') && p.cp >= 1,
+    tipIt: p.hand.includes('tip-it') && p.cp >= 1,
+  }
+}
+
 export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState {
   if (player.heroId === 'hh') {
     const t = player.tokens
-    return { dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent), grimPursuit: t.grimPursuit }
+    return {
+      dreadful: t.dreadful, hasHead: t.head > 0, upgradeIds: player.upgradesInPlay,
+      defenseTax: defenseTaxFor(opponent), grimPursuit: t.grimPursuit,
+      // L'IA PLANIFIE aussi ses gardes autour de ses cartes de conversion (user-caught :
+      // elle réparait après coup mais ne chassait jamais). Le suivi-de-plan est assuré par
+      // le scoring-par-replay de ses fenêtres : jouer la carte qui complète l'Ultimate gagne
+      // ~14 PV au replay, largement au-dessus de son bruit de décision.
+      wildcards: wildcardFlagsFor(player),
+    }
   }
   if (player.heroId === 'fm') {
-    return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
+    return { armorCount: fm.armorCount(player), upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player) }
   }
   // opponent.timeBombs is on PlayerState directly (Time Bomb is hero-agnostic — it's
   // inflicted BY Black Widow but stacks on whichever opponent she's hitting).
-  return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent) }
+  return { upgrades: player.upgradesInPlay.length, tbOnOpp: opponent.timeBombs.length, upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player) }
 }
 
 export function checkGameOver(state: GameState): boolean {
