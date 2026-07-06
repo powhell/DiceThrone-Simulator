@@ -1,4 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
+import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
 import {
   hhFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -18,6 +19,8 @@ export interface HHState {
   // Stock actuel de Grim Pursuit (cap 3) : les gains au-delà du cap ne valent rien
   // (user-caught : Ride Down surévalué à cap plein). Défaut 0 (anciens appels).
   grimPursuit?: number
+  // Cartes de conversion en main (payables) : filet de securite au jet final.
+  wildcards?: WildcardFlags
 }
 
 export const hhConfig: CharacterConfig<HHState> = {
@@ -26,7 +29,9 @@ export const hhConfig: CharacterConfig<HHState> = {
     return hhFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0)
+    const base = bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0)
+    return augmentTerminalValue(dice, base, state.wildcards,
+      d => bestAbilityValue(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0))
   },
   bestAbilityName(dice, state) {
     return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0)
@@ -41,6 +46,7 @@ export const hhConfig: CharacterConfig<HHState> = {
   stateKey(state) {
     const upgrades = (state.upgradeIds ?? []).slice().sort().join(',')
     // tax arrondie au 1/2 pour garder le cache DP compact
-    return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${upgrades}`
+    const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0)
+    return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${wc}|${upgrades}`
   },
 }

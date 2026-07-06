@@ -1,4 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
+import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
 import {
   fmFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -18,7 +19,9 @@ export const fmConfig: CharacterConfig<FMState> = {
     return fmFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.armorCount, state.defenseTax ?? 0)
+    const base = bestAbilityValue(dice, state.armorCount, state.defenseTax ?? 0)
+    return augmentTerminalValue(dice, base, (state as any).wildcards as WildcardFlags,
+      d => bestAbilityValue(d, state.armorCount, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
     return bestAbilityName(dice, state.armorCount, state.defenseTax ?? 0)
@@ -31,6 +34,7 @@ export const fmConfig: CharacterConfig<FMState> = {
     return cands.some(([name]) => name !== 'Whiff')
   },
   stateKey(state) {
-    return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}`
+    const wc = ((state as any).wildcards?.sixIt ? 1 : 0) + ((state as any).wildcards?.soWild ? 2 : 0)
+    return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}`
   },
 }

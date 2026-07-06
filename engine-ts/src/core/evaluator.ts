@@ -31,6 +31,37 @@ export function clearCache(): void {
 }
 
 // totalDice : 5 normalement — 4 quand Naraxus a volé un dé (Hoarding), le solveur reste exact.
+// Cartes de conversion en main (user-caught : "si j'ai 666 j'ai de quoi backer") :
+// au JET FINAL, Six-It!/So Wild! peuvent corriger un de — la valeur terminale d'une main
+// est donc max(main, meilleure variante - cout CP). Les flags viennent de l'etat du hero.
+export interface WildcardFlags { sixIt?: boolean; soWild?: boolean }
+export function augmentTerminalValue(
+  dice: number[],
+  base: number,
+  flags: WildcardFlags | undefined,
+  evalDice: (d: number[]) => number,
+  cpToDmg = 0.75,
+): number {
+  if (!flags || (!flags.sixIt && !flags.soWild)) return base
+  let best = base
+  const counts = new Map<number, number>()
+  for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1)
+  let mode = dice[0]
+  for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v
+  const tryVariant = (i: number, v: number, cost: number) => {
+    if (dice[i] === v) return
+    const d2 = dice.slice(); d2[i] = v
+    d2.sort((a, b) => a - b)
+    const val = evalDice(d2) - cost * cpToDmg
+    if (val > best) best = val
+  }
+  for (let i = 0; i < dice.length; i++) {
+    if (flags.sixIt) tryVariant(i, 6, 1)              // Six-It! : de -> 6, 1 CP
+    if (flags.soWild) { tryVariant(i, 6, 2); tryVariant(i, mode, 2) } // So Wild! ~= ->6 ou ->majorite, 2 CP
+  }
+  return best
+}
+
 export function evalState<S>(
   cfg: CharacterConfig<S>,
   kept: number[],

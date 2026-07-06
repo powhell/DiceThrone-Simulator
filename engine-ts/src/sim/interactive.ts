@@ -306,7 +306,13 @@ export function humanKeepAdvice(
   const self = g.state.players[g.humanIdx]
   const opp = g.state.players[g.aiIdx]
   const cfg: any = self.heroId === 'hh' ? hhConfig : self.heroId === 'fm' ? fmConfig : bwConfig
-  const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp) as any)
+  const state: any = oracleStateFor(self, opp)
+  // Cartes de conversion payables en main -> filet de securite du jet final (coach humain).
+  state.wildcards = {
+    sixIt: self.hand.includes('six-it') && self.cp >= 1,
+    soWild: self.hand.includes('so-wild') && self.cp >= 2,
+  }
+  const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, state)
   const top = r.topOptions[0]
   // topOptions: the full ranked keep table (kept dice, EV, per-ability landing odds) so the UI
   // can show the coach's alternatives, not just the single best keep.

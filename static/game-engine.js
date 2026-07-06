@@ -199,6 +199,30 @@ var Game = (() => {
   function cacheKey(cfg, kept, rollsRemaining, state, totalDice) {
     return `${cfg.id}|${totalDice}|${kept.join(",")}|${rollsRemaining}|${cfg.stateKey(state)}`;
   }
+  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
+    if (!flags || !flags.sixIt && !flags.soWild) return base;
+    let best = base;
+    const counts = /* @__PURE__ */ new Map();
+    for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
+    let mode = dice[0];
+    for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v;
+    const tryVariant = (i, v, cost) => {
+      if (dice[i] === v) return;
+      const d2 = dice.slice();
+      d2[i] = v;
+      d2.sort((a, b) => a - b);
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) best = val;
+    };
+    for (let i = 0; i < dice.length; i++) {
+      if (flags.sixIt) tryVariant(i, 6, 1);
+      if (flags.soWild) {
+        tryVariant(i, 6, 2);
+        tryVariant(i, mode, 2);
+      }
+    }
+    return best;
+  }
   function evalState(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
       if (kept.length !== totalDice) throw new Error(`evalState: need ${totalDice} dice at rolls=0, got ${kept.length}`);
@@ -581,7 +605,13 @@ var Game = (() => {
       return hhFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      const base = bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
       return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
@@ -595,7 +625,8 @@ var Game = (() => {
     },
     stateKey(state) {
       const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${upgrades}`;
+      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${wc}|${upgrades}`;
     }
   };
 
@@ -848,7 +879,13 @@ var Game = (() => {
       return bwFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const base = bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
       return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
@@ -862,7 +899,8 @@ var Game = (() => {
     },
     stateKey(state) {
       const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgradeIds}`;
+      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgradeIds}`;
     },
     directDamageByName(state) {
       return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds);
@@ -967,7 +1005,13 @@ var Game = (() => {
       return fmFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue3(dice, state.armorCount, state.defenseTax ?? 0);
+      const base = bestAbilityValue3(dice, state.armorCount, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue3(d, state.armorCount, state.defenseTax ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
       return bestAbilityName3(dice, state.armorCount, state.defenseTax ?? 0);
@@ -980,7 +1024,8 @@ var Game = (() => {
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}`;
+      const wc = (state.wildcards?.sixIt ? 1 : 0) + (state.wildcards?.soWild ? 2 : 0);
+      return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}`;
     }
   };
 
@@ -3209,7 +3254,12 @@ var Game = (() => {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
     const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : bwConfig;
-    const r = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleStateFor(self, opp));
+    const state = oracleStateFor(self, opp);
+    state.wildcards = {
+      sixIt: self.hand.includes("six-it") && self.cp >= 1,
+      soWild: self.hand.includes("so-wild") && self.cp >= 2
+    };
+    const r = calculateOptimalKeep(cfg, dice, rollsRemaining, state);
     const top = r.topOptions[0];
     return { kept: top.kept, ev: top.ev, keepAllEv: r.currentEv, topOptions: r.topOptions };
   }

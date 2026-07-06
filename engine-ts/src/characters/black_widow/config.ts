@@ -1,4 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
+import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
 import {
   bwFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
   directDamageByName,
@@ -20,7 +21,9 @@ export const bwConfig: CharacterConfig<BWState> = {
     return bwFaceToSymbol(face)
   },
   bestAbilityValue(dice, state) {
-    return bestAbilityValue(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+    const base = bestAbilityValue(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalValue(dice, base, (state as any).wildcards as WildcardFlags,
+      d => bestAbilityValue(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
     return bestAbilityName(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
@@ -34,7 +37,8 @@ export const bwConfig: CharacterConfig<BWState> = {
   },
   stateKey(state) {
     const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(',')
-    return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgradeIds}`
+    const wc = ((state as any).wildcards?.sixIt ? 1 : 0) + ((state as any).wildcards?.soWild ? 2 : 0)
+    return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgradeIds}`
   },
   directDamageByName(state) {
     return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds)
