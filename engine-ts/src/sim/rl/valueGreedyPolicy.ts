@@ -125,7 +125,13 @@ export function createValueGreedyPolicy(network: Network): Policy {
           if (o.kind !== 'playCard') return false
           const self = state.players[playerIdx]
           const card = cardById(heroTemplateFor(self.heroId), (o as any).cardId)
-          return card?.kind === 'upgrade'
+          if (card?.kind !== 'upgrade') return false
+          // Garde-fou HH (A/B 2026-07-06, objection user validée : « cave d'acheter en se
+          // vidant ») : n'acheter que s'il reste >= 2 CP APRÈS — l'achat inconditionnel
+          // coûtait ~5 points de win-rate (45,5 % -> 50,7 %) et faisait mesurer Ride Down II
+          // NÉGATIF au banc v4. BW garde l'achat systématique (ses upgrades mesurent +2 à +3).
+          if (self.heroId === 'hh' && self.cp < (card.cpCost ?? 0) + 2) return false
+          return true
         })
         // Red Room Training II se pose EN PREMIER : sa passive pioche sur chaque upgrade
         // joué APRÈS elle (audit : posée 6x/12 parties mais 2 pioches déclenchées en tout).

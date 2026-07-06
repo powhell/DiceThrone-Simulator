@@ -6023,7 +6023,9 @@ var Game = (() => {
             if (o.kind !== "playCard") return false;
             const self = state.players[playerIdx];
             const card = cardById(heroTemplateFor(self.heroId), o.cardId);
-            return card?.kind === "upgrade";
+            if (card?.kind !== "upgrade") return false;
+            if (self.heroId === "hh" && self.cp < (card.cpCost ?? 0) + 2) return false;
+            return true;
           });
           const rrt = upgradePlays.find((o) => o.cardId === "red-room-training-ii");
           if (rrt) return rrt;

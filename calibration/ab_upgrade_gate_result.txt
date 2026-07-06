@@ -1,0 +1,10 @@
+
+=== A/B (n=300 par condition) ===
+base v4       : HH gagne 45.5% ± 2.9
+base économe  : HH gagne 50.7% ± 2.9
++RDII v4      : HH gagne 41.0% ± 2.8
++RDII économe : HH gagne 49.2% ± 2.9
+
+Valeur de RD II, politique v4      : -4.5% ± 4.0
+Valeur de RD II, politique économe : -1.5% ± 4.1
+Effet de la règle économe seule (sans carte ajoutée) : 5.2%
