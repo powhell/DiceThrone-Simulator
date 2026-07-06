@@ -38,12 +38,18 @@ export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' 
 // gating upgrade is actually in play (see characters/<hero>/abilities.ts getCandidates()), so
 // no extra "is the upgrade active" check is needed at lookup time.
 export function abilityByBoardName(hero: HeroTemplate, boardName: string): AbilityTemplate | undefined {
-  const base = hero.abilities.find(a => a.boardName === boardName)
-  if (base) return base
-  for (const card of hero.cards) {
-    if (card.altAbility?.boardName === boardName) return card.altAbility
-  }
-  return undefined
+  const pools: AbilityTemplate[] = [
+    ...hero.abilities,
+    ...((hero as any).altAbilities ?? []),
+    ...hero.cards.map(c => c.altAbility).filter((x): x is AbilityTemplate => !!x),
+  ]
+  const exact = pools.find(a => a.boardName === boardName)
+  if (exact) return exact
+  // Les candidats du solveur portent des variantes (« Fowl Friend II (BBB) ») : on matche
+  // sur le nom de base, sans le tier ni l'exigence. (Bug user : sélecteur muet + effets vides.)
+  const short = (n: string) => n.split(' (')[0].replace(/ I{1,3}$/, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const want = short(boardName)
+  return pools.find(a => short(a.boardName) === want)
 }
 
 export function cardById(hero: HeroTemplate, cardId: string): CardTemplate | undefined {
@@ -63,13 +69,14 @@ export function resolvedAbilityByBoardName(
   const base = abilityByBoardName(hero, boardName)
   if (!base?.upgradedBy) return base
   if (!upgradeIds.includes(base.upgradedBy.upgradeId)) return base
-  return {
-    ...base,
-    baseDamage: base.upgradedBy.baseDamage ?? base.baseDamage,
-    tokensGrantedToSelf: base.upgradedBy.tokensGrantedToSelf ?? base.tokensGrantedToSelf,
-    cpGain: base.upgradedBy.cpGain ?? base.cpGain,
-    // Grapple II makes the CP gain unconditional — drop the >=N-upgrades gate so applyBWAbility
-    // doesn't also grant it a second time via cpGainIfUpgradesAtLeast.
-    cpGainIfUpgradesAtLeast: base.upgradedBy.cpGain != null ? undefined : base.cpGainIfUpgradesAtLeast,
+  // Fusion générique : tout champ défini par upgradedBy remplace celui de la base (les
+  // upgrades rv/dr/th portent dicePattern/activateNevermore/feathersToMax/bonusRollDice...).
+  const merged: any = { ...base }
+  for (const [k, v] of Object.entries(base.upgradedBy)) {
+    if (k !== 'upgradeId' && v !== undefined) merged[k] = v
   }
+  // Grapple II makes the CP gain unconditional — drop the >=N-upgrades gate so applyBWAbility
+  // doesn't also grant it a second time via cpGainIfUpgradesAtLeast.
+  if (base.upgradedBy.cpGain != null) merged.cpGainIfUpgradesAtLeast = undefined
+  return merged as AbilityTemplate
 }

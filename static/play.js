@@ -496,7 +496,7 @@
       if (!cands.length) { box.innerHTML = '<div class="empty">Tes dés ne forment aucune habileté.</div>'; return; }
       box.innerHTML = cands.map(c=>{ const f=formatAbility(humanHero,c.name); const eff=abilityEffects(c.name);
         return `<button class="abil pick" data-name="${c.name.replace(/"/g,'&quot;')}">
-        <div><div class="an">${f.name}</div><div class="req">${f.req} ${c.defendable?'· défendable':'· indéfendable'}${eff?` · ${eff}`:''}</div></div>
+        <div><div class="an">${f.name}</div><div class="req">${f.req}${(c.baseDamage>0)?(c.defendable?' · défendable':' · indéfendable'):''}${eff?` · ${eff}`:''}</div></div>
         <div class="dv">${c.baseDamage!=null?c.baseDamage+' dmg':'—'}</div></button>`; }).join('');
       box.querySelectorAll('.abil.pick').forEach(el=>el.onclick=()=>chooseAbility(el.dataset.name));
     } else {
@@ -1100,12 +1100,18 @@
     const a = G.resolvedAbilityByBoardName(G.heroTemplateFor(heroKey), boardName, p.upgradesInPlay);
     if (!a) return '';
     const out = [];
-    const tokenFr = { dreadful:'Dreadful', grimPursuit:'Grim Pursuit', agility:'Agility', covertOps:'Covert Ops', timeBomb:'Time Bomb' };
+    const tokenFr = { dreadful:'Dreadful', grimPursuit:'Grim Pursuit', agility:'Agility', covertOps:'Covert Ops', timeBomb:'Time Bomb',
+      feather:'Plume', hex:'Hex', nevermore:'Nevermore', shapeShift:'Shape Shift', regen2:'Regenerate ②', regen1:'Regenerate ①',
+      wound:'Wound', electrokinesis:'⚡EK', guardBreak:'Guard Break' };
     if (a.defendable === false) out.push('indéfendable');
     for (const [k,n] of Object.entries(a.tokensGrantedToSelf||{})) if (n) out.push(`+${n} ${tokenFr[k]||k}`);
     for (const [k,n] of Object.entries(a.tokensInflictedOnOpponent||{})) if (n) out.push(`inflige ${n} ${tokenFr[k]||k}`);
     if (a.cpGain) out.push(`+${a.cpGain} CP`);
     if (a.cardDraw) out.push(`pioche ${a.cardDraw}`);
+    if (a.drawCards) out.push(`pioche ${a.drawCards}`);
+    if (a.feathersToMax) out.push('Plumes au MAX');
+    if (a.activateNevermore) out.push(`Activation Nevermore ×${a.activateNevermore}`);
+    if (a.healSelf) out.push(`soigne ${a.healSelf}`);
     // Head-conditional riders show the CURRENT status, not just the condition (user hit Reap
     // expecting the draw without holding the Head).
     const hasHead = p.tokens.head > 0;
@@ -1125,8 +1131,14 @@
       for (const [sym,d] of Object.entries(br.perSymbolDamage||{})) det.push(`+${d} dégât/${hero.symName[sym]||sym}`);
       if (br.undefendableOnSymbolPair) det.push(`2 ${hero.symName[br.undefendableOnSymbolPair]}s = indéfendable`);
       for (const [sym,t] of Object.entries(br.perSymbolTokens||{})) det.push(`+${t.amount} ${tokenFr[t.token]||t.token}/${hero.symName[sym]||sym}`);
-      out.push(`jet bonus (${n}) : ${det.join(' · ')}`);
+      if (br.dice) { // schéma Raveness (Murder of Crows)
+        if (br.damagePerTalon) det.push(`+${br.damagePerTalon} dégât/Talon`);
+        if (br.featherPerWing) det.push(`+${br.featherPerWing} Plume/Aile`);
+        if (br.activateNevermorePerEye) det.push('Œil = Activation Nevermore');
+      }
+      out.push(`jet bonus (${br.dice||n}) : ${det.join(' · ')}`);
     }
+    if (!out.length && (a.effect || a.notes)) out.push(a.effect || a.notes);
     if (a.numberMatchBonus) {
       // Cleave II lowers the number-match threshold 4-of-a-kind -> 3 (engine special-case).
       const three = heroKey==='hh' && p.upgradesInPlay.includes('cleave-ii');

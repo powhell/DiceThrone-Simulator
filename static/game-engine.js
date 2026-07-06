@@ -2560,12 +2560,16 @@ var Game = (() => {
     return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
-    const base = hero.abilities.find((a) => a.boardName === boardName);
-    if (base) return base;
-    for (const card of hero.cards) {
-      if (card.altAbility?.boardName === boardName) return card.altAbility;
-    }
-    return void 0;
+    const pools = [
+      ...hero.abilities,
+      ...hero.altAbilities ?? [],
+      ...hero.cards.map((c) => c.altAbility).filter((x) => !!x)
+    ];
+    const exact = pools.find((a) => a.boardName === boardName);
+    if (exact) return exact;
+    const short = (n) => n.split(" (")[0].replace(/ I{1,3}$/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const want = short(boardName);
+    return pools.find((a) => short(a.boardName) === want);
   }
   function cardById(hero, cardId) {
     return hero.cards.find((c) => c.id === cardId) ?? commonCards.cards.find((c) => c.id === cardId);
@@ -2574,15 +2578,12 @@ var Game = (() => {
     const base = abilityByBoardName(hero, boardName);
     if (!base?.upgradedBy) return base;
     if (!upgradeIds.includes(base.upgradedBy.upgradeId)) return base;
-    return {
-      ...base,
-      baseDamage: base.upgradedBy.baseDamage ?? base.baseDamage,
-      tokensGrantedToSelf: base.upgradedBy.tokensGrantedToSelf ?? base.tokensGrantedToSelf,
-      cpGain: base.upgradedBy.cpGain ?? base.cpGain,
-      // Grapple II makes the CP gain unconditional — drop the >=N-upgrades gate so applyBWAbility
-      // doesn't also grant it a second time via cpGainIfUpgradesAtLeast.
-      cpGainIfUpgradesAtLeast: base.upgradedBy.cpGain != null ? void 0 : base.cpGainIfUpgradesAtLeast
-    };
+    const merged = { ...base };
+    for (const [k, v] of Object.entries(base.upgradedBy)) {
+      if (k !== "upgradeId" && v !== void 0) merged[k] = v;
+    }
+    if (base.upgradedBy.cpGain != null) merged.cpGainIfUpgradesAtLeast = void 0;
+    return merged;
   }
 
   // src/sim/ability-resolver.ts
