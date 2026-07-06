@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createInitialGameState } from '../../src/sim/match.js'
 import { resolveAbilityPhase } from '../../src/sim/turn.js'
 import { greedyHighestDamagePolicy } from '../../src/sim/policy.js'
+// Les invariants token-gain ne testent PAS la politique de dépense (v3 : greedy dépense le GP)
+const noGpSpendGreedy = { ...greedyHighestDamagePolicy, chooseGrimPursuitSpend: () => false }
 import { heroTemplateFor, resolvedAbilityByBoardName } from '../../src/sim/data/load.js'
 import { mulberry32 } from '../../src/sim/rng.js'
 import type { HeroId } from '../../src/sim/types.js'
@@ -70,8 +72,8 @@ function runCase(heroId: HeroId, c: Case) {
     upgrades: attacker.upgradesInPlay.length,
     oppTb: state.players[1].timeBombs.length,
   }
-  const forced = { ...greedyHighestDamagePolicy, chooseAbility: () => c.boardName }
-  resolveAbilityPhase(state, 0, c.dice, mulberry32(7), [forced, greedyHighestDamagePolicy])
+  const forced = { ...noGpSpendGreedy, chooseAbility: () => c.boardName }
+  resolveAbilityPhase(state, 0, c.dice, mulberry32(7), [forced, noGpSpendGreedy])
 
   // The forced name must actually have been a legal candidate (guards the dice choices above).
   expect(state.log.some(l => l.message === `Chose ability: ${c.boardName}`),

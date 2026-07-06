@@ -203,8 +203,8 @@ var Engine = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 1.8;
-  var CARD_DRAW_VALUE = 1.6;
+  var GRIM_PURSUIT_AVG_DMG = 0.9;
+  var CARD_DRAW_VALUE = 0.5;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -244,7 +244,7 @@ var Engine = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [1.9, 0.9, 0.9, 1.1, 0];
+  var MARGINAL_VALUE = [1.5, 0.8, 0.8, 0.4, 1];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -484,9 +484,9 @@ var Engine = (() => {
   var WIDOWS_BITE_TB_INFLICTED = 1;
   var RRT_THRESHOLD_UPGRADES = 5;
   var RRT_ALL_ATTACK_BONUS = 1;
-  var AGILITY_VALUE = 1.5;
+  var AGILITY_VALUE = 1.1;
   var CP_TO_DMG_EQUIV = 0.75;
-  var COVERT_OPS_VALUE = 0.75;
+  var COVERT_OPS_VALUE = 0.1;
   var WHIFF_VALUE = 0;
   var COVERT_MISSION_DMG = 0;
   var RECON_DMG = 0;
@@ -737,7 +737,7 @@ var Engine = (() => {
   var ARMORED_UP_2ARMOR_BONUS = 2;
   var FINAL_TOUCHES_VALUE = 14;
   var CP_TO_DMG_EQUIV2 = 0.75;
-  var CARD_DRAW_VALUE2 = 1.3;
+  var CARD_DRAW_VALUE2 = 1.5;
   var MINE_VALUE = 2;
   var ORE_TUTOR_VALUE = 2.2;
   var WHIFF_VALUE2 = 0;

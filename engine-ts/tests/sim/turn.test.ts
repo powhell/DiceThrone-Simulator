@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createInitialGameState, createInitialPlayer, buildFullDeck } from '../../src/sim/match.js'
 import { playTurn, playIncomePhase, playDiscardPhase, playCard, resolveAbilityPhase, resolveDefense, playOffensiveRollPhase } from '../../src/sim/turn.js'
 import { greedyHighestDamagePolicy } from '../../src/sim/policy.js'
+// Les invariants token-gain ne testent PAS la politique de dépense (v3 : greedy dépense le GP)
+const noGpSpendGreedy = { ...greedyHighestDamagePolicy, chooseGrimPursuitSpend: () => false }
 import type { Policy } from '../../src/sim/policy.js'
 import { mulberry32 } from '../../src/sim/rng.js'
 import type { RNG } from '../../src/sim/rng.js'
@@ -19,13 +21,13 @@ function seqRng(faces: number[]): RNG {
 // first playCard offered (the window re-enumerates after each, so all eligible cards get played);
 // defer to greedy for every other window (keeps Main Phase behavior).
 const alwaysPlayDefensiveCards: Policy = {
-  ...greedyHighestDamagePolicy,
+  ...noGpSpendGreedy,
   decide(state, idx, request) {
     if (request.ctx.windowType === 'defense') {
       const play = request.options.find(o => o.kind === 'playCard')
       if (play) return play
     }
-    return greedyHighestDamagePolicy.decide(state, idx, request)
+    return noGpSpendGreedy.decide(state, idx, request)
   },
 }
 
@@ -37,7 +39,7 @@ describe('playTurn', () => {
     // Player 0's turn 1 is the Start Player's first turn, which skips Income Phase entirely
     // (verified rulebook rule) — bump turnNumber so this test exercises a normal turn instead.
     state.turnNumber = 2
-    playTurn(state, 0, rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    playTurn(state, 0, rng, [noGpSpendGreedy, noGpSpendGreedy])
 
     const phases = state.log.map(e => e.phase)
     expect(phases).toContain('income')
@@ -52,14 +54,14 @@ describe('playTurn', () => {
     clearCache()
     const state = createInitialGameState('bw', 'hh')
     const rng = mulberry32(7)
-    expect(() => playTurn(state, 0, rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])).not.toThrow()
+    expect(() => playTurn(state, 0, rng, [noGpSpendGreedy, noGpSpendGreedy])).not.toThrow()
   })
 
   it('never lets CP go negative from upkeep income alone', () => {
     clearCache()
     const state = createInitialGameState('hh', 'bw')
     const rng = mulberry32(1)
-    playTurn(state, 0, rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    playTurn(state, 0, rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(state.players[0].cp).toBeGreaterThanOrEqual(0)
   })
 })
@@ -134,7 +136,7 @@ describe('Discard Phase (verified: official rulebook)', () => {
     const state = createInitialGameState('hh', 'bw', rng)
     state.players[0].hand = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] // 8 cards
     const cpBefore = state.players[0].cp
-    playDiscardPhase(state, 0, greedyHighestDamagePolicy)
+    playDiscardPhase(state, 0, noGpSpendGreedy)
     expect(state.players[0].hand.length).toBe(MAX_HAND_SIZE)
     expect(state.players[0].discard.length).toBe(2)
     expect(state.players[0].cp).toBe(cpBefore + 2)
@@ -146,7 +148,7 @@ describe('Discard Phase (verified: official rulebook)', () => {
     const state = createInitialGameState('hh', 'bw', rng)
     state.players[0].hand = ['a', 'b']
     const cpBefore = state.players[0].cp
-    playDiscardPhase(state, 0, greedyHighestDamagePolicy)
+    playDiscardPhase(state, 0, noGpSpendGreedy)
     expect(state.players[0].hand).toEqual(['a', 'b'])
     expect(state.players[0].cp).toBe(cpBefore)
   })
@@ -260,7 +262,7 @@ describe('resolveAbilityPhase: Infiltrate advance-Time-Bomb ordering (verified)'
     const [self, opp] = state.players
     opp.timeBombs = ['0:02'] // pre-existing TB that should advance to 0:01
     // [1,2,3,6,6]: a=2 (Espionage), b=1 (Batons), c=2 (Widow) — matches only Infiltrate.
-    resolveAbilityPhase(state, 0, [1, 2, 3, 6, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 2, 3, 6, 6], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(self.heroId).toBe('bw')
     // Pre-existing TB advanced to 0:01, and the newly-inflicted one stays at 0:02 (not advanced).
     expect(opp.timeBombs.sort()).toEqual(['0:01', '0:02'])
@@ -276,7 +278,7 @@ describe('resolveAbilityPhase: Infiltrate advance-Time-Bomb ordering (verified)'
     // [1,1,4,5,6]: a=2 (Espionage), b=2 (Batons), c=1 (Widow) — matches only Infiltrate.
     // (c=2 would also unlock Infiltrate II's alt-ability Spy Game, which outscores base
     // Infiltrate and would make the greedy policy pick it instead — not what this test targets.)
-    resolveAbilityPhase(state, 0, [1, 1, 4, 5, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 1, 4, 5, 6], rng, [noGpSpendGreedy, noGpSpendGreedy])
     // The only TB in play is the newly-inflicted one, and it should already be advanced (0:01).
     expect(opp.timeBombs).toEqual(['0:01'])
   })
@@ -289,9 +291,9 @@ describe('resolveAbilityPhase: Horrify choice (verified: XOR without the Head, b
     const state = createInitialGameState('hh', 'bw', rng)
     const self = state.players[0]
     ;(self.tokens as any).head = 0
-    const policy: Policy = { ...greedyHighestDamagePolicy, chooseHorrifyBonus: () => 'grimPursuit' }
+    const policy: Policy = { ...noGpSpendGreedy, chooseHorrifyBonus: () => 'grimPursuit' }
     // [6,6,6,6,1]: c=4 (Scare), a=1 (Axe) — matches only Horrify.
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [policy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [policy, noGpSpendGreedy])
     expect((self.tokens as any).grimPursuit).toBeGreaterThan(0)
     expect((self.tokens as any).dreadful).toBe(0)
   })
@@ -302,7 +304,7 @@ describe('resolveAbilityPhase: Horrify choice (verified: XOR without the Head, b
     const state = createInitialGameState('hh', 'bw', rng)
     const self = state.players[0]
     ;(self.tokens as any).head = 1
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect((self.tokens as any).dreadful).toBeGreaterThan(0)
     expect((self.tokens as any).grimPursuit).toBeGreaterThan(0)
   })
@@ -317,7 +319,7 @@ describe('resolveAbilityPhase: Widow\'s Bite deck search (verified: free, up to 
     self.deck = ['hacked-ii', 'assemble', 'grapple-ii', 'recoil']
     const cpBefore = self.cp
     // [6,6,6,6,6]: c=5 — matches only Widow's Bite.
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 6], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(self.upgradesInPlay.sort()).toEqual(['grapple-ii', 'hacked-ii'])
     expect(self.cp).toBe(cpBefore) // free — no CP spent
     expect(self.deck).not.toContain('hacked-ii')
@@ -338,8 +340,8 @@ describe('resolveAbilityPhase: HH alt-ability The Reaper (Reap II unlocks BBBCC)
     // The Reaper. Reap II also bumps base Reap's own dmg 3->4 (see hero.json upgradedBy), so
     // the two now TIE on baseDamage — the greedy policy's tie-break keeps the first candidate
     // (base Reap), not necessarily The Reaper, so pin the choice explicitly to test resolution.
-    const policy: Policy = { ...greedyHighestDamagePolicy, chooseAbility: () => 'The Reaper (BBBCC)' }
-    resolveAbilityPhase(state, 0, [4, 4, 4, 6, 6], rng, [policy, greedyHighestDamagePolicy])
+    const policy: Policy = { ...noGpSpendGreedy, chooseAbility: () => 'The Reaper (BBBCC)' }
+    resolveAbilityPhase(state, 0, [4, 4, 4, 6, 6], rng, [policy, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 4)
     expect((self.tokens as any).dreadful).toBe(3)
     expect(self.hand.length).toBe(handBefore + 1)
@@ -351,7 +353,7 @@ describe('resolveAbilityPhase: HH alt-ability The Reaper (Reap II unlocks BBBCC)
     const state = createInitialGameState('hh', 'bw', rng)
     const [self, opp] = state.players
     const oppHpBefore = opp.hp
-    resolveAbilityPhase(state, 0, [4, 4, 4, 6, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [4, 4, 4, 6, 6], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 3) // base Reap's baseDamage
     expect((self.tokens as any).dreadful).toBe(2) // base Reap's dreadful gain
   })
@@ -372,8 +374,8 @@ describe('resolveAbilityPhase: base ability numbers buffed by their own II upgra
     // [6,6,6,6,1]: c=4 (Scare) — matches Horrify, but also Spooky (needs only c>=3, unlocked by
     // the same horrify-ii) with a higher baseDamage (7 vs 6), so the greedy policy would pick
     // Spooky instead — pin the choice to Horrify explicitly to test ITS resolution.
-    const policy: Policy = { ...greedyHighestDamagePolicy, chooseAbility: () => 'Horrify (CCCC)' }
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [policy, greedyHighestDamagePolicy])
+    const policy: Policy = { ...noGpSpendGreedy, chooseAbility: () => 'Horrify (CCCC)' }
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [policy, noGpSpendGreedy])
     expect((self.tokens as any).dreadful).toBe(3)
     expect((self.tokens as any).grimPursuit).toBe(2)
   })
@@ -387,7 +389,7 @@ describe('resolveAbilityPhase: base ability numbers buffed by their own II upgra
     const oppHpBefore = opp.hp
     // [6,6,6,6,1]: c=4 — matches only Grapple (undefendable). Real dmg = 7 (upgraded base)
     // + 1 (bonusDamagePerUpgrade x 1 upgrade in play) = 8.
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 8)
   })
 
@@ -398,7 +400,7 @@ describe('resolveAbilityPhase: base ability numbers buffed by their own II upgra
     const self = state.players[0]
     self.upgradesInPlay = ['grapple-ii'] // 1 upgrade total — base Grapple's own threshold needs >=2
     self.cp = 3
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(self.cp).toBe(4)
   })
 
@@ -409,7 +411,7 @@ describe('resolveAbilityPhase: base ability numbers buffed by their own II upgra
     const self = state.players[0]
     self.upgradesInPlay = ['hacked-ii'] // 1 upgrade, not grapple-ii
     self.cp = 3
-    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [6, 6, 6, 6, 1], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect(self.cp).toBe(3) // unchanged — threshold not met, no grapple-ii either
   })
 })
@@ -426,7 +428,7 @@ describe('resolveAbilityPhase: BW alt-ability Recon (Grapple II unlocks CCC)', (
     const agilityBefore = (self.tokens as any).agility
     // [1,2,6,6,6]: c=3 (Widow) — matches Recon (gated on grapple-ii); base Grapple needs c>=4
     // so it doesn't compete here.
-    resolveAbilityPhase(state, 0, [1, 2, 6, 6, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 2, 6, 6, 6], rng, [noGpSpendGreedy, noGpSpendGreedy])
     expect((self.tokens as any).agility).toBe(agilityBefore + 1)
     expect(self.upgradesInPlay).toContain('hacked-ii')
     expect(self.cp).toBe(cpBefore) // free — no CP spent
@@ -444,7 +446,7 @@ describe('resolveDefense: uses the DEFENDER\'s own Policy, not the attacker\'s',
     // Attacker's Policy always plays defensive cards; defender's (greedy) never does. A prior
     // bug threaded the ACTIVE/attacking player's Policy into resolveDefense's decisions
     // regardless of whose turn it was to decide — this would have wrongly played the card.
-    resolveDefense(state, 0, 10, seqRng([6]), [alwaysPlayDefensiveCards, greedyHighestDamagePolicy])
+    resolveDefense(state, 0, 10, seqRng([6]), [alwaysPlayDefensiveCards, noGpSpendGreedy])
     expect(defender.hand).toContain('not-this-time') // never played
     expect(defender.hp).toBe(hpBefore - 10) // full dmg through, no prevention
   })
@@ -459,7 +461,7 @@ describe('resolveDefense: uses the DEFENDER\'s own Policy, not the attacker\'s',
     // Mirror image of the test above: attacker's Policy never plays defensive cards, but the
     // DEFENDER's does — confirming resolveDefense consults policies[defenderIdx], not
     // policies[attackerIdx].
-    resolveDefense(state, 0, 10, seqRng([6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hand).not.toContain('not-this-time')
     expect(defender.hp).toBe(hpBefore - 4) // 10 - 6 prevented
   })
@@ -475,7 +477,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     const cpBefore = defender.cp
     const hpBefore = defender.hp
     // Hallowed Reckoning rolls 1 die at dreadful=0; face 6 (Scare) -> 0 prevented, 0 counter-dmg.
-    resolveDefense(state, 0, 10, seqRng([6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore - 4) // 10 - 6
     expect(defender.cp).toBe(cpBefore - 1)
     expect(defender.hand).not.toContain('not-this-time')
@@ -489,7 +491,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     defender.hand = ['not-this-time']
     defender.cp = 5
     const hpBefore = defender.hp
-    resolveDefense(state, 0, 4, seqRng([6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 4, seqRng([6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore) // fully prevented, not overshooting to +2
   })
 
@@ -501,7 +503,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     defender.hand = ['spirited-reprisal']
     defender.cp = 5
     const hpBefore = defender.hp
-    resolveDefense(state, 0, 10, seqRng([6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore - 7) // 10 - 3
   })
 
@@ -514,7 +516,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     defender.cp = 5
     const cpBefore = defender.cp
     const hpBefore = defender.hp
-    resolveDefense(state, 0, 10, seqRng([6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore - 10)
     expect(defender.cp).toBe(cpBefore - 1)
   })
@@ -529,7 +531,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     const hpBefore = defender.hp
     // Sabotage (0 upgrades -> 3 dice): [3,4,5] all Batons -> 0 dmg prevented by Sabotage itself.
     // Recoil then rolls 2 more dice: [1,6] -> Espionage (+1 CP) + Widow (prevent half, rounded up).
-    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 1, 6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 1, 6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.cp).toBe(cpBefore + 1) // Recoil costs 0 CP, +1 CP gained
     expect(defender.hp).toBe(hpBefore - 5) // 10 - ceil(10/2)
   })
@@ -543,7 +545,7 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     defender.cp = 5
     const hpBefore = defender.hp
     // Sabotage: [3,4,5] (0 prevented). Agility roll: [6] -> fails halving, but IS Elude-eligible.
-    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 6]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 6]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore)
     expect(defender.hand).not.toContain('elude')
   })
@@ -556,14 +558,14 @@ describe('resolveDefense: "play only after being Attacked" Roll Phase Action car
     defender.hand = ['elude']
     defender.cp = 5
     const hpBefore = defender.hp
-    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 4]), [greedyHighestDamagePolicy, alwaysPlayDefensiveCards])
+    resolveDefense(state, 0, 10, seqRng([3, 4, 5, 4]), [noGpSpendGreedy, alwaysPlayDefensiveCards])
     expect(defender.hp).toBe(hpBefore - 10) // Agility fails (roll=4), Elude not eligible
     expect(defender.hand).toContain('elude') // never played
   })
 })
 
 describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action cards', () => {
-  const alwaysPlayAttackModifiers: Policy = { ...greedyHighestDamagePolicy, chooseAttackModifierCards: (_s, _i, _dmg, eligible) => eligible }
+  const alwaysPlayAttackModifiers: Policy = { ...noGpSpendGreedy, chooseAttackModifierCards: (_s, _i, _dmg, eligible) => eligible }
 
   it('Unescapable! spends 1 Grim Pursuit + 1 CP to make an otherwise-defendable attack undefendable', () => {
     clearCache()
@@ -575,7 +577,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     ;(self.tokens as any).grimPursuit = 1
     const oppHpBefore = opp.hp
     // [1,1,1,4,6]: a=3 — matches only Cleave 3A (defendable:true, 4 base dmg).
-    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 4) // no defense roll applied — attack was made undefendable
     expect(self.cp).toBe(4)
     expect((self.tokens as any).grimPursuit).toBe(0)
@@ -591,7 +593,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     self.hand = ['unescapable']
     self.cp = 5
     ;(self.tokens as any).grimPursuit = 0
-    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(self.hand).toContain('unescapable') // never played
     expect(self.cp).toBe(5)
   })
@@ -606,7 +608,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     ;(opp.tokens as any).head = 1
     const oppHpBefore = opp.hp
     // [1,4,4,4,6]: b=3, c=1 — matches only Reap (undefendable, 3 base dmg).
-    resolveAbilityPhase(state, 0, [1, 4, 4, 4, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 4, 4, 4, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 6) // 3 (Reap) + 3 (Cranial Assist)
     expect(self.cp).toBe(3)
   })
@@ -619,7 +621,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     self.hand = ['cranial-assist']
     self.cp = 5
     const oppHpBefore = opp.hp
-    resolveAbilityPhase(state, 0, [1, 4, 4, 4, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 4, 4, 4, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 3) // Reap base only
     expect(self.cp).toBe(3)
   })
@@ -634,7 +636,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     self.upgradesPlayedThisTurn = 2
     const oppHpBefore = opp.hp
     // [1,6,6,6,6]: c=4 — matches only Grapple (undefendable, 6 base dmg at upgrades=0).
-    resolveAbilityPhase(state, 0, [1, 6, 6, 6, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 6, 6, 6, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(opp.hp).toBe(oppHpBefore - 10) // 6 (Grapple) + 2 + 2 (Subversion)
     expect(self.cp).toBe(4)
   })
@@ -649,7 +651,7 @@ describe('resolveAbilityPhase: attacker "Attack Modifier" Roll Phase Action card
     const grimPursuitBefore = (self.tokens as any).grimPursuit
     // [1,1,1,4,6]: a=3 — matches Cleave 3A (defendable — real defense RNG doesn't matter here,
     // this test only checks the attacker's own CP/token state, not opp.hp).
-    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, greedyHighestDamagePolicy])
+    resolveAbilityPhase(state, 0, [1, 1, 1, 4, 6], rng, [alwaysPlayAttackModifiers, noGpSpendGreedy])
     expect(self.cp).toBe(2) // 5 - 0 (card cost) - 3 (spent for conversion)
     expect((self.tokens as any).grimPursuit).toBe(grimPursuitBefore + 3)
   })
@@ -664,7 +666,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['six-it']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('six-it') ? [{ cardId: 'six-it', dieIndices: [0], values: [6] }] : [],
     }
@@ -682,7 +684,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['so-wild']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('so-wild') ? [{ cardId: 'so-wild', dieIndices: [0], values: [3] }] : [],
     }
@@ -699,7 +701,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['twice-as-wild']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('twice-as-wild') ? [{ cardId: 'twice-as-wild', dieIndices: [0, 1], values: [6, 6] }] : [],
     }
@@ -716,7 +718,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['samesies']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, dice, _r, eligible) =>
         eligible.includes('samesies') ? [{ cardId: 'samesies', dieIndices: [0], values: [dice[1]] }] : [],
     }
@@ -733,7 +735,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['try-try-again']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('try-try-again') ? [{ cardId: 'try-try-again', dieIndices: [0, 1] }] : [],
     }
@@ -750,7 +752,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['one-more-time']
     self.cp = 5
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('one-more-time') ? [{ cardId: 'one-more-time' }] : [],
     }
@@ -768,7 +770,7 @@ describe('playOffensiveRollPhase: dice-manipulation Roll Phase Action cards', ()
     self.hand = ['twice-as-wild'] // costs 3 CP
     self.cp = 2
     const policy: Policy = {
-      ...greedyHighestDamagePolicy,
+      ...noGpSpendGreedy,
       chooseRollManipulationCards: (_s, _i, _dice, _r, eligible) =>
         eligible.includes('twice-as-wild') ? [{ cardId: 'twice-as-wild', dieIndices: [0, 1], values: [6, 6] }] : [],
     }

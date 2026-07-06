@@ -2,8 +2,8 @@
 // GP mesuré 1.80±0.37 (le 1.66 du guide = mode (b) seul ; le surplus = valeur d'option du
 // mode (a)) ; pioche 1.61±0.38 ; CP 0.75±0.24 (probablement borné par la politique — à
 // re-mesurer après le ré-entraînement RL, ne pas descendre plus bas sans nouvelle mesure).
-export const GRIM_PURSUIT_AVG_DMG = 1.8
-export const CARD_DRAW_VALUE = 1.6
+export const GRIM_PURSUIT_AVG_DMG = 0.9 // v3 re-mesuré APRÈS câblage de la dépense (0.89±0.41)
+export const CARD_DRAW_VALUE = 0.5 // v3 : 0.46±0.48 — deck HH faible en pioche
 export const CP_TO_DMG_EQUIV = 0.75
 
 export const SPECTRAL_ASSAULT_BASE = 8.0

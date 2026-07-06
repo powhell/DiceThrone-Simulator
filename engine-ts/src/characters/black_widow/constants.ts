@@ -52,9 +52,9 @@ export const RRT_ALL_ATTACK_BONUS = 1.0
 // CALIBRÉ 2026-07-05 (calibration v2) : Agility mesurée 1.47±0.36 ; CP(BW) et Covert Ops
 // mesurés ~0 mais c'est la POLITIQUE qui ne les exploite pas — alignés sur le CP HH mesuré
 // (0.75) plutôt que 0, à re-mesurer après ré-entraînement RL.
-export const AGILITY_VALUE = 1.5
+export const AGILITY_VALUE = 1.1 // v3 : 1.07±0.46, double-dépense incluse
 export const CP_TO_DMG_EQUIV = 0.75
-export const COVERT_OPS_VALUE = 0.75
+export const COVERT_OPS_VALUE = 0.1 // v3 : jeton marginal ~0 (3 de départ suffisent)
 
 export const WHIFF_VALUE = 0.0
 

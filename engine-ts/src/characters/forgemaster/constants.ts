@@ -24,7 +24,7 @@ export const FINAL_TOUCHES_VALUE = 14.0
 // après ré-entraînement RL). Un Gold Ore posé sur la Forge = 2.2 dmg-equiv (mesuré 4.33/2) ;
 // armures tier 1 ≈ 5.6-6.3. ---
 export const CP_TO_DMG_EQUIV = 0.75  // aligné HH mesuré (le greedy fm ne dépense pas : 0 mesuré)
-export const CARD_DRAW_VALUE = 1.3   // mesuré 1.27±0.22
+export const CARD_DRAW_VALUE = 1.5   // v3 : 1.53±0.65
 export const MINE_VALUE = 2.0        // P(Ore dans le top 3)≈0.87 x 2.2 + 0.13 x 0.75 CP
 export const ORE_TUTOR_VALUE = 2.2   // Final Touches! choisit son Ore (≥ valeur d'un Gold posé)
 export const WHIFF_VALUE = 0.0

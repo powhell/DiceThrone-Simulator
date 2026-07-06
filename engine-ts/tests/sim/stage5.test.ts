@@ -193,7 +193,7 @@ describe('5d — Grim Pursuit spend mode (b) as a decision', () => {
     expect(opp.hp).toBeLessThanOrEqual(oppHpBefore - 4) // 3 base + >=1 bonus
   })
 
-  it('greedy never spends Grim Pursuit (no chooseGrimPursuitSpend)', () => {
+  it('greedy NOW spends Grim Pursuit when the attack lands (v3 fix)', () => {
     clearCache()
     const rng = mulberry32(40)
     const state = createInitialGameState('hh', 'bw', rng)
@@ -201,8 +201,8 @@ describe('5d — Grim Pursuit spend mode (b) as a decision', () => {
     self.tokens.grimPursuit = 1
     const oppHpBefore = opp.hp
     resolveAbilityPhase(state, 0, [1, 4, 4, 4, 6], rng, [greedyHighestDamagePolicy, greedyHighestDamagePolicy])
-    expect(self.tokens.grimPursuit).toBe(1) // untouched
-    expect(opp.hp).toBe(oppHpBefore - 3) // Reap base only
+    expect(self.tokens.grimPursuit).toBe(0) // dépensé (v3 : dmg>0 => spend)
+    expect(opp.hp).toBeLessThanOrEqual(oppHpBefore - 3) // Reap + éventuels Fers du jet GP
   })
 
   it('does not spend again once used this turn', () => {
