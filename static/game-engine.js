@@ -4769,7 +4769,7 @@ var Game = (() => {
       if (hook) choice = hook(state, rvIdx);
       else if (rvP.nevermoreMode) choice = rvP.nevermoreMode;
       else if (rvIsHolder) choice = "move";
-      else if ((rvP.nevermoreDial ?? 0) >= NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = "move";
+      else if ((rvP.nevermoreDial ?? 0) >= NEVERMORE_DIAL_CAP) choice = opp.hp <= 2 ? "absorb" : "move";
       else choice = "absorb";
       if (choice === "absorb" && rvIsHolder) choice = "move";
       const r = applyNevermoreActivation(rvP, opp, rvIsHolder, choice);

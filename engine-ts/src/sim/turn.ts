@@ -1888,7 +1888,11 @@ export function performNevermoreActivations(state: GameState, rvIdx: 0 | 1, time
     if (hook) choice = hook(state, rvIdx)
     else if (rvP.nevermoreMode) choice = rvP.nevermoreMode // toggle UI du joueur humain
     else if (rvIsHolder) choice = 'move'
-    else if ((rvP.nevermoreDial ?? 0) >= rv.NEVERMORE_DIAL_CAP && rvP.hp <= 47) choice = 'move'
+    // Au cadran plein, absorber ne monte plus rien : on rapatrie (soin 3 + nouveau cycle),
+    // sauf si l'adversaire est finissable au grignotage. (Bug user 2026-07-06 : la condition
+    // hp<=47 laissait le corbeau coincé chez l'adversaire à pleine vie — et elle ignorait
+    // le sur-soin autorisé jusqu'à 60.)
+    else if ((rvP.nevermoreDial ?? 0) >= rv.NEVERMORE_DIAL_CAP) choice = opp.hp <= 2 ? 'absorb' : 'move'
     else choice = 'absorb'
     if (choice === 'absorb' && rvIsHolder) choice = 'move' // Absorb exige Nevermore sur un adversaire
     const r = rv.applyNevermoreActivation(rvP, opp, rvIsHolder, choice)

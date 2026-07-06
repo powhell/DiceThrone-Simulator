@@ -526,6 +526,17 @@
             eff: abilityEffects(alt.boardName) });
         }
       }
+      // rv/dr/th : les sub-habiletés vivent dans hero.altAbilities avec requiresUpgrade(Id)
+      // — invisibles jusqu'ici (bug user 2026-07-06 : « je ne vois pas les sub abilités »).
+      for (const alt of (hero.altAbilities||[])) {
+        const need = alt.requiresUpgradeId || alt.requiresUpgrade;
+        if (!need || !self.upgradesInPlay.includes(need)) continue;
+        const short = alt.boardName.replace(/\s*\([^)]*\)$/, '');
+        const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
+        rows.push({ name: `↳ ${short}`, matchName: short, req,
+          dmg: alt.baseDamage != null ? alt.baseDamage : '—', on: isOn(short),
+          eff: alt.notes || alt.effect || '' });
+      }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
         <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
         + defBoxHTML(HUMAN, self);
@@ -603,6 +614,14 @@
           dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—',
           eff: abilityEffects(alt.boardName, AI_HERO, g.aiIdx) });
       }
+    }
+    for (const alt of (aiHeroT.altAbilities||[])) {
+      const need = alt.requiresUpgradeId || alt.requiresUpgrade;
+      if (!need || !ai.upgradesInPlay.includes(need)) continue;
+      const req = (alt.boardName.match(/\(([^)]+)\)/) || [])[1] || alt.dicePattern;
+      aiRows.push({ name: `↳ ${alt.boardName.replace(/\s*\([^)]*\)$/, '')}`, req,
+        dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—',
+        eff: alt.notes || alt.effect || '' });
     }
     box.innerHTML = aiRows.map(a=>`<div class="abil" style="opacity:.85">
       <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
