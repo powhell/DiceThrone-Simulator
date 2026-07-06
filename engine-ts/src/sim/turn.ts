@@ -972,8 +972,9 @@ export function finalizeDefenseRoll(
     const face = finalDefenseDice[0]
     const out = fm.masterworkOutcome(face, defender, incomingDamage)
     if (out.mines) {
+      const seen = fm.minePeek(defender) // transparence (plan #3) : les 3 cartes regardées
       const r = fm.mine(defender)
-      log(state, defenderIdx, 'defense', `Masterwork (Pick): mined — ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
+      log(state, defenderIdx, 'defense', `Masterwork (Pick): mined — saw [${seen.join(',')}], ${r.revealed.length ? `revealed ${r.revealed.join(',')} to The Forge` : `no reveal, +${r.cpGained} CP`}`)
     }
     // Les armures s'activent sur toute Attaque à dégâts normaux ; Masterwork double
     // éventuellement leur effet (Forge = une, Anvil = jusqu'à deux différentes).

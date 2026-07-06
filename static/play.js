@@ -838,10 +838,8 @@
       // A Good Haul : le Mine intégré garde son alternative "ne rien révéler, +1 CP"
       // (mot-clé Mine, validé user). Pré-armé AVANT l'attaque — les 3 cartes ne se
       // regardent qu'à la résolution.
-      if (HUMAN==='fm' && cands.some(cd=>cd.name.startsWith('A Good Haul'))) {
-        c.appendChild(btn(`${aghCpSel?'✅ ':''}A Good Haul : Mine sans révéler (+1 CP au lieu des Ore)`, aghCpSel?'primary':'',
-          ()=>{ aghCpSel=!aghCpSel; renderControls(); }));
-      }
+      // A Good Haul : le choix révéler/+1 CP se fait maintenant EN VOYANT les 3 cartes
+      // (prompt dans chooseAbility) — le pré-armement aveugle est retiré.
       // Instants jouables MAINTENANT (règle : un Instant s'insère n'importe quand) — cas
       // rapporté : Rolling Pumpkin! pour donner la Tête à l'IA AVANT d'armer Cranial Assist.
       G.humanInstantOptions(g).slice(0,4).forEach(a=>{
@@ -1173,7 +1171,24 @@
     log(`Tu lances : <b>${dice.map(d=>humanHero.symName[humanHero.cls(d.v)]).join(', ')}</b>`);
     renderDice(true); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities();
   }
-  function chooseAbility(name){
+  function chooseAbility(name, fmMineChoice){
+    // A Good Haul (mot-clé Mine) : tu regardes les 3 cartes du dessus AVANT de choisir
+    // révéler/encaisser — l'ordre du deck est dans l'état, on te les montre (fidélité).
+    if (name.startsWith('A Good Haul') && fmMineChoice === undefined) {
+      const you = g.state.players[g.humanIdx];
+      const top3 = you.deck.slice(0, 3);
+      const hero = G.heroTemplateFor(HUMAN);
+      const isOre = id => /-ore$/.test(id);
+      const lbl = top3.map(id => (G.cardById(hero,id)||{name:id}).name + (isOre(id)?' ⛏️':'')).join(' · ');
+      const nOre = top3.filter(isOre).length;
+      const c=$('controls'); c.innerHTML='';
+      const s0=document.createElement('span'); s0.className='rolls';
+      s0.textContent=`⛏️ A Good Haul — tu regardes : ${lbl || '(deck vide)'} . Choisis :`;
+      c.appendChild(s0);
+      c.appendChild(btn(`Révéler ${nOre} Ore → la Forge`,'primary', ()=>chooseAbility(name, {kind:'all'})));
+      c.appendChild(btn('Ne rien révéler (+1 CP)','', ()=>chooseAbility(name, {kind:'cp'})));
+      return;
+    }
     try { // coach: which ability would the network have activated on these dice?
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
       if (cands.length > 1) coachNote('habileté', name, coach.chooseAbility(g.state, g.humanIdx, cands));
@@ -1184,7 +1199,7 @@
     const base = (cand && cand.baseDamage) || 0;
     const logFrom = g.state.log.length;
     G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel, [...amSel],
-      (aghCpSel && name.startsWith('A Good Haul')) ? {kind:'cp'} : undefined);
+      fmMineChoice && fmMineChoice.kind==='cp' ? {kind:'cp'} : undefined);
     gpBonusSel = false; amSel.clear(); aghCpSel = false;
     const cb = parseCombat(logFrom);
     const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
@@ -1517,9 +1532,9 @@
     if ((m = msg.match(/^The Forge: placed (.+) from hand/))) return `⚒️ <b>The Forge</b> : pose ${m[1]} depuis la main`;
     if ((m = msg.match(/^Crafted (\w+) \(tier (\d) (helmet|shield)\)/)))
       return `🛠️ <b>Craft</b> : ${m[1].replace(/_/g,' ')} (${m[3]==='helmet'?'casque':'bouclier'} tier ${m[2]})`;
-    if ((m = msg.match(/^Masterwork \(Pick\): mined — revealed (.+) to The Forge/)))
-      return `🛡️ <b>Masterwork</b> (Pioche) : mine — révèle <b>${m[1]}</b> → la Forge`;
-    if (/^Masterwork \(Pick\): mined — no reveal/.test(msg)) return `🛡️ <b>Masterwork</b> (Pioche) : mine — rien révélé, +1 CP`;
+    if ((m = msg.match(/^Masterwork \(Pick\): mined —(?: saw \[([^\]]*)\],)? revealed (.+) to The Forge/)))
+      return `🛡️ <b>Masterwork</b> (Pioche) : mine — vu [${m[1]||'?'}], révèle <b>${m[2]}</b> → la Forge`;
+    if ((m = msg.match(/^Masterwork \(Pick\): mined —(?: saw \[([^\]]*)\],)? no reveal/))) return `🛡️ <b>Masterwork</b> (Pioche) : mine — vu [${m[1]||'?'}], rien révélé, +1 CP`;
     if ((m = msg.match(/^Masterwork: face (\d), prevented (\d+), (\d+) dmg back(?: \(doubled ([^)]+)\))?/)))
       return `🛡️ <b>Masterwork</b> : dé ${m[1]} — ${m[2]} prévenu(s) · ${m[3]} contre-dégât(s)${m[4]?` · <b>doublé ${m[4].replace('helmet','casque').replace('shield','bouclier').replace('+',' + ')}</b>`:''}`;
     if ((m = msg.match(/^Ultimanium Shield: prevented (\d+)/)))

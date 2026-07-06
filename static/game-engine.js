@@ -2419,8 +2419,9 @@ var Game = (() => {
       const face = finalDefenseDice[0];
       const out = masterworkOutcome(face, defender, incomingDamage);
       if (out.mines) {
+        const seen = minePeek(defender);
         const r = mine(defender);
-        log(state, defenderIdx, "defense", `Masterwork (Pick): mined \u2014 ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
+        log(state, defenderIdx, "defense", `Masterwork (Pick): mined \u2014 saw [${seen.join(",")}], ${r.revealed.length ? `revealed ${r.revealed.join(",")} to The Forge` : `no reveal, +${r.cpGained} CP`}`);
       }
       const eff = armorEffects(defender, "normal", out.doubling);
       damagePrevented = eff.prevented;
