@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><title>Dice Throne — Tes statistiques</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#17131f;--panel:#221b30;--line:#3a2f52;--ink:#e8e2f4;--muted:#9b8fb8;--gold:#e0ac4e;--win:#4caf7d;--loss:#e5534b}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
+  h1{font-family:Georgia,serif}
+  a{color:var(--gold)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .big{font-size:2rem;font-weight:700}
+  .muted{color:var(--muted);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .bar{height:8px;border-radius:4px;background:#3a2f52;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--win)}
+  .w{color:var(--win);font-weight:700}.l{color:var(--loss);font-weight:700}
+  .trend{display:flex;gap:3px;align-items:flex-end;height:46px}
+  .trend>i{width:14px;border-radius:2px 2px 0 0}
+  .btn{background:#2c2440;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}
+</style></head><body><div class="wrap">
+<h1>📈 Tes statistiques <span class="muted" style="font-size:.5em">· <a href="play.html">← retour au jeu</a></span></h1>
+<div id="empty" class="card" style="display:none">Aucune partie sauvegardée sur ce navigateur. Joue une partie, ou importe un export JSON : <button class="btn" onclick="document.getElementById('imp').click()">📂 Importer</button></div>
+<div id="content"></div>
+<p><button class="btn" onclick="document.getElementById('imp').click()">📂 Importer un export JSON (fusion)</button>
+<button class="btn" id="exp">💾 Exporter tout</button></p>
+<input type="file" id="imp" accept=".json" style="display:none">
+<script>
+const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', nx:'Naraxus'};
+function isWin(g){ return /Victoire|🏆/.test(g.result||''); }
+function isDraw(g){ return /nul|Nul|🤝/.test(g.result||''); }
+function load(){ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } }
+function save(games){ localStorage.setItem('dt_games', JSON.stringify(games.slice(-200))); }
+function pct(w,n){ return n ? Math.round(100*w/n) : 0; }
+
+function render(){
+  const games = load().slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const C = document.getElementById('content');
+  document.getElementById('empty').style.display = games.length ? 'none' : '';
+  if (!games.length) { C.innerHTML=''; return; }
+  const W = games.filter(isWin).length, D = games.filter(isDraw).length, L = games.length - W - D;
+
+  // par adversaire
+  const byOpp = {};
+  for (const g of games) {
+    const k = g.aiHero === 'nx' ? (g.bossHard ? 'nx-hard' : 'nx') : (g.aiHero||'?');
+    (byOpp[k] ??= {n:0,w:0}).n++; if (isWin(g)) byOpp[k].w++;
+  }
+  // par perso joué
+  const byMe = {};
+  for (const g of games) { (byMe[g.humanHero||'?'] ??= {n:0,w:0}).n++; if (isWin(g)) byMe[g.humanHero].w++; }
+  // par version IA
+  const byVer = {};
+  for (const g of games) { const v=g.aiVersion||'avant versionnage'; (byVer[v] ??= {n:0,w:0}).n++; if (isWin(g)) byVer[v].w++; }
+  // tendance : fenêtre glissante de 5
+  let trend='';
+  for (let i=0;i<games.length;i++){
+    const win = isWin(games[i]);
+    trend += `<i title="${(games[i].date||'').slice(0,16)} — ${games[i].result||''}" style="height:${win?46:14}px;background:${win?'var(--win)':isDraw(games[i])?'var(--gold)':'var(--loss)'}"></i>`;
+  }
+  // désaccords coach + patterns
+  let dec=0, dis=0, turns=0;
+  const attacks = {};
+  for (const g of games) {
+    turns += g.turns||0;
+    for (const r of (g.decisions||[])) { if (r.kind==='roll-data') continue; dec++; if (!r.agree) dis++; }
+    for (const e of (g.engineLog||[])) {
+      if (e.playerIdx === (g.humanFirst?0:1)) {
+        const m = (e.message||'').match(/^Chose ability: (.+)$/);
+        if (m && e.phase==='resolveAttack') attacks[m[1]] = (attacks[m[1]]||0)+1;
+      }
+    }
+  }
+  const topAtk = Object.entries(attacks).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  const oppRows = Object.entries(byOpp).map(([k,v])=>{
+    const name = k==='nx-hard' ? '🐲 Naraxus (HARD)' : k==='nx' ? '🐲 Naraxus' : (HERO_NAME[k]||k);
+    return `<tr><td>${name}</td><td>${v.w} / ${v.n}</td><td style="width:40%"><div class="bar"><i style="width:${pct(v.w,v.n)}%"></i></div></td><td><b>${pct(v.w,v.n)} %</b></td></tr>`;
+  }).join('');
+  const meRows = Object.entries(byMe).map(([k,v])=>
+    `<tr><td>${HERO_NAME[k]||k}</td><td>${v.w} / ${v.n}</td><td style="width:40%"><div class="bar"><i style="width:${pct(v.w,v.n)}%"></i></div></td><td><b>${pct(v.w,v.n)} %</b></td></tr>`).join('');
+  const verRows = Object.entries(byVer).map(([k,v])=>
+    `<tr><td>${k}</td><td>${v.w} / ${v.n}</td><td><b>${pct(v.w,v.n)} %</b></td></tr>`).join('');
+  const atkRows = topAtk.map(([k,n])=>`<tr><td>${k.replace(/\s*\([A-C]+\)$/,'')}</td><td>${n}×</td></tr>`).join('');
+
+  C.innerHTML = `
+  <div class="grid">
+    <div class="card"><div class="muted">Parties</div><div class="big">${games.length}</div><div class="muted">${turns} tours joués</div></div>
+    <div class="card"><div class="muted">Bilan</div><div class="big"><span class="w">${W}</span>–<span class="l">${L}</span>${D?`–${D}`:''}</div><div class="muted">winrate <b>${pct(W,games.length)} %</b></div></div>
+    <div class="card"><div class="muted">Accord avec le coach</div><div class="big">${dec?100-Math.round(100*dis/dec):'—'} %</div><div class="muted">${dis} désaccord(s) sur ${dec} décisions</div></div>
+  </div>
+  <div class="card"><div class="muted" style="margin-bottom:6px">Tendance (chaque barre = 1 partie, chronologique — l'IA te rattrape-t-elle ?)</div><div class="trend">${trend}</div></div>
+  <div class="grid">
+    <div class="card"><h3 style="margin-top:0">Par adversaire</h3><table>${oppRows}</table></div>
+    <div class="card"><h3 style="margin-top:0">Par perso joué</h3><table>${meRows}</table></div>
+    <div class="card"><h3 style="margin-top:0">Par version de l'IA</h3><table>${verRows}</table>
+      <div class="muted" style="margin-top:6px">Si ton % baisse avec les versions récentes, l'entraînement paie.</div></div>
+    <div class="card"><h3 style="margin-top:0">Tes attaques favorites</h3><table>${atkRows||'<tr><td class="muted">Rejoue des parties récentes (le log détaillé est requis)</td></tr>'}</table></div>
+  </div>`;
+}
+
+document.getElementById('imp').addEventListener('change', ev=>{
+  const f = ev.target.files[0]; if (!f) return;
+  f.text().then(t=>{
+    const data = JSON.parse(t);
+    const arr = Array.isArray(data) ? data : [data];
+    const cur = load();
+    const seen = new Set(cur.map(g=>g.date));
+    for (const g of arr) if (g && g.date && !seen.has(g.date)) cur.push(g);
+    cur.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    save(cur); render();
+  }).catch(e=>alert('JSON invalide : '+e.message));
+});
+document.getElementById('exp').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(load(),null,1)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `dicethrone_stats_${new Date().toISOString().slice(0,10)}.json`; a.click();
+};
+render();
+</script>
+</div></body></html>

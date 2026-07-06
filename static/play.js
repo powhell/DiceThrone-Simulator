@@ -139,7 +139,7 @@
     // The key must carry the SOLVER STATE too (Dreadful count, Head, upgrades in play — see
     // oracleStateFor): keyed on dice+rerolls alone, a turn-1 answer got replayed all game.
     const you = g.state.players[g.humanIdx];
-    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft+'|'+you.tokens.dreadful+'|'+(you.tokens.head>0?1:0)+'|'+you.upgradesInPlay.join('+');
+    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft+'|'+you.tokens.dreadful+'|'+(you.tokens.head>0?1:0)+'|'+(you.tokens.grimPursuit||0)+'|'+you.upgradesInPlay.join('+');
     if (!adviceCache.has(key)) {
       try { adviceCache.set(key, G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft)); }
       catch(e){ adviceCache.set(key, null); }
@@ -398,7 +398,47 @@
         <div class="ev">${o.ev.toFixed(1)}</div>
         ${dist?`<div class="dist">${dist}</div>`:''}</div>`;
     }).join('');
-    document.getElementById('coach-evs').innerHTML = rows +
+    // A2 — LETHAL : un keep SÛR dont les dégâts DIRECTS tuent l'adversaire prime sur l'EV.
+    const oppHp = Math.max(0, g.state.players[g.aiIdx].hp);
+    const lethal = adv.topOptions.find(o=>o.isGuaranteed && (o.directDamage||0) >= oppHp && oppHp>0);
+    let banner = '';
+    if (lethal) {
+      banner = `<div class="evrow best" style="border-color:#e5534b"><div class="keep">☠️ <b>LETHAL</b> — [${lethal.kept.join(',')}] garanti ${lethal.directDamage} dégâts ≥ ${oppHp} PV : prends le SÛR, ignore l'EV</div></div>`;
+    } else {
+      // A2 — profil de risque : l'EV moyen ne connaît pas le score.
+      const youHp = g.state.players[g.humanIdx].hp;
+      const sure = adv.topOptions.find(o=>o.isGuaranteed);
+      const best = adv.topOptions[0];
+      if (sure && best && !best.isGuaranteed && (best.ev - sure.ev) < 0.5) {
+        if (youHp - oppHp >= 10) banner = `<div class="dist" style="padding:2px 8px">📊 Tu mènes de ${youHp-oppHp} PV et l'écart d'EV est mince (${(best.ev-sure.ev).toFixed(1)}) — le SÛR protège ton avance.</div>`;
+        else if (oppHp - youHp >= 10) banner = `<div class="dist" style="padding:2px 8px">📊 Tu es mené de ${oppHp-youHp} PV — le pari [${best.kept.join(',')}] est justifié, la variance est ton alliée.</div>`;
+      }
+    }
+    // A3 — cartes de manipulation en main : que vaudrait le jet AVEC la carte ?
+    let cardLines = '';
+    try {
+      const you2 = g.state.players[g.humanIdx];
+      const hero2 = G.heroTemplateFor(HUMAN);
+      const vals = dice.map(d=>d.v);
+      const canPay = id => { const c2=G.cardById(hero2,id); return c2 && you2.hand.includes(id) && you2.cp >= (c2.cpCost||0); };
+      const tryVariant = (label, newVals) => {
+        const a2 = G.humanKeepAdvice(g, newVals, rollsLeft);
+        if (a2 && a2.ev > adv.ev + 0.4) cardLines += `<div class="dist" style="padding:2px 8px">🃏 ${label} → EV ${a2.ev.toFixed(1)} (+${(a2.ev-adv.ev).toFixed(1)})</div>`;
+      };
+      if (canPay('six-it')) {
+        // meilleur candidat : transformer le plus petit dé non-6 en 6
+        const i = vals.indexOf(Math.min(...vals.filter(v=>v!==6)));
+        if (i>=0) tryVariant(`Six-It! sur le dé ${i+1} (${vals[i]}→6)`, vals.map((v,j)=>j===i?6:v));
+      }
+      if (canPay('so-wild')) {
+        // heuristique : le dé le plus isolé -> valeur majoritaire
+        const counts = {}; vals.forEach(v=>counts[v]=(counts[v]||0)+1);
+        const mode = +Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+        const i = vals.findIndex(v=>counts[v]===1 && v!==mode);
+        if (i>=0) tryVariant(`So Wild! sur le dé ${i+1} (${vals[i]}→${mode})`, vals.map((v,j)=>j===i?mode:v));
+      }
+    } catch(e) {}
+    document.getElementById('coach-evs').innerHTML = banner + rows + cardLines +
       `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.</div>`;
   }
 
@@ -1318,14 +1358,15 @@
     const gameRecord = {
       date: new Date().toISOString(), result: msg, turns: g.state.turnNumber,
       humanHero: HUMAN, aiHero: AI_HERO, humanFirst: g.humanIdx === 0,
+      bossHard: !!BOSS_HARD, aiVersion: (window.AI_WEIGHTS_VERSION||'inconnue'),
       decisions: replayLog, engineLog: g.state.log,
       finalHp: [g.state.players[0].hp, g.state.players[1].hp],
     };
     try {
       const all = JSON.parse(localStorage.getItem('dt_games') || '[]');
       all.push(gameRecord);
-      localStorage.setItem('dt_games', JSON.stringify(all.slice(-20)));
-      log(`💾 Partie sauvegardée (${all.length > 20 ? 20 : all.length} en mémoire locale).`);
+      localStorage.setItem('dt_games', JSON.stringify(all.slice(-200))); // 200 pour la page stats
+      log(`💾 Partie sauvegardée (${Math.min(all.length,200)} en mémoire locale — <a href='stats.html' style='color:var(--gold)'>📈 voir tes stats</a>).`);
     } catch (e) {}
     const dl = document.createElement('button');
     dl.className = 'btn gold'; dl.textContent = '💾 Télécharger cette partie (JSON)';
@@ -1520,6 +1561,10 @@
     tag.parentNode.insertBefore(tg, tag);
     // Export de TOUTES les parties sauvegardées (localStorage en garde 20) — le bouton de fin
     // de partie n'exportait que la dernière (user-caught).
+    const st = document.createElement('a');
+    st.className='btn'; st.href='stats.html'; st.textContent='📈 Stats';
+    st.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px;text-decoration:none';
+    tag.parentNode.insertBefore(st, tag);
     const ex = document.createElement('button');
     ex.className='btn'; ex.style.cssText='margin-left:6px;font-size:.72rem;padding:3px 10px';
     const histo = ()=>{ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } };
