@@ -68,7 +68,8 @@ export function getCandidates(
   // Prime "indéfendable" — voir horseman/abilities.ts (user-caught). Taxe seulement les
   // attaques défendables À DÉGÂTS (une attaque 0 dégât n'ouvre pas de défense).
   const tax = defenseTax
-  const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0
+  // +1 à toutes les attaques : passif de RRT II — exige LA CARTE en jeu, pas juste 5 upgrades
+  const rrt = (upgradeIds.includes('red-room-training-ii') && upgrades >= RRT_THRESHOLD_UPGRADES) ? RRT_ALL_ATTACK_BONUS : 0
   const has = (id: string) => upgradeIds.includes(id)
 
   if (has('widows-gauntlets-ii') && a >= 2 && b >= 2) {
@@ -157,7 +158,7 @@ export function bestAbilityName(dice: number[], upgrades: number, tbOnOpp: numbe
 // Vengeance rider: dmg-only contribution is N × 1/2 (only Batons faces deal dmg; Espionage
 // inflicts TB and Widow contributes to the Covert-Ops-on-pair trigger instead).
 export function directDamageByName(upgrades: number, _tbOnOpp: number, upgradeIds: string[] = []): Record<string, number> {
-  const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0
+  const rrt = (upgradeIds.includes('red-room-training-ii') && upgrades >= RRT_THRESHOLD_UPGRADES) ? RRT_ALL_ATTACK_BONUS : 0
   const has = (id: string) => upgradeIds.includes(id)
   const batonStrikeUpgraded = has('baton-strike-ii')
   const gauntletsDmg = has('widows-gauntlets-ii') ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG

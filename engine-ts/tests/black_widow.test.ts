@@ -43,10 +43,13 @@ describe('BW terminal states', () => {
     expect(r.currentEv).toBeCloseTo(8.6, 2)
   })
 
-  it('Red Room Training II: +1 dmg all attacks at upgrades≥5', () => {
-    // [1,1,3,3,3] upgrades=5: Gauntlets = 6 + 5 + 0.75 CP + 1 RRT = 12.75 (calibré)
-    const r = BWEngine.calculateOptimalKeep([1, 1, 3, 3, 3], 0, { upgrades: 5, tbOnOpp: 0 })
-    expect(r.currentEv).toBeCloseTo(12.75, 2)
+  it('RRT II: +1 dmg all attacks — EXIGE la carte en jeu (texte vérifié, user-caught)', () => {
+    // sans RRT II en jeu : 5 upgrades quelconques ne donnent RIEN
+    const r0 = BWEngine.calculateOptimalKeep([1, 1, 3, 3, 3], 0, { upgrades: 5, tbOnOpp: 0 })
+    expect(r0.currentEv).toBeCloseTo(11.75, 2) // 6 + 5 + 0.75 CP, pas de +1
+    // avec RRT II en jeu : +1
+    const r1 = BWEngine.calculateOptimalKeep([1, 1, 3, 3, 3], 0, { upgrades: 5, tbOnOpp: 0, upgradeIds: ['red-room-training-ii'] })
+    expect(r1.currentEv).toBeCloseTo(12.75, 2)
   })
 
   it('TB stack cap at tbOnOpp=2 zeroes TB value', () => {
@@ -67,8 +70,8 @@ describe('BW terminal states', () => {
 
   it('Grapple beats Widow\'s Bite at upgrades=6 thanks to the corrected dmg + CP gain', () => {
     // [6,6,6,6,6] upgrades=6: Grapple = 6 + 6 + 1.5 agility + 0.75 CP + 1 RRT = 15.25 (calibré)
-    const r = BWEngine.calculateOptimalKeep([6, 6, 6, 6, 6], 0, { upgrades: 6, tbOnOpp: 0 })
-    expect(r.currentEv).toBeCloseTo(14.85, 2) // Agility v3 1.1
+    const r = BWEngine.calculateOptimalKeep([6, 6, 6, 6, 6], 0, { upgrades: 6, tbOnOpp: 0, upgradeIds: ['red-room-training-ii'] })
+    expect(r.currentEv).toBeCloseTo(14.85, 2) // Agility v3 1.1, RRT II en jeu
   })
 })
 

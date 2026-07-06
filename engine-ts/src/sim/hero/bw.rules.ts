@@ -234,5 +234,9 @@ export function resolveSabotage(
 }
 
 export function rrtAttackBonus(upgradesInPlay: string[]): number {
+  // Texte vérifié (carte RRT II) : "If you have at least 5 Ability Upgrades in play, add 1
+  // dmg to all of your Attacks" — c'est un passif DE CETTE CARTE : il exige RRT II en jeu
+  // (user-caught : le moteur l'accordait à 5 upgrades quelconques).
+  if (!upgradesInPlay.includes('red-room-training-ii')) return 0.0
   return upgradesInPlay.length >= 5 ? 1.0 : 0.0
 }

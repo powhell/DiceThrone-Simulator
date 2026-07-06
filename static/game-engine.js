@@ -747,7 +747,7 @@ var Game = (() => {
     const { A: a, B: b, C: c } = classify2(dice);
     const out = [];
     const tax = defenseTax;
-    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const rrt = upgradeIds.includes("red-room-training-ii") && upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     if (has("widows-gauntlets-ii") && a >= 2 && b >= 2) {
       const tb = tbGainValue(upgrades, tbOnOpp, 1);
@@ -819,7 +819,7 @@ var Game = (() => {
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
   function directDamageByName(upgrades, _tbOnOpp, upgradeIds = []) {
-    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const rrt = upgradeIds.includes("red-room-training-ii") && upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     const batonStrikeUpgraded = has("baton-strike-ii");
     const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
@@ -1606,6 +1606,7 @@ var Game = (() => {
     return countSabotage(rollSabotageDice(defender, rng, policy, gameState, defenderIdx, upgraded));
   }
   function rrtAttackBonus(upgradesInPlay) {
+    if (!upgradesInPlay.includes("red-room-training-ii")) return 0;
     return upgradesInPlay.length >= 5 ? 1 : 0;
   }
 
