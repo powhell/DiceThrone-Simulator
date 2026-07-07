@@ -150,39 +150,57 @@
   // Quels plans (attaques) la garde du DP vise — approximation lisible : pour chaque pattern
   // HH, combien de dés manquent par rapport aux dés gardés.
   // Plans de garde par héros : [nom, besoin en A, B, C] (les suites sont gérées à part).
+  // [nom, A, B, C, D?] — D = 4e symbole (Pyromancer). Suites gérées à part.
   const PLAN_PATTERNS = {
     hh: [['Ride Down',3,2,0],['Reap',0,3,1],['Cleave',3,0,0],['Spectral Assault',3,0,2],['Horrify',0,0,4]],
     fm: [['Pick Axe',3,0,0],['Furnace',0,4,0],['A Good Haul',1,1,2],['Smelting Time',0,0,4]],
     bw: [['Baton Strike',0,3,0],['Infiltrate',2,1,1],["Widow's Gauntlets",2,3,0],['Grapple',0,0,4]],
+    rv: [['Peck',3,0,0],['Raven Sight',2,0,2],['Fowl Friend',0,4,0],['Murder of Crows',2,3,0],['Chamber',0,0,4]],
+    dr: [['Ferocity',3,0,0],['Maul',0,4,0],["Nature's Cure",2,0,2],['Wild Realignment',1,2,1],['Protect the Forest',0,0,4]],
+    th: [['Hammered',3,0,0],['Mighty Summon',1,2,1],['Chain Lightning',3,0,2],['Odinforce',2,3,0],['Bottled Lightning',0,0,4]],
+    sm: [['Punch',3,0,0],['C-C-C-Combo',2,0,2],['Spider-Reflexes',1,2,1],['Wall Crawler',2,3,0],['Venom Punch',0,0,4]],
+    py: [['Fireball',3,0,0,0],['Burning Soul',0,0,2,0],['Combustion',1,1,1,1],['Pyroblast',4,0,0,1],['Meteorite',0,0,0,4]],
   };
+  const SUITE_NAME = { hh:'Suite (Sow Despair)', fm:'Suite (Armored Up)', bw:'Suite (Hacked)',
+    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)' };
   function planHint(kept){
     const heroCls = humanHero.cls;
-    const a=kept.filter(v=>heroCls(v)==='A').length, b=kept.filter(v=>heroCls(v)==='B').length, c=kept.filter(v=>heroCls(v)==='C').length;
+    const cnt = k => kept.filter(v=>heroCls(v)===k).length;
+    const a=cnt('A'), b=cnt('B'), c=cnt('C'), d=cnt('D');
     const uniq=[...new Set(kept)].sort((x,y)=>x-y);
     const plans=[];
-    const need=(na,nb,nc)=>Math.max(0,na-a)+Math.max(0,nb-b)+Math.max(0,nc-c);
-    for (const [nm,na,nb,nc] of (PLAN_PATTERNS[HUMAN]||[])) plans.push([nm, need(na,nb,nc)]);
+    const need=(na,nb,nc,nd)=>Math.max(0,na-a)+Math.max(0,nb-b)+Math.max(0,nc-c)+Math.max(0,(nd||0)-d);
+    for (const [nm,na,nb,nc,nd] of (PLAN_PATTERNS[HUMAN]||[])) plans.push([nm, need(na,nb,nc,nd)]);
     // suites : plus longue fenetre consécutive couverte
     let bestRun=0;
     for(let s0=1;s0<=3;s0++){ let run=0; for(let v=s0;v<s0+4;v++) if(uniq.includes(v)) run++; bestRun=Math.max(bestRun,run); }
-    plans.push([HUMAN==='fm' ? 'Suite (Armored Up)' : HUMAN==='bw' ? 'Suite (Hacked)' : 'Suite (Sow Despair)', 4-bestRun]);
+    plans.push([SUITE_NAME[HUMAN]||'Suite', 4-bestRun]);
     plans.sort((x,y)=>x[1]-y[1]);
     const top=plans.filter(pl=>pl[1]<=5-kept.length).slice(0,2);
     if(!top.length) return '';
     return 'vise : '+top.map(pl=>pl[1]===0?`${pl[0]} (déjà fait !)`:`${pl[0]} (manque ${pl[1]})`).join(' ou ');
   }
-  function liveAdvice(){
+  function adviceKey(useWc){
+    const you = g.state.players[g.humanIdx];
+    return dice.map(d=>d.v).join(',')+'|'+rollsLeft+'|'+you.tokens.dreadful+'|'+(you.tokens.head>0?1:0)+'|'+(you.tokens.grimPursuit||0)+'|'+you.upgradesInPlay.join('+')+'|'+(useWc?'wc':'raw');
+  }
+  function liveAdvice(useWildcards = true){
     if (!coachLive || phase!=='roll' || attempts===0 || !dice.length) return null;
     // Hoarding : le solveur gère maintenant 4 dés nativement (DP généralisé) — coach actif.
     // The key must carry the SOLVER STATE too (Dreadful count, Head, upgrades in play — see
     // oracleStateFor): keyed on dice+rerolls alone, a turn-1 answer got replayed all game.
-    const you = g.state.players[g.humanIdx];
-    const key = dice.map(d=>d.v).join(',')+'|'+rollsLeft+'|'+you.tokens.dreadful+'|'+(you.tokens.head>0?1:0)+'|'+(you.tokens.grimPursuit||0)+'|'+you.upgradesInPlay.join('+');
+    const key = adviceKey(useWildcards);
     if (!adviceCache.has(key)) {
-      try { adviceCache.set(key, G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft)); }
+      try { adviceCache.set(key, G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft, useWildcards)); }
       catch(e){ adviceCache.set(key, null); }
     }
     return adviceCache.get(key);
+  }
+  // Le joueur tient-il une carte de manipulation payable ? (sinon les deux solveurs sont identiques)
+  function hasDiceCards(){
+    const you = g.state.players[g.humanIdx];
+    return [['six-it',1],['tip-it',1],['samesies',1],['so-wild',2],['twice-as-wild',3]]
+      .some(([id,cp]) => you.hand.includes(id) && you.cp >= cp);
   }
   const replayLog = [];        // {t, kind, you, coach, agree}
   function coachNote(kind, you, coachPick){
@@ -427,10 +445,19 @@
     if (adv) {
       const stop = adv.kept.length===5 || adv.ev <= adv.keepAllEv + 0.05;
       const hint = stop ? '' : planHint(adv.kept);
+      // Demande user : montrer aussi le solveur « dés seuls » quand des cartes de manip
+      // gonflent l'EV — pour voir ce que valent le jet ET les cartes séparément.
+      let rawLine = '';
+      if (hasDiceCards()) {
+        const raw = liveAdvice(false);
+        if (raw && (Math.abs(raw.ev - adv.ev) >= 0.15 || raw.kept.join(',') !== adv.kept.join(','))) {
+          rawLine = `<div class="lead" style="margin-top:4px">🎲 dés seuls : garder [${raw.kept.join(',')||'rien'}] → EV ${raw.ev.toFixed(1)} · tes cartes ajoutent +${Math.max(0, adv.ev - raw.ev).toFixed(1)}</div>`;
+        }
+      }
       $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
         stop ? `S'ARRÊTER — tout garder vaut ${adv.keepAllEv.toFixed(1)}`
              : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · tout garder = ${adv.keepAllEv.toFixed(1)}`}</div>${
-        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}`;
+        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}${rawLine}`;
       return;
     }
     const show = (phase==='roll' && attempts>0) || phase==='alter';
@@ -450,6 +477,11 @@
     if (!adv || !adv.topOptions || !adv.topOptions.length) { panel.style.display='none'; return; }
     panel.style.display='';
     const distName = n => n==='Whiff' ? 'Raté (whiff)' : formatAbility(humanHero, n).name;
+    // Demande user : DEUX solveurs côte à côte — « dés seuls » vs « avec tes cartes de manip ».
+    const dual = hasDiceCards();
+    const raw = dual ? liveAdvice(false) : null;
+    const rawByKept = new Map((raw && raw.topOptions || []).map(o => [o.kept.join(','), o.ev]));
+    const header = dual && raw ? `<div class="evrow" style="opacity:.75"><div class="keep"><small>garde</small></div><div class="ev"><small>🎲 seuls&nbsp;→&nbsp;🃏 avec cartes</small></div></div>` : '';
     const rows = adv.topOptions.map((o,i)=>{
       const icons = o.kept.length
         ? o.kept.map(v=>symIcon(humanHero, humanHero.cls(v))).join('')
@@ -457,11 +489,16 @@
       const dist = Object.entries(o.probDist||{})
         .sort((x,y)=>y[1]-x[1]).filter(e=>e[1]>=3).slice(0,3)
         .map(e=>`${distName(e[0])} ${Math.round(e[1])}%`).join(' · ');
+      const rawEv = rawByKept.get(o.kept.join(','));
+      const evCell = (dual && rawEv !== undefined && Math.abs(rawEv - o.ev) >= 0.05)
+        ? `<span style="opacity:.65">${rawEv.toFixed(1)}</span> → ${o.ev.toFixed(1)}`
+        : o.ev.toFixed(1);
       return `<div class="evrow${i===0?' best':''}">
         <div class="keep">${o.kept.length?`[${o.kept.join(',')}] `:''}${icons}${o.isGuaranteed?'<span class="sure">SÛR</span>':''}</div>
-        <div class="ev">${o.ev.toFixed(1)}</div>
+        <div class="ev">${evCell}</div>
         ${dist?`<div class="dist">${dist}</div>`:''}</div>`;
     }).join('');
+    const rowsOut = header + rows;
     // A2 — LETHAL : un keep SÛR dont les dégâts DIRECTS tuent l'adversaire prime sur l'EV.
     const oppHp = Math.max(0, g.state.players[g.aiIdx].hp);
     const lethal = adv.topOptions.find(o=>o.isGuaranteed && (o.directDamage||0) >= oppHp && oppHp>0);
@@ -509,8 +546,8 @@
     const netNote = nets.length
       ? `<div class="dist" style="padding:2px 8px;color:var(--gold)">🃏 Filet actif : ${nets.join(', ')} — l'EV inclut la réparation au jet final, les % « Raté » NON (ils sont avant carte).</div>`
       : '';
-    document.getElementById('coach-evs').innerHTML = banner + rows + cardLines + netNote +
-      `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.</div>`;
+    document.getElementById('coach-evs').innerHTML = banner + rowsOut + cardLines + netNote +
+      `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.${dual?' <b>🎲 → 🃏</b> : EV dés seuls → EV en comptant tes cartes de manipulation.':''}</div>`;
   }
 
   // Board / ability panel: during 'ability' phase, list matched abilities as pickable buttons.

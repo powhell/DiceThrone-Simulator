@@ -311,20 +311,21 @@ export function humanApplyInstant(g: HumanGame, action: WindowAction): void {
 // same optimal keep calculator the AI rolls with). Lets the UI coach flag reroll mistakes:
 // "you kept X, the optimal keep was Y (EV a vs b)".
 export function humanKeepAdvice(
-  g: HumanGame, dice: number[], rollsRemaining: number,
+  g: HumanGame, dice: number[], rollsRemaining: number, useWildcards = true,
 ): { kept: number[]; ev: number; keepAllEv: number; topOptions: core.KeepOption[] } {
   const self = g.state.players[g.humanIdx]
   const opp = g.state.players[g.aiIdx]
   const cfg: any = self.heroId === 'hh' ? hhConfig : self.heroId === 'fm' ? fmConfig : self.heroId === 'rv' ? rvConfig : self.heroId === 'dr' ? drConfig : self.heroId === 'th' ? thConfig : self.heroId === 'sm' ? smConfig : self.heroId === 'py' ? pyConfig : bwConfig
   const state: any = oracleStateFor(self, opp)
   // Cartes de conversion payables en main -> filet de securite du jet final (coach humain).
-  state.wildcards = {
+  // useWildcards=false : solveur « dés seuls » (demande user : comparer l'EV avec/sans cartes).
+  state.wildcards = useWildcards ? {
     sixIt: self.hand.includes('six-it') && self.cp >= 1,
     soWild: self.hand.includes('so-wild') && self.cp >= 2,
     twiceAsWild: self.hand.includes('twice-as-wild') && self.cp >= 3,
     samesies: self.hand.includes('samesies') && self.cp >= 1,
     tipIt: self.hand.includes('tip-it') && self.cp >= 1,
-  }
+  } : {}
   const r = core.calculateOptimalKeep(cfg, dice, rollsRemaining, state)
   const top = r.topOptions[0]
   // topOptions: the full ranked keep table (kept dice, EV, per-ability landing odds) so the UI
