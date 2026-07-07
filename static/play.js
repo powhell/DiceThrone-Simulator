@@ -102,8 +102,11 @@
   const BOSS_HARD = _q.get('hard')==='1';
   let ai;
   // Depuis 2026-07-05 le réseau est entraîné AVEC le Forgemaster (features Forge/armures).
-  if (window.AI_WEIGHTS) { try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; } }
-  else ai = G.greedyHighestDamagePolicy;
+  // v3 (2026-07-06) : layout à 8 héros — des poids d'un ancien layout feraient un forward
+  // faux en silence, on vérifie la taille d'entrée avant de s'en servir.
+  if (window.AI_WEIGHTS && window.AI_WEIGHTS.sizes && window.AI_WEIGHTS.sizes[0] === G.FEATURE_COUNT) {
+    try { ai = G.createValueGreedyPolicy(G.fromJSON(JSON.stringify(window.AI_WEIGHTS))); } catch (e) { ai = G.greedyHighestDamagePolicy; }
+  } else ai = G.greedyHighestDamagePolicy;
 
   // Stateful (snapshotable) rng so interactive defense can clone+replay the AI's attack deterministically.
   const rng = G.mulberry32Stateful((Date.now() % 2147483647) || 1);

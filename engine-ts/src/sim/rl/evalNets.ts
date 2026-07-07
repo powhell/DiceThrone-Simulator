@@ -20,7 +20,7 @@ import { runMatch, runBossMatch } from '../match.js'
 // Miroirs (hh-hh, bw-bw) retirés à la demande du user (2026-07-05) : ils coûtent la moitié
 // du budget de calcul pour des règles spéciales non modélisées (unicité Head/armures) et
 // n'informent pas l'équilibre inter-héros.
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne)
+import { EVAL_MATCHUPS as MATCHUPS } from './matchups.js' // v3 : 10 matchups couvrant les 8 héros
 
 function loadPolicy(pathOrGreedy: string): Policy {
   if (pathOrGreedy === 'greedy') return greedyHighestDamagePolicy

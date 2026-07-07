@@ -21,6 +21,7 @@ export {
 } from './interactive.js'
 export { createValueGreedyPolicy } from './rl/valueGreedyPolicy.js'
 export { fromJSON, toJSON, forward, createNetwork } from './rl/network.js'
+export { FEATURE_COUNT } from './rl/features.js'
 export { greedyHighestDamagePolicy } from './policy.js'
 export { mulberry32, mulberry32Stateful, shuffle, rollDice } from './rng.js'
 export {

@@ -13,6 +13,12 @@
 //     count-only — encoding it would leak hidden information and train a cheating evaluator),
 //   - tokens read un-gated from the bag for both players (Transference!-style cards can move
 //     tokens across heroes, so "a bw player can't hold dreadful" is no longer structurally true).
+//
+// v3 (2026-07-06) : les 8 héros (rv/dr/th/sm/py ajoutés) — one-hot d'identité à 8, encodages
+// de deck/upgrades pour tous, TOUS les jetons du bag (feather/hex/nevermore/shapeShift/regen/
+// wound/EK/GB/combo/webbed/invisibility/fireMastery/burn/knockdown/stun), forme Druid,
+// Mjölnir, cadran Nevermore, cap Fire Mastery. CHANGEMENT DE LAYOUT : les anciens poids
+// (v2, hh/bw/fm) sont incompatibles — re-train from scratch.
 import type { GameState, PlayerState, HeroId } from '../types.js'
 import { STARTING_HP, HEAL_CAP_ABOVE_STARTING, CP_CAP, MAX_HAND_SIZE } from '../data/config.js'
 import { DREADFUL_CAP, GRIM_PURSUIT_CAP } from '../hero/hh.rules.js'
@@ -46,13 +52,13 @@ function buildHeroEncoding(heroId: HeroId): HeroEncoding {
 }
 
 // nx (boss) exclu : jamais encodé pour le réseau (pas dans le pool self-play)
-const ENCODINGS: Partial<Record<HeroId, HeroEncoding>> & Record<'hh' | 'bw' | 'fm', HeroEncoding> = { hh: buildHeroEncoding('hh'), bw: buildHeroEncoding('bw'), fm: buildHeroEncoding('fm') }
+const HERO_IDS = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py'] as const
+const ENCODINGS: Partial<Record<HeroId, HeroEncoding>> & Record<'hh' | 'bw' | 'fm', HeroEncoding> =
+  Object.fromEntries(HERO_IDS.map(h => [h, buildHeroEncoding(h)])) as any
 
-// Both heroes' full decks must be the same size for the hand one-hot block to have a fixed
-// width. True today (14 hero cards + 17 common = 31 for both); if a future hero breaks this,
-// HAND_ONEHOT_SIZE must become the max and shorter decks zero-pad.
-export const UPGRADE_ONEHOT_SIZE = 8
-export const HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize, ENCODINGS.fm.deckSize)
+// Largeurs dérivées des kits réels (le padding gère les decks/kits plus courts).
+export const UPGRADE_ONEHOT_SIZE = Math.max(...HERO_IDS.map(h => ENCODINGS[h]!.upgradeIds.length)) // py = 10
+export const HAND_ONEHOT_SIZE = Math.max(...HERO_IDS.map(h => ENCODINGS[h]!.deckSize))
 
 // One-hot over the hero's upgrade card list, padded to UPGRADE_ONEHOT_SIZE. Slot i means "the
 // i-th upgrade card of THIS hero's kit is in play" — hero-dependent semantics, which the
@@ -82,9 +88,6 @@ function encodeHand(p: PlayerState): number[] {
 // Per-player fields shared by both self and opponent encodings.
 function encodePlayer(p: PlayerState): number[] {
   const deckSize = (ENCODINGS[p.heroId] ?? ENCODINGS.hh).deckSize
-  const isHH = p.heroId === 'hh' ? 1 : 0
-  const isBW = p.heroId === 'bw' ? 1 : 0
-  const isFM = p.heroId === 'fm' ? 1 : 0
 
   return [
     p.hp / MAX_HP,
@@ -95,9 +98,8 @@ function encodePlayer(p: PlayerState): number[] {
     p.upgradesInPlay.length / MAX_UPGRADES_IN_PLAY,
     p.timeBombs.length / TIME_BOMB_STACK_CAP,
     p.upgradesPlayedThisTurn / MAX_UPGRADES_PLAYED_PER_TURN,
-    isHH,
-    isBW,
-    isFM,
+    // v3 : identité à 8 héros (remplace isHH/isBW/isFM)
+    ...HERO_IDS.map(h => (p.heroId === h ? 1 : 0)),
     // Forgemaster : la Forge et les armures sont SON état stratégique central — sans ces
     // features le réseau ne peut pas valoriser un état fm (zéro pour les autres héros).
     p.forge.filter(id => id === 'gold-ore').length / 9,
@@ -113,6 +115,30 @@ function encodePlayer(p: PlayerState): number[] {
     p.tokens.head,
     p.tokens.agility / AGILITY_CAP,
     p.tokens.covertOps / COVERT_OPS_CAP,
+    // v3 : jetons des 5 nouveaux héros (normalisés à leur cap)
+    (p.tokens.feather ?? 0) / 5,
+    p.tokens.hex ?? 0,
+    p.tokens.nevermore ?? 0,
+    (p.nevermoreDial ?? 0) / 3,
+    (p.tokens.shapeShift ?? 0) / 2,
+    (p.tokens.regen2 ?? 0) / 2,
+    (p.tokens.regen1 ?? 0) / 2,
+    (p.tokens.wound ?? 0) / 2,
+    (p.tokens.electrokinesis ?? 0) / 4,
+    (p.tokens.guardBreak ?? 0) / 2,
+    p.tokens.combo ?? 0,
+    p.tokens.webbed ?? 0,
+    p.tokens.invisibility ?? 0,
+    (p.tokens.fireMastery ?? 0) / 7,
+    p.tokens.burn ?? 0,
+    p.tokens.knockdown ?? 0,
+    p.tokens.stun ?? 0,
+    (p.fmCapBonus ?? 0) / 2,
+    // Druid : forme (3 one-hot) ; Thor : Mjölnir chez l'adversaire
+    p.form === 'druid' ? 1 : 0,
+    p.form === 'cat' ? 1 : 0,
+    p.form === 'bear' ? 1 : 0,
+    p.mjolnirAway === true ? 1 : 0,
     ...encodeUpgradesInPlay(p),
   ]
 }
@@ -128,5 +154,7 @@ export function encodeState(state: GameState, forPlayerIdx: 0 | 1): number[] {
   ]
 }
 
-const PLAYER_BLOCK_SIZE = 21 + UPGRADE_ONEHOT_SIZE // 15 + isFM + 3 ore Forge + 2 armures (2026-07-05)
+// v3 : 8 scalaires + 8 identité + 5 forge/armures + 5 jetons v2 + 17 jetons v3 + fmCapBonus
+// + 3 formes + mjolnir = 48, + upgrades one-hot. (Vérifié par printFeatureCount.ts.)
+const PLAYER_BLOCK_SIZE = 48 + UPGRADE_ONEHOT_SIZE
 export const FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE

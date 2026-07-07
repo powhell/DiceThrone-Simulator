@@ -26,7 +26,7 @@ import { playTurn, playNaraxusTurn } from '../turn.js'
 import { createInitialGameState, MAX_TURNS } from '../match.js'
 import { heroTemplateFor, cardById } from '../data/load.js'
 
-const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne) // miroirs retirés (user 2026-07-05)
+import { TRAIN_MATCHUPS as MATCHUPS } from './matchups.js' // v3 : 64 matchups, rotation par seed
 
 function outcomeFor(state: GameState, idx: 0 | 1): number {
   if (state.winner === null) return 0
@@ -87,7 +87,7 @@ function main(): void {
   const t0 = Date.now()
 
   for (let g = 0; g < games; g++) {
-    const [heroA, heroB] = MATCHUPS[g % MATCHUPS.length]
+    const [heroA, heroB] = MATCHUPS[(seedBase + g) % MATCHUPS.length] // offset seed : couvre les 64 sur plusieurs rounds
     const rng = mulberry32(seedBase + g)
     const state = createInitialGameState(heroA, heroB, rng)
     const bossGame = heroB === 'nx'

@@ -21,6 +21,7 @@ var Game = (() => {
   // src/sim/browser.ts
   var browser_exports = {};
   __export(browser_exports, {
+    FEATURE_COUNT: () => FEATURE_COUNT,
     MAX_TURNS: () => MAX_TURNS,
     TRANSFERABLE_TOKENS: () => TRANSFERABLE_TOKENS,
     abilityByBoardName: () => abilityByBoardName,
@@ -7265,9 +7266,10 @@ var Game = (() => {
       deckSize: deck.length
     };
   }
-  var ENCODINGS = { hh: buildHeroEncoding("hh"), bw: buildHeroEncoding("bw"), fm: buildHeroEncoding("fm") };
-  var UPGRADE_ONEHOT_SIZE = 8;
-  var HAND_ONEHOT_SIZE = Math.max(ENCODINGS.hh.deckSize, ENCODINGS.bw.deckSize, ENCODINGS.fm.deckSize);
+  var HERO_IDS = ["hh", "bw", "fm", "rv", "dr", "th", "sm", "py"];
+  var ENCODINGS = Object.fromEntries(HERO_IDS.map((h) => [h, buildHeroEncoding(h)]));
+  var UPGRADE_ONEHOT_SIZE = Math.max(...HERO_IDS.map((h) => ENCODINGS[h].upgradeIds.length));
+  var HAND_ONEHOT_SIZE = Math.max(...HERO_IDS.map((h) => ENCODINGS[h].deckSize));
   function encodeUpgradesInPlay(p) {
     const enc = ENCODINGS[p.heroId] ?? ENCODINGS.hh;
     const out = new Array(UPGRADE_ONEHOT_SIZE).fill(0);
@@ -7288,9 +7290,6 @@ var Game = (() => {
   }
   function encodePlayer(p) {
     const deckSize = (ENCODINGS[p.heroId] ?? ENCODINGS.hh).deckSize;
-    const isHH = p.heroId === "hh" ? 1 : 0;
-    const isBW = p.heroId === "bw" ? 1 : 0;
-    const isFM = p.heroId === "fm" ? 1 : 0;
     return [
       p.hp / MAX_HP,
       p.cp / CP_CAP,
@@ -7300,9 +7299,8 @@ var Game = (() => {
       p.upgradesInPlay.length / MAX_UPGRADES_IN_PLAY,
       p.timeBombs.length / TIME_BOMB_STACK_CAP,
       p.upgradesPlayedThisTurn / MAX_UPGRADES_PLAYED_PER_TURN,
-      isHH,
-      isBW,
-      isFM,
+      // v3 : identité à 8 héros (remplace isHH/isBW/isFM)
+      ...HERO_IDS.map((h) => p.heroId === h ? 1 : 0),
       // Forgemaster : la Forge et les armures sont SON état stratégique central — sans ces
       // features le réseau ne peut pas valoriser un état fm (zéro pour les autres héros).
       p.forge.filter((id) => id === "gold-ore").length / 9,
@@ -7318,6 +7316,30 @@ var Game = (() => {
       p.tokens.head,
       p.tokens.agility / AGILITY_CAP,
       p.tokens.covertOps / COVERT_OPS_CAP,
+      // v3 : jetons des 5 nouveaux héros (normalisés à leur cap)
+      (p.tokens.feather ?? 0) / 5,
+      p.tokens.hex ?? 0,
+      p.tokens.nevermore ?? 0,
+      (p.nevermoreDial ?? 0) / 3,
+      (p.tokens.shapeShift ?? 0) / 2,
+      (p.tokens.regen2 ?? 0) / 2,
+      (p.tokens.regen1 ?? 0) / 2,
+      (p.tokens.wound ?? 0) / 2,
+      (p.tokens.electrokinesis ?? 0) / 4,
+      (p.tokens.guardBreak ?? 0) / 2,
+      p.tokens.combo ?? 0,
+      p.tokens.webbed ?? 0,
+      p.tokens.invisibility ?? 0,
+      (p.tokens.fireMastery ?? 0) / 7,
+      p.tokens.burn ?? 0,
+      p.tokens.knockdown ?? 0,
+      p.tokens.stun ?? 0,
+      (p.fmCapBonus ?? 0) / 2,
+      // Druid : forme (3 one-hot) ; Thor : Mjölnir chez l'adversaire
+      p.form === "druid" ? 1 : 0,
+      p.form === "cat" ? 1 : 0,
+      p.form === "bear" ? 1 : 0,
+      p.mjolnirAway === true ? 1 : 0,
       ...encodeUpgradesInPlay(p)
     ];
   }
@@ -7331,7 +7353,7 @@ var Game = (() => {
       ...encodePlayer(opp)
     ];
   }
-  var PLAYER_BLOCK_SIZE = 21 + UPGRADE_ONEHOT_SIZE;
+  var PLAYER_BLOCK_SIZE = 48 + UPGRADE_ONEHOT_SIZE;
   var FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE;
 
   // src/sim/rl/lookahead.ts

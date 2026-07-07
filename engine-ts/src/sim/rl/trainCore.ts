@@ -22,7 +22,8 @@ import type { HeroId, GameState } from '../types.js'
 export const LEARNING_RATE = 0.005
 export const HIDDEN_SIZES = [24, 12]
 export const EVAL_GAMES_PER_MATCHUP = 20
-export const MATCHUPS: Array<[HeroId, HeroId]> = [['hh', 'bw'], ['bw', 'hh'], ['fm', 'bw'], ['bw', 'fm'], ['fm', 'hh'], ['hh', 'fm'], ['hh', 'nx'], ['bw', 'nx'], ['fm', 'nx']] // vs Naraxus : heros seat 0, boss seat 1 (normal/hard alterne) // miroirs retirés (user 2026-07-05)
+import { TRAIN_MATCHUPS } from './matchups.js'
+export const MATCHUPS = TRAIN_MATCHUPS // v3 : les 8 héros, liste partagée
 
 // Timeout (MAX_TURNS reached, state.winner still null) is treated as a draw (target 0) —
 // a deliberate v1 default, not an overlooked edge case (see the RL plan's open question).
