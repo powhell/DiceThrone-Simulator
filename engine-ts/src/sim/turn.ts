@@ -62,7 +62,12 @@ export function defenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'dr') {
     // Thick Hide : hors Bear 2 des, contre 1/Claw (E=1), AUCUNE prevention ; Bear 4 des :
     // contre E=2, prevention E=4x(1/3+1/6)=2. (ruling user)
-    return dr.formOf(opponent) === 'bear' ? 2 + 2 : 1
+    // ANTICIPATION (user-caught « HH 36% pas normal ») : l'IA dr se morphe en Ours AU MOMENT
+    // de défendre (auto-morph des 5 dmg entrants) — planifier avec la taxe Druide (1) fait
+    // choisir les mauvaises lignes à TOUS ses adversaires. S'il a un Shape Shift en stock,
+    // la défense attendue est un Ours (~3.5 : mix attaques <5 non morphées).
+    if (dr.formOf(opponent) === 'bear') return 2 + 2
+    return (opponent.tokens.shapeShift ?? 0) > 0 ? 3.5 : 1
   }
   if (opponent.heroId === 'rv') {
     // Nothing More (5 des, seuils UNE fois — ruling user) : contre 2 x P(>=2 Talons | p=1/2,

@@ -4220,7 +4220,8 @@ var Game = (() => {
       return opponent.upgradesInPlay.includes("thunder-wheel-ii") ? 2.7 : 2;
     }
     if (opponent.heroId === "dr") {
-      return formOf(opponent) === "bear" ? 2 + 2 : 1;
+      if (formOf(opponent) === "bear") return 2 + 2;
+      return (opponent.tokens.shapeShift ?? 0) > 0 ? 3.5 : 1;
     }
     if (opponent.heroId === "rv") {
       return 2 * 0.8125 + 2 * 0.539;
