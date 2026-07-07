@@ -5036,11 +5036,13 @@ var Game = (() => {
         log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
         return;
       }
-      if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && result.dmg >= 5) {
+      const gbWanted = policy.chooseGuardBreakSpend ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg) : result.dmg >= 5;
+      if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
         const gb = tryGuardBreak(self, rng);
         log(state, playerIdx, "resolveAttack", `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(",")}] \u2014 ${gb.success ? "attack is UNDEFENDABLE" : "failed"}`);
         if (gb.success) result = { ...result, undefendable: true };
       }
+      log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
       if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
       else resolveDefense(state, playerIdx, result.dmg, rng, policies);
     };
@@ -5115,6 +5117,7 @@ var Game = (() => {
         gainEk(self, r.thunders);
         log(state, playerIdx, "resolveAttack", `Odinforce: +${r.thunders} EK (Thunder)`);
       }
+      log(state, playerIdx, "resolveAttack", `Odinforce: ${base} base + ${ekOf()} EK`);
       attack(base + ekOf(), true);
       return;
     }
@@ -5123,6 +5126,7 @@ var Game = (() => {
       doShuttle(up ? 3 : 2, "Bottled Lightning");
       gainGb(self, 2);
       log(state, playerIdx, "resolveAttack", "Bottled Lightning: +2 Guard Break");
+      log(state, playerIdx, "resolveAttack", `Bottled Lightning: ${up ? 8 : 7} base + ${ekOf()} EK`);
       attack((up ? 8 : 7) + ekOf(), true);
       return;
     }
@@ -5459,11 +5463,14 @@ var Game = (() => {
     const opp = g.state.players[g.aiIdx];
     return resolveMatchedAbilities(self.heroId, dice, oracleStateFor(self, opp));
   }
-  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = [], fmMine) {
+  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = [], fmMine, gbSpend = false) {
     const humanPolicy = {
       ...greedyHighestDamagePolicy,
       chooseAbility: () => abilityName,
       chooseGrimPursuitSpend: () => gpBonus,
+      // Thor : sans ce hook, l'heuristique IA (dmg >= 5) dépensait les Guard Break du joueur
+      // humain automatiquement (user-caught) — ici c'est SON toggle UI qui décide.
+      chooseGuardBreakSpend: () => gbSpend,
       chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter((id) => eligible.includes(id)),
       ...fmMine ? { chooseFmMine: () => fmMine } : {}
     };

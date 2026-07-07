@@ -71,6 +71,12 @@ export interface Policy {
   // Grim Pursuit for the bonus. Optional — omit to never spend (scripted greedy default).
   chooseGrimPursuitSpend?(state: GameState, playerIdx: 0 | 1, dmg: number): boolean
 
+  // Thor : Guard Break à la conclusion d'une attaque défendable — true pour dépenser les
+  // jetons (un par un, d6 4-5 = indéfendable, arrêt au succès). Optionnel — défaut
+  // heuristique dmg >= 5 dans turn.ts ; le pont humain injecte le choix pré-armé de l'UI
+  // (avant, les jetons du joueur humain partaient tout seuls — user-caught).
+  chooseGuardBreakSpend?(state: GameState, playerIdx: 0 | 1, dmg: number): boolean
+
   // Grim Pursuit mode (a): "spend 1 to perform an additional Roll Attempt during your Offensive
   // Roll Phase" (once per turn). Offered at the roll's FINAL window (rollsRemaining 0), when the
   // dice are otherwise final — return true to spend 1 Grim Pursuit and re-enter the keep/reroll

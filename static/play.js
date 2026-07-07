@@ -107,6 +107,7 @@
   let defSel = new Set();      // defense dice selected for Better D!'s partial reroll
   let lastDefDice = null;      // your resolved defense dice, shown in the tray after the attack lands
   let gpBonusSel = false;      // Grim Pursuit mode (b) armed for the attack being chosen
+  let gbSel = false;           // Thor: Guard Break armé pour l'attaque en cours de choix
   let amSel = new Set();       // attack-modifier cards armed for the attack being chosen
   let aghCpSel = false;        // A Good Haul : Mine SANS révéler (+1 CP) pré-armé
   let scrapMode = null;        // {oreId, mode:'reroll'|'set6'} — clique ensuite le dé visé
@@ -735,7 +736,10 @@
     const m = g.state.players[g.humanIdx].nevermoreMode;
     return m==='absorb' ? '🩸 Absorber' : m==='move' ? '✈️ Déplacer' : '🤖 Auto';
   }
-  function addThorBtns(c){
+  function addThorBtns(c, ekDraw){
+    // ekDraw : la pioche ⚡×4 est une action de MAIN PHASE (leaflet vérifié) — le bouton
+    // n'apparaissait qu'en roll/defarm (illégal) et jamais en main (user-caught : « je suis
+    // cap EK, avant d'activer mon attaque je voudrais piger, mais je ne peux pas »).
     if (HUMAN!=='th') return;
     const you=g.state.players[g.humanIdx], ai=g.state.players[1-g.humanIdx];
     if (you.hand.length>0){
@@ -752,7 +756,7 @@
         renderAll();
       }));
     }
-    if ((you.tokens.electrokinesis||0)>=4 && !you.ekDrawUsedThisTurn){
+    if (ekDraw && (you.tokens.electrokinesis||0)>=4 && !you.ekDrawUsedThisTurn){
       c.appendChild(btn('⚡×4 → pioche 1','', ()=>{
         you.tokens.electrokinesis-=4; you.ekDrawUsedThisTurn=true;
         if (you.deck.length>0){ you.hand.push(you.deck.shift()); }
@@ -845,6 +849,7 @@
       if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       addFmBtns(c);
+      addThorBtns(c, true); // ⚡×4→pioche (Main Phase, leaflet) + navette Mjölnir
       c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
@@ -927,6 +932,7 @@
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = cands.length ? 'Choisis une habileté à droite →' : 'Aucune habileté — tu rates ton attaque.';
       c.appendChild(s);
+      addThorBtns(c); // 🔨 Retrieve AVANT l'attaque = +1 EK compté dans Odinforce/Bottled Lightning
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
       // Offered even at 0 Grim Pursuit: "Gain X Grim Pursuit. THEN deal dmg" abilities (Ride
@@ -946,6 +952,12 @@
         const hint = you.tokens.grimPursuit>0 ? '' : " — 0 jeton : ne partira que si l'attaque en donne (ex. Ride Down)";
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
+      }
+      // Thor : Guard Break pré-armé (avant, les jetons partaient AUTOMATIQUEMENT dès 5+
+      // dégâts — heuristique IA appliquée au joueur humain, user-caught).
+      if (HUMAN==='th' && cands.length && (you.tokens.guardBreak||0)>0) {
+        c.appendChild(btn(`${gbSel?'✅ ':''}Guard Break : d6 par jeton, 4-5 = attaque INDÉFENDABLE (arrêt au 1er succès)`,
+          gbSel?'primary':'', ()=>{ gbSel=!gbSel; renderControls(); }));
       }
       // Attack-modifier cards, armed the same toggle way (Cranial Assist! & co were unplayable
       // by the human before — the attack bridge always answered "none"; user-caught).
@@ -1344,14 +1356,14 @@
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
       if (cands.length > 1) coachNote('habileté', name, coach.chooseAbility(g.state, g.humanIdx, cands));
     } catch (e) {}
-    log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+ dé Grim Pursuit)':''}${amSel.size?` + ${[...amSel].join(' + ')}`:''}.`);
+    log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+ dé Grim Pursuit)':''}${gbSel?' (+ Guard Break)':''}${amSel.size?` + ${[...amSel].join(' + ')}`:''}.`);
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
     const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
     const base = (cand && cand.baseDamage) || 0;
     const logFrom = g.state.log.length;
     G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel, [...amSel],
-      fmMineChoice && fmMineChoice.kind==='cp' ? {kind:'cp'} : undefined);
-    gpBonusSel = false; amSel.clear(); aghCpSel = false;
+      fmMineChoice && fmMineChoice.kind==='cp' ? {kind:'cp'} : undefined, gbSel);
+    gpBonusSel = false; gbSel = false; amSel.clear(); aghCpSel = false;
     const cb = parseCombat(logFrom);
     const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
     log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — ${breakdownStr(base, cb)} = ${Math.max(0,dealt)} infligés`+
@@ -1606,7 +1618,7 @@
       }
     }
     if (g.state.gameOver) { renderAll(); return end(); }
-    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; amSel.clear(); aghCpSel=false; tbArmed=false;
+    phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; gbSel=false; amSel.clear(); aghCpSel=false; tbArmed=false;
     $('turntag').textContent = `Ton tour · tour ${g.state.turnNumber}`;
     renderAll();
   }
@@ -1738,8 +1750,16 @@
     if ((m = msg.match(/^Thunder Wheel( II)?: prevented (\d+), (\d+) Mjolnir move\(s\)(?: \((\d+) dmg back\))?, \+(\d+) EK/))) return `🛡️ <b>Thunder Wheel${m[1]||''}</b> : prévient ${m[2]}${m[3]!=='0'?`, navette Mjölnir${m[4]?` (${m[4]} dégât en retour)`:''}`:''}${m[5]!=='0'?`, +${m[5]} ⚡EK`:''}`;
     if ((m = msg.match(/^Guard Break: spent (\d+), rolls \[([\d,]+)\] — (.+)$/))) return `🛡️⚡ <b>Guard Break</b> : ${m[1]} jeton(s), dés [${m[2]}] — ${m[3].includes('UNDEFENDABLE')?'<b>attaque INDÉFENDABLE !</b>':'raté'}`;
     if ((m = msg.match(/^Chain Lightning: rolled \[([\d,]+)\] -> (\d+) dmg \+ (\d+) collateral/))) return `⚡ <b>Chain Lightning</b> : [${m[1]}] → ${m[2]} dégâts + ${m[3]} collatéral`;
-    if ((m = msg.match(/^Odinforce roll \[([\d,]+)\]/))) return `<b>Odinforce</b> : jet [${m[1]}]`;
-    if ((m = msg.match(/^Odinforce II re-roll -> \[([\d,]+)\]/))) return `<b>Odinforce II</b> : relance → [${m[1]}]`;
+    // Jet Odinforce en FACES lisibles (1-3 🔨 Marteau, 4-5 🙌 Digne, 6 ⚡ Tonnerre) —
+    // les chiffres bruts « [6,1,1,6,2] » ne disaient rien à l'user (user-caught).
+    const thFaces = s => { const d=s.split(',').map(Number);
+      const h=d.filter(v=>v<=3).length, w=d.filter(v=>v===4||v===5).length, t=d.filter(v=>v===6).length;
+      return `[${d.map(v=>v<=3?'🔨':v<=5?'🙌':'⚡').join(' ')}] = ${h} Marteau·x, ${w} Digne·s, ${t} Tonnerre·s`; };
+    if ((m = msg.match(/^Odinforce roll \[([\d,]+)\]/))) return `<b>Odinforce</b> : jet ${thFaces(m[1])}`;
+    if ((m = msg.match(/^Odinforce II re-roll -> \[([\d,]+)\]/))) return `<b>Odinforce II</b> : relance → ${thFaces(m[1])}`;
+    if ((m = msg.match(/^Odinforce: (\d+) base \+ (\d+) EK$/))) return `<b>Odinforce</b> : ${m[1]} base + ${m[2]} ⚡EK = <b>${+m[1]+ +m[2]} dégâts</b>`;
+    if ((m = msg.match(/^Bottled Lightning: (\d+) base \+ (\d+) EK$/))) return `<b>Bottled Lightning</b> : ${m[1]} base + ${m[2]} ⚡EK = <b>${+m[1]+ +m[2]} dégâts</b>`;
+    if ((m = msg.match(/^(.+?): attack total (\d+) dmg( \(undefendable\))?$/))) return `⚔️ <b>${m[1].replace(/\s*\([^)]*\)$/,'')}</b> : attaque de <b>${m[2]} dégâts</b>${m[3]?' (indéfendable)':''}`;
     if ((m = msg.match(/^Odinforce: (.+)$/))) return `<b>Odinforce</b> : ${m[1].replace('+1 CP (2+ Worthy)','+1 CP (2+ Dignes)').replace(/\+(\d+) EK \(Thunder\)/,'+$1 ⚡EK (Tonnerre)')}`;
     if ((m = msg.match(/^Mighty Summon: (.+)$/))) return `<b>Mighty Summon</b> : ${m[1].replace('Heal','soigne').replace('(Mjolnir home)','(Mjölnir chez toi)').replace(/Retrieve -> (\d+) collateral/,'Retrieve → $1 collatéral')}`;
     if ((m = msg.match(/^Hammered: (.+)$/))) return `<b>Hammered</b> : ${m[1].replace('Mjolnir thrown (1 dmg)','Mjölnir lancé (1 dégât)').replace(/(\d)-of-a-kind -> \+1 EK/,'$1 identiques → +1 ⚡EK')}`;

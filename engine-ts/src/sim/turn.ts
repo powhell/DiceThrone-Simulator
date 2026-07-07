@@ -2164,12 +2164,19 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
     if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
-    // Guard Break : a la conclusion d'une attaque defendable (heuristique : >= 5 dmg)
-    if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && result.dmg >= 5) {
+    // Guard Break : a la conclusion d'une attaque defendable. Politique scriptee/IA :
+    // heuristique >= 5 dmg ; joueur humain : son choix pre-arme (hook), jamais automatique.
+    const gbWanted = policy.chooseGuardBreakSpend
+      ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg)
+      : result.dmg >= 5
+    if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
       const gb = th.tryGuardBreak(self, rng)
       log(state, playerIdx, 'resolveAttack', `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(',')}] — ${gb.success ? 'attack is UNDEFENDABLE' : 'failed'}`)
       if (gb.success) result = { ...result, undefendable: true }
     }
+    // Le total final n'apparaissait nulle part dans le journal : on passait des effets
+    // directement aux dés de défense, et l'user ne pouvait pas voir que l'EK était compté.
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
     if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
     else resolveDefense(state, playerIdx, result.dmg, rng, policies)
   }
@@ -2239,6 +2246,7 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     if (r.hammers >= 2) doShuttle(1, 'Odinforce')
     if (r.worthies >= 2) { grantCp(self, 1); log(state, playerIdx, 'resolveAttack', 'Odinforce: +1 CP (2+ Worthy)') }
     if (r.thunders > 0) { th.gainEk(self, r.thunders); log(state, playerIdx, 'resolveAttack', `Odinforce: +${r.thunders} EK (Thunder)`) }
+    log(state, playerIdx, 'resolveAttack', `Odinforce: ${base} base + ${ekOf()} EK`)
     attack(base + ekOf(), true)
     return
   }
@@ -2247,6 +2255,7 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     doShuttle(up ? 3 : 2, 'Bottled Lightning')
     th.gainGb(self, 2)
     log(state, playerIdx, 'resolveAttack', 'Bottled Lightning: +2 Guard Break')
+    log(state, playerIdx, 'resolveAttack', `Bottled Lightning: ${up ? 8 : 7} base + ${ekOf()} EK`)
     attack((up ? 8 : 7) + ekOf(), true)
     return
   }

@@ -234,7 +234,7 @@ export function matchedAbilities(g: HumanGame, dice: number[]): AbilityCandidate
 // Resolve the human's chosen attack. The chosen ability name is injected into a one-shot policy so
 // the real resolveAbilityPhase (which also runs the AI's defense) picks it. Returns nothing; read
 // g.state for the result. If dice match no ability it's a Whiff (handled inside resolveAbilityPhase).
-export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice): void {
+export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice, gbSpend = false): void {
   // gpBonus: mode (b) Grim Pursuit pre-armed. attackMods: attack-modifier card ids the human
   // pre-armed in the UI (Cranial Assist!, Unescapable!, Subversion!, Thundering Hooves!) —
   // before this parameter the human hook always answered "none", making those 4 cards
@@ -244,6 +244,9 @@ export function humanAttack(g: HumanGame, dice: number[], abilityName: string, g
     ...greedyHighestDamagePolicy,
     chooseAbility: () => abilityName,
     chooseGrimPursuitSpend: () => gpBonus,
+    // Thor : sans ce hook, l'heuristique IA (dmg >= 5) dépensait les Guard Break du joueur
+    // humain automatiquement (user-caught) — ici c'est SON toggle UI qui décide.
+    chooseGuardBreakSpend: () => gbSpend,
     chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter(id => eligible.includes(id)),
     ...(fmMine ? { chooseFmMine: () => fmMine } : {}),
   }
