@@ -51,6 +51,9 @@ export function getCandidates(
   const tax = (defendable: boolean) => (defendable ? defenseTax : 0)
   // Cat Form : +2 dégâts (et Wound) sur toute attaque conclue — s'ajoute aux attaques à dégâts.
   const catBonus = (dmg: number) => (form === 'cat' && dmg > 0 ? CAT_ATTACK_BONUS + WOUND_VALUE : 0)
+  // Shape Shift cap 2 : un gain au-delà du cap vaut 0 (user-caught : le solveur poussait
+  // Wild Realignment à Shape Shift plein — la formule créditait toujours 2 jetons).
+  const ssGain = (n: number) => (Math.min(2, shapeShift + n) - Math.min(2, shapeShift)) * SHAPE_SHIFT_VALUE
 
   // Ferocity
   const fUp = has('ferocity-ii')
@@ -64,7 +67,7 @@ export function getCandidates(
   // Maul (BBBB) — 2d6 (E=7 ; Bear ~8.17). Savage Maul (BBBBB, Maul II) : +Shape Shift puis Maul.
   const maulEv = form === 'bear' ? MAUL_EV_BEAR : MAUL_EV
   if (b >= 5 && has('maul-ii')) {
-    out.push(['Savage Maul (BBBBB)', SHAPE_SHIFT_VALUE + maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)])
+    out.push(['Savage Maul (BBBBB)', ssGain(1) + maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)])
   }
   if (b >= 4) out.push(['Maul (BBBB)', maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)])
 
@@ -75,31 +78,31 @@ export function getCandidates(
 
   // Wild Realignment (ABBC) : +1 CP, +2 Shape Shift, pioche si Druid — pas de dégâts
   if (a >= 1 && b >= 2 && c >= 1) {
-    const val = CP_TO_DMG_EQUIV + Math.min(2, 2 - 0) * SHAPE_SHIFT_VALUE + (form === 'druid' ? CARD_DRAW_VALUE : 0)
+    const val = CP_TO_DMG_EQUIV + ssGain(2) + (form === 'druid' ? CARD_DRAW_VALUE : 0)
     out.push(['Wild Realignment (ABBC)', val, 0])
   }
 
   // Suites
   if (hasStraight(dice, 4)) {
-    out.push(["Forest's Call (4-straight)", FORESTS_CALL_DMG + SHAPE_SHIFT_VALUE + catBonus(FORESTS_CALL_DMG) - tax(true), FORESTS_CALL_DMG])
+    out.push(["Forest's Call (4-straight)", FORESTS_CALL_DMG + ssGain(1) + catBonus(FORESTS_CALL_DMG) - tax(true), FORESTS_CALL_DMG])
   }
   if (hasStraight(dice, 5)) {
     // dé bonus : 1/2 -> +2 dmg ; 1/3 -> +SS ; 1/6 -> +Regen2
-    const bonus = 0.5 * 2 + (1 / 3) * SHAPE_SHIFT_VALUE + (1 / 6) * REGEN2_VALUE
-    out.push(["Forest's Answer (5-straight)", FORESTS_ANSWER_DMG + SHAPE_SHIFT_VALUE + bonus + catBonus(FORESTS_ANSWER_DMG) - tax(true), FORESTS_ANSWER_DMG])
+    const bonus = 0.5 * 2 + (1 / 3) * ssGain(1) + (1 / 6) * REGEN2_VALUE
+    out.push(["Forest's Answer (5-straight)", FORESTS_ANSWER_DMG + ssGain(1) + bonus + catBonus(FORESTS_ANSWER_DMG) - tax(true), FORESTS_ANSWER_DMG])
   }
 
   // Protect the Forest (CCCC) — indéfendable. Rainfall (CCC, PtF II).
   const pDmg = has('protect-the-forest-ii') ? PROTECT_DMG_UPGRADED : PROTECT_DMG
   if (c >= 4) {
-    out.push(['Protect the Forest (CCCC)', pDmg + REGEN2_VALUE + SHAPE_SHIFT_VALUE + catBonus(pDmg), pDmg])
+    out.push(['Protect the Forest (CCCC)', pDmg + REGEN2_VALUE + ssGain(1) + catBonus(pDmg), pDmg])
   } else if (c >= 3 && has('protect-the-forest-ii')) {
     out.push(['Rainfall (CCC)', CP_TO_DMG_EQUIV + 2 * REGEN2_VALUE, 0])
   }
 
   // Wrath of Nature (CCCCC) — ULTIMATE
   if (c >= 5) {
-    out.push(['Wrath of Nature (CCCCC)', WRATH_DMG + REGEN2_VALUE + 2 * SHAPE_SHIFT_VALUE + catBonus(WRATH_DMG), WRATH_DMG])
+    out.push(['Wrath of Nature (CCCCC)', WRATH_DMG + REGEN2_VALUE + ssGain(2) + catBonus(WRATH_DMG), WRATH_DMG])
   }
 
   out.push(['Whiff', 0, 0])

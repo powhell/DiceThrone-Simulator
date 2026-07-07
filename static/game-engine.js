@@ -1292,6 +1292,7 @@ var Game = (() => {
     const out = [];
     const tax = (defendable) => defendable ? defenseTax : 0;
     const catBonus = (dmg) => form === "cat" && dmg > 0 ? CAT_ATTACK_BONUS + WOUND_VALUE : 0;
+    const ssGain = (n) => (Math.min(2, shapeShift + n) - Math.min(2, shapeShift)) * SHAPE_SHIFT_VALUE;
     const fUp = has("ferocity-ii");
     const fd = fUp ? FEROCITY_DMG_UPGRADED : FEROCITY_DMG;
     const kindNeeded = fUp ? 3 : 4;
@@ -1301,31 +1302,31 @@ var Game = (() => {
     else if (a >= 3) out.push(["Ferocity 3A (AAA)", fd[0] + woundBonus + catBonus(fd[0]) - tax(true), fd[0]]);
     const maulEv = form === "bear" ? MAUL_EV_BEAR : MAUL_EV;
     if (b >= 5 && has("maul-ii")) {
-      out.push(["Savage Maul (BBBBB)", SHAPE_SHIFT_VALUE + maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)]);
+      out.push(["Savage Maul (BBBBB)", ssGain(1) + maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)]);
     }
     if (b >= 4) out.push(["Maul (BBBB)", maulEv + catBonus(maulEv) - tax(true), Math.round(maulEv)]);
     if (a >= 2 && c >= 2) {
       out.push(["Nature's Cure (AACC)", NATURES_CURE_DMG + REGEN2_VALUE + catBonus(NATURES_CURE_DMG) - tax(true), NATURES_CURE_DMG]);
     }
     if (a >= 1 && b >= 2 && c >= 1) {
-      const val = CP_TO_DMG_EQUIV3 + Math.min(2, 2 - 0) * SHAPE_SHIFT_VALUE + (form === "druid" ? CARD_DRAW_VALUE4 : 0);
+      const val = CP_TO_DMG_EQUIV3 + ssGain(2) + (form === "druid" ? CARD_DRAW_VALUE4 : 0);
       out.push(["Wild Realignment (ABBC)", val, 0]);
     }
     if (hasStraight5(dice, 4)) {
-      out.push(["Forest's Call (4-straight)", FORESTS_CALL_DMG + SHAPE_SHIFT_VALUE + catBonus(FORESTS_CALL_DMG) - tax(true), FORESTS_CALL_DMG]);
+      out.push(["Forest's Call (4-straight)", FORESTS_CALL_DMG + ssGain(1) + catBonus(FORESTS_CALL_DMG) - tax(true), FORESTS_CALL_DMG]);
     }
     if (hasStraight5(dice, 5)) {
-      const bonus = 0.5 * 2 + 1 / 3 * SHAPE_SHIFT_VALUE + 1 / 6 * REGEN2_VALUE;
-      out.push(["Forest's Answer (5-straight)", FORESTS_ANSWER_DMG + SHAPE_SHIFT_VALUE + bonus + catBonus(FORESTS_ANSWER_DMG) - tax(true), FORESTS_ANSWER_DMG]);
+      const bonus = 0.5 * 2 + 1 / 3 * ssGain(1) + 1 / 6 * REGEN2_VALUE;
+      out.push(["Forest's Answer (5-straight)", FORESTS_ANSWER_DMG + ssGain(1) + bonus + catBonus(FORESTS_ANSWER_DMG) - tax(true), FORESTS_ANSWER_DMG]);
     }
     const pDmg = has("protect-the-forest-ii") ? PROTECT_DMG_UPGRADED : PROTECT_DMG;
     if (c >= 4) {
-      out.push(["Protect the Forest (CCCC)", pDmg + REGEN2_VALUE + SHAPE_SHIFT_VALUE + catBonus(pDmg), pDmg]);
+      out.push(["Protect the Forest (CCCC)", pDmg + REGEN2_VALUE + ssGain(1) + catBonus(pDmg), pDmg]);
     } else if (c >= 3 && has("protect-the-forest-ii")) {
       out.push(["Rainfall (CCC)", CP_TO_DMG_EQUIV3 + 2 * REGEN2_VALUE, 0]);
     }
     if (c >= 5) {
-      out.push(["Wrath of Nature (CCCCC)", WRATH_DMG + REGEN2_VALUE + 2 * SHAPE_SHIFT_VALUE + catBonus(WRATH_DMG), WRATH_DMG]);
+      out.push(["Wrath of Nature (CCCCC)", WRATH_DMG + REGEN2_VALUE + ssGain(2) + catBonus(WRATH_DMG), WRATH_DMG]);
     }
     out.push(["Whiff", 0, 0]);
     return out;
