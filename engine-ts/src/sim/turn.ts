@@ -129,8 +129,10 @@ export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHSt
   if (player.heroId === 'th') {
     return {
       mjolnirHome: th.mjolnirHome(player),
-      // EK bucketise (0/2/4) : cache solveur chaud — l'exact ne vaut que ±1 dmg sur 2 habiletes
-      electrokinesis: Math.min(4, Math.round((player.tokens.electrokinesis ?? 0) / 2) * 2),
+      // EK bucketise (0/2/4) : cache solveur chaud — l'exact ne vaut que ±1 dmg sur 2 habiletes.
+      // FLOOR, pas round : Math.round comptait EK 1 comme 2 et EK 3 comme 4 (boost fantôme
+      // +1-2 dmg sur les lignes Odinforce/Bottled Lightning dans les gardes).
+      electrokinesis: Math.min(4, Math.floor((player.tokens.electrokinesis ?? 0) / 2) * 2),
       guardBreak: player.tokens.guardBreak ?? 0, upgradeIds: player.upgradesInPlay,
       defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player),
       heIsWorthy: player.hand.includes('he-is-worthy') && player.cp >= 1,
