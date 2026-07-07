@@ -1,7 +1,20 @@
 // Thor — valeurs EV (SPEC.md vérifiée). Les valeurs de jetons sont des ESTIMATIONS
 // initiales à calibrer (banc calibration/), comme rv/dr.
-export const EK_VALUE = 0.85 // calibré v5 : échelle 0.46/0.91/3.43 (cumul 1/2/4) — convexe, 0.85/jeton
-export const GB_VALUE = 1.35 // calibré v5 : 1.37±1.32 (cumul 2 : 2.40)
+export const EK_VALUE = 0.5 // valeur d'un gain UNITAIRE (marginal bas mesuré ~0.45) — l'échelle complète est EK_MARGINAL
+// calibré v5 : cumuls mesurés 0.46 (1) / 0.91 (2) / 3.43 (4) — CONVEXE : le 4e jeton porte la
+// pioche. Un 0.85 à plat gonflait Mighty Summon/les navettes et Thor se buffait au lieu
+// d'attaquer (36% -> 29% mesuré). Gains multiples : ekValueOfGaining.
+export const EK_MARGINAL = [0.45, 0.45, 0.55, 2.0]
+export function ekValueOfGaining(current: number, gained: number): number {
+  let total = 0
+  for (let i = 0; i < gained; i++) {
+    const idx = current + i
+    if (idx >= EK_MARGINAL.length) break
+    total += EK_MARGINAL[idx]
+  }
+  return total
+}
+export const GB_VALUE = 1.2 // calibré v5 : 1er jeton 1.37, cumul 2 = 2.40 -> moyenne 1.2 (le flat 1.35 sur-payait les gains x2)
 export const HEAL_VALUE = 1.0
 export const CP_TO_DMG_EQUIV = 0.85 // calibré v5 : 0.86±1.26
 export const CARD_DRAW_VALUE = 1.2

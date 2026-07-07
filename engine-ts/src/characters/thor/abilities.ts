@@ -1,7 +1,7 @@
 // Thor — matching + valeurs EV (board vérifié, SPEC.md). Dé : 1-3 Marteau, 4-5 Digne, 6 Tonnerre.
 import type { AbilityEntry } from '../../core/types.js'
 import {
-  EK_VALUE, GB_VALUE, HEAL_VALUE, CP_TO_DMG_EQUIV,
+  EK_VALUE, ekValueOfGaining, GB_VALUE, HEAL_VALUE, CP_TO_DMG_EQUIV,
   HAMMERED_DMG, HAMMERED_DMG_II, HAMMERED_DMG_III,
   MIGHTY_SUMMON_HEAL, MIGHTY_SUMMON_HEAL_II, MIGHTY_SUMMON_COLLATERAL, MIGHTY_SUMMON_COLLATERAL_II,
   CHAIN_LIGHTNING_EV, CHAIN_LIGHTNING_EV_II, CHAIN_LIGHTNING_COLLATERAL, CHAIN_LIGHTNING_COLLATERAL_II,
@@ -41,12 +41,14 @@ function maxOfAKind(dice: number[]): number {
 }
 
 // Valeur d'une séquence de navettes Mjölnir : alternance depuis la position courante.
-// Throw = 1 dmg isolé indéfendable ; Retrieve = +1 EK.
-export function shuttleValue(steps: number, home: boolean): number {
+// Throw = 1 dmg isolé indéfendable ; Retrieve = +1 EK (marginal selon le stock courant).
+export function shuttleValue(steps: number, home: boolean, ek = 0): number {
   let v = 0
   let h = home
+  let stock = ek
   for (let i = 0; i < steps; i++) {
-    v += h ? 1 : EK_VALUE
+    if (h) v += 1
+    else { v += ekValueOfGaining(stock, 1); stock += 1 }
     h = !h
   }
   return v
@@ -72,9 +74,9 @@ export function getCandidates(
     const dmgTable = has('hammered-iii') ? HAMMERED_DMG_III : has('hammered-ii') ? HAMMERED_DMG_II : HAMMERED_DMG
     const dmg = dmgTable[tier]
     // I : Throw seulement (rien si le marteau est absent) ; II/III : navette au choix
-    const moveV = (has('hammered-ii') || has('hammered-iii')) ? shuttleValue(1, mjolnirHome) : (mjolnirHome ? 1 : 0)
+    const moveV = (has('hammered-ii') || has('hammered-iii')) ? shuttleValue(1, mjolnirHome, ek) : (mjolnirHome ? 1 : 0)
     const kindNeed = has('hammered-iii') ? 3 : has('hammered-ii') ? 4 : 99
-    const ekBonus = maxOfAKind(dice) >= kindNeed ? EK_VALUE : 0
+    const ekBonus = maxOfAKind(dice) >= kindNeed ? ekValueOfGaining(ek, 1) : 0
     const label = a >= 5 ? 'Hammered 5H' : a >= 4 ? 'Hammered 4H' : 'Hammered 3H'
     out.push([label, dmg + moveV + ekBonus - tax(true), dmg])
   }
@@ -84,7 +86,7 @@ export function getCandidates(
     const up = has('mighty-summon-ii')
     const heal = up ? MIGHTY_SUMMON_HEAL_II : MIGHTY_SUMMON_HEAL
     const coll = up ? MIGHTY_SUMMON_COLLATERAL_II : MIGHTY_SUMMON_COLLATERAL
-    const branch = mjolnirHome ? 3 * EK_VALUE : coll + EK_VALUE // Retrieve donne aussi son EK
+    const branch = mjolnirHome ? ekValueOfGaining(ek, 3) : coll + ekValueOfGaining(ek, 1) // Retrieve donne aussi son EK
     out.push(['Mighty Summon (HWWT)', 2 * GB_VALUE + heal * HEAL_VALUE + branch, 0])
   }
 
@@ -107,9 +109,9 @@ export function getCandidates(
     const expectEkGain = ODINFORCE_E_THUNDER
     const boost = Math.min(4, ek + expectEkGain) // +1 dmg x EK (après gains)
     const v = dmg + boost
-      + ODINFORCE_P_SHUTTLE * shuttleValue(1, mjolnirHome)
+      + ODINFORCE_P_SHUTTLE * shuttleValue(1, mjolnirHome, ek)
       + ODINFORCE_P_CP * CP_TO_DMG_EQUIV
-      + expectEkGain * EK_VALUE
+      + ekValueOfGaining(ek, 1) * ODINFORCE_E_THUNDER
       - tax(true)
     out.push(['Odinforce (HHWWW)', v, dmg])
   }
@@ -119,21 +121,21 @@ export function getCandidates(
     const up = has('bottled-lightning-ii')
     const dmg = (up ? BOTTLED_DMG_II : BOTTLED_DMG) + Math.min(4, ek)
     const steps = up ? 3 : 2
-    out.push(['Bottled Lightning (TTTT)', dmg + shuttleValue(steps, mjolnirHome) + 2 * GB_VALUE - tax(true), dmg])
+    out.push(['Bottled Lightning (TTTT)', dmg + shuttleValue(steps, mjolnirHome, ek) + 2 * GB_VALUE - tax(true), dmg])
   }
 
   // Ricochet! (TTT, Bottled Lightning II) : 6 navettes, pas d'attaque
   if (c >= 3 && has('bottled-lightning-ii')) {
-    out.push(['Ricochet! (TTT)', shuttleValue(RICOCHET_STEPS, mjolnirHome), 0])
+    out.push(['Ricochet! (TTT)', shuttleValue(RICOCHET_STEPS, mjolnirHome, ek), 0])
   }
 
   // Lightning Rod (suite de 4)
   if (hasStraight(dice, 4)) {
     if (has('lightning-rod-ii')) {
-      out.push(['Lightning Rod (4-straight)', LIGHTNING_ROD_DMG_II + shuttleValue(1, mjolnirHome) + EK_VALUE - tax(true), LIGHTNING_ROD_DMG_II])
+      out.push(['Lightning Rod (4-straight)', LIGHTNING_ROD_DMG_II + shuttleValue(1, mjolnirHome, ek) + ekValueOfGaining(ek, 1) - tax(true), LIGHTNING_ROD_DMG_II])
     } else {
       // 9 si l'adversaire a Mjölnir (= il est away), sinon 7 + 1 EK
-      const v = mjolnirHome ? LIGHTNING_ROD_DMG + EK_VALUE : LIGHTNING_ROD_DMG_MJOLNIR
+      const v = mjolnirHome ? LIGHTNING_ROD_DMG + ekValueOfGaining(ek, 1) : LIGHTNING_ROD_DMG_MJOLNIR
       const dmg = mjolnirHome ? LIGHTNING_ROD_DMG : LIGHTNING_ROD_DMG_MJOLNIR
       out.push(['Lightning Rod (4-straight)', v - tax(true), dmg])
     }
@@ -142,7 +144,7 @@ export function getCandidates(
   // Thunder Bolt (suite de 5)
   if (hasStraight(dice, 5)) {
     const dmg = has('thunder-bolt-ii') ? THUNDER_BOLT_DMG_II : THUNDER_BOLT_DMG
-    out.push(['Thunder Bolt (5-straight)', dmg + shuttleValue(1, mjolnirHome) + 2 * EK_VALUE - tax(true), dmg])
+    out.push(['Thunder Bolt (5-straight)', dmg + shuttleValue(1, mjolnirHome, ek) + ekValueOfGaining(ek, 2) - tax(true), dmg])
   }
 
   // Asgardian Brawn (WWW, Thunder Bolt II) : soin pur
@@ -152,7 +154,7 @@ export function getCandidates(
 
   // For Asgard! (TTTTT) — ULTIMATE indéfendable
   if (c >= 5) {
-    out.push(['For Asgard! (TTTTT)', FOR_ASGARD_DMG + GB_VALUE + shuttleValue(4, mjolnirHome), FOR_ASGARD_DMG])
+    out.push(['For Asgard! (TTTTT)', FOR_ASGARD_DMG + GB_VALUE + shuttleValue(4, mjolnirHome, ek), FOR_ASGARD_DMG])
   }
 
   out.push(['Whiff', 0, 0])

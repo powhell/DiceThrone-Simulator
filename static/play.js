@@ -945,6 +945,7 @@
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       addFmBtns(c);
       addThorBtns(c, true); // ⚡×4→pioche (Main Phase, leaflet) + navette Mjölnir
+      addMorphBtns(c); // 🧙 revenir Druide en fin de tour = Regenerate (user-caught : bouton absent en Main Phase)
       // Combo (sm) : la dépense officielle est « à la conclusion de la Defensive Roll Phase
       // adverse » — dans le flux UI, juste après le BILAN, donc offerte en arrivant en main2.
       const youC = g.state.players[g.humanIdx];
@@ -1041,6 +1042,7 @@
       else if (sel.length===1) s.textContent=`Dé ${sel[0]+1} (${dice[sel[0]].v}) sélectionné — nouvelle valeur :`;
       else s.textContent=`Dés ${sel[0]+1} et ${sel[1]+1} sélectionnés — nouvelle valeur pour les DEUX :`;
       c.appendChild(s);
+      addMorphBtns(c); // Shape Shift à tout moment (user-caught : impossible de passer Chat avant l'attaque)
       if (sel.length===1) {
         const i=sel[0], cur=dice[i].v;
         if (cardOK('tip-it')) {
@@ -1062,6 +1064,7 @@
       s.textContent = cands.length ? 'Choisis une habileté à droite →' : 'Aucune habileté — tu rates ton attaque.';
       c.appendChild(s);
       addThorBtns(c); // 🔨 Retrieve AVANT l'attaque = +1 EK compté dans Odinforce/Bottled Lightning
+      addMorphBtns(c); // 🐆 passer Chat AVANT de résoudre l'attaque = +2 dmg + Wound (user-caught)
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
       const you = g.state.players[g.humanIdx];
       // Offered even at 0 Grim Pursuit: "Gain X Grim Pursuit. THEN deal dmg" abilities (Ride

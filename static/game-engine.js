@@ -1396,8 +1396,18 @@ var Game = (() => {
   };
 
   // src/characters/thor/constants.ts
-  var EK_VALUE = 0.85;
-  var GB_VALUE = 1.35;
+  var EK_VALUE = 0.5;
+  var EK_MARGINAL = [0.45, 0.45, 0.55, 2];
+  function ekValueOfGaining(current, gained) {
+    let total = 0;
+    for (let i = 0; i < gained; i++) {
+      const idx = current + i;
+      if (idx >= EK_MARGINAL.length) break;
+      total += EK_MARGINAL[idx];
+    }
+    return total;
+  }
+  var GB_VALUE = 1.2;
   var HEAL_VALUE = 1;
   var CP_TO_DMG_EQUIV4 = 0.85;
   var HAMMERED_DMG = [4, 5, 7];
@@ -1455,11 +1465,16 @@ var Game = (() => {
     for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
     return Math.max(...counts.values());
   }
-  function shuttleValue(steps, home) {
+  function shuttleValue(steps, home, ek = 0) {
     let v = 0;
     let h = home;
+    let stock = ek;
     for (let i = 0; i < steps; i++) {
-      v += h ? 1 : EK_VALUE;
+      if (h) v += 1;
+      else {
+        v += ekValueOfGaining(stock, 1);
+        stock += 1;
+      }
       h = !h;
     }
     return v;
@@ -1474,9 +1489,9 @@ var Game = (() => {
       const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
       const dmgTable = has("hammered-iii") ? HAMMERED_DMG_III : has("hammered-ii") ? HAMMERED_DMG_II : HAMMERED_DMG;
       const dmg = dmgTable[tier];
-      const moveV = has("hammered-ii") || has("hammered-iii") ? shuttleValue(1, mjolnirHome2) : mjolnirHome2 ? 1 : 0;
+      const moveV = has("hammered-ii") || has("hammered-iii") ? shuttleValue(1, mjolnirHome2, ek) : mjolnirHome2 ? 1 : 0;
       const kindNeed = has("hammered-iii") ? 3 : has("hammered-ii") ? 4 : 99;
-      const ekBonus = maxOfAKind3(dice) >= kindNeed ? EK_VALUE : 0;
+      const ekBonus = maxOfAKind3(dice) >= kindNeed ? ekValueOfGaining(ek, 1) : 0;
       const label = a >= 5 ? "Hammered 5H" : a >= 4 ? "Hammered 4H" : "Hammered 3H";
       out.push([label, dmg + moveV + ekBonus - tax(true), dmg]);
     }
@@ -1484,7 +1499,7 @@ var Game = (() => {
       const up = has("mighty-summon-ii");
       const heal = up ? MIGHTY_SUMMON_HEAL_II : MIGHTY_SUMMON_HEAL;
       const coll = up ? MIGHTY_SUMMON_COLLATERAL_II : MIGHTY_SUMMON_COLLATERAL;
-      const branch = mjolnirHome2 ? 3 * EK_VALUE : coll + EK_VALUE;
+      const branch = mjolnirHome2 ? ekValueOfGaining(ek, 3) : coll + ekValueOfGaining(ek, 1);
       out.push(["Mighty Summon (HWWT)", 2 * GB_VALUE + heal * HEAL_VALUE + branch, 0]);
     }
     if (a >= 2 && c >= 2 && has("mighty-summon-ii")) {
@@ -1500,36 +1515,36 @@ var Game = (() => {
       const dmg = has("odinforce-ii") ? ODINFORCE_DMG_II : ODINFORCE_DMG;
       const expectEkGain = ODINFORCE_E_THUNDER;
       const boost = Math.min(4, ek + expectEkGain);
-      const v = dmg + boost + ODINFORCE_P_SHUTTLE * shuttleValue(1, mjolnirHome2) + ODINFORCE_P_CP * CP_TO_DMG_EQUIV4 + expectEkGain * EK_VALUE - tax(true);
+      const v = dmg + boost + ODINFORCE_P_SHUTTLE * shuttleValue(1, mjolnirHome2, ek) + ODINFORCE_P_CP * CP_TO_DMG_EQUIV4 + ekValueOfGaining(ek, 1) * ODINFORCE_E_THUNDER - tax(true);
       out.push(["Odinforce (HHWWW)", v, dmg]);
     }
     if (c >= 4) {
       const up = has("bottled-lightning-ii");
       const dmg = (up ? BOTTLED_DMG_II : BOTTLED_DMG) + Math.min(4, ek);
       const steps = up ? 3 : 2;
-      out.push(["Bottled Lightning (TTTT)", dmg + shuttleValue(steps, mjolnirHome2) + 2 * GB_VALUE - tax(true), dmg]);
+      out.push(["Bottled Lightning (TTTT)", dmg + shuttleValue(steps, mjolnirHome2, ek) + 2 * GB_VALUE - tax(true), dmg]);
     }
     if (c >= 3 && has("bottled-lightning-ii")) {
-      out.push(["Ricochet! (TTT)", shuttleValue(RICOCHET_STEPS, mjolnirHome2), 0]);
+      out.push(["Ricochet! (TTT)", shuttleValue(RICOCHET_STEPS, mjolnirHome2, ek), 0]);
     }
     if (hasStraight6(dice, 4)) {
       if (has("lightning-rod-ii")) {
-        out.push(["Lightning Rod (4-straight)", LIGHTNING_ROD_DMG_II + shuttleValue(1, mjolnirHome2) + EK_VALUE - tax(true), LIGHTNING_ROD_DMG_II]);
+        out.push(["Lightning Rod (4-straight)", LIGHTNING_ROD_DMG_II + shuttleValue(1, mjolnirHome2, ek) + ekValueOfGaining(ek, 1) - tax(true), LIGHTNING_ROD_DMG_II]);
       } else {
-        const v = mjolnirHome2 ? LIGHTNING_ROD_DMG + EK_VALUE : LIGHTNING_ROD_DMG_MJOLNIR;
+        const v = mjolnirHome2 ? LIGHTNING_ROD_DMG + ekValueOfGaining(ek, 1) : LIGHTNING_ROD_DMG_MJOLNIR;
         const dmg = mjolnirHome2 ? LIGHTNING_ROD_DMG : LIGHTNING_ROD_DMG_MJOLNIR;
         out.push(["Lightning Rod (4-straight)", v - tax(true), dmg]);
       }
     }
     if (hasStraight6(dice, 5)) {
       const dmg = has("thunder-bolt-ii") ? THUNDER_BOLT_DMG_II : THUNDER_BOLT_DMG;
-      out.push(["Thunder Bolt (5-straight)", dmg + shuttleValue(1, mjolnirHome2) + 2 * EK_VALUE - tax(true), dmg]);
+      out.push(["Thunder Bolt (5-straight)", dmg + shuttleValue(1, mjolnirHome2, ek) + ekValueOfGaining(ek, 2) - tax(true), dmg]);
     }
     if (b >= 3 && has("thunder-bolt-ii")) {
       out.push(["Asgardian Brawn (WWW)", ASGARDIAN_BRAWN_HEAL * HEAL_VALUE, 0]);
     }
     if (c >= 5) {
-      out.push(["For Asgard! (TTTTT)", FOR_ASGARD_DMG + GB_VALUE + shuttleValue(4, mjolnirHome2), FOR_ASGARD_DMG]);
+      out.push(["For Asgard! (TTTTT)", FOR_ASGARD_DMG + GB_VALUE + shuttleValue(4, mjolnirHome2, ek), FOR_ASGARD_DMG]);
     }
     out.push(["Whiff", 0, 0]);
     return out;
