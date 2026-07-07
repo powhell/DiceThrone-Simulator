@@ -6243,7 +6243,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : self.heroId === "sm" ? smConfig : bwConfig;
     const state = oracleStateFor(self, opp);
     state.wildcards = {
       sixIt: self.hand.includes("six-it") && self.cp >= 1,
