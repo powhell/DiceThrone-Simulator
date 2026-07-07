@@ -1063,7 +1063,7 @@ var Game = (() => {
 
   // src/characters/raveness/constants.ts
   var NEVERMORE_ACTIVATION_VALUE = 1.3;
-  var FEATHER_VALUE = 0.8;
+  var FEATHER_VALUE = 0.3;
   var FEATHER_CAP = 5;
   var HEX_VALUE = 1.5;
   var CARD_DRAW_VALUE3 = 1.3;
@@ -1242,11 +1242,11 @@ var Game = (() => {
   };
 
   // src/characters/druid/constants.ts
-  var SHAPE_SHIFT_VALUE = 1.2;
-  var REGEN2_VALUE = 2.2;
-  var WOUND_VALUE = 1.6;
+  var SHAPE_SHIFT_VALUE = 1.45;
+  var REGEN2_VALUE = 2.9;
+  var WOUND_VALUE = 1.4;
   var CARD_DRAW_VALUE4 = 1.3;
-  var CP_TO_DMG_EQUIV3 = 0.75;
+  var CP_TO_DMG_EQUIV3 = 0.55;
   var FEROCITY_DMG = [4, 5, 6];
   var FEROCITY_DMG_UPGRADED = [5, 6, 7];
   var MAUL_EV = 7;
@@ -1396,10 +1396,10 @@ var Game = (() => {
   };
 
   // src/characters/thor/constants.ts
-  var EK_VALUE = 0.6;
-  var GB_VALUE = 0.9;
+  var EK_VALUE = 0.85;
+  var GB_VALUE = 1.35;
   var HEAL_VALUE = 1;
-  var CP_TO_DMG_EQUIV4 = 1.3;
+  var CP_TO_DMG_EQUIV4 = 0.85;
   var HAMMERED_DMG = [4, 5, 7];
   var HAMMERED_DMG_II = [5, 6, 7];
   var HAMMERED_DMG_III = [5, 6, 8];
@@ -1606,9 +1606,9 @@ var Game = (() => {
   };
 
   // src/characters/spiderman/constants.ts
-  var COMBO_VALUE = 4;
-  var WEBBED_VALUE = 3.5;
-  var INVIS_VALUE = 1.5;
+  var COMBO_VALUE = 4.7;
+  var WEBBED_VALUE = 1.5;
+  var INVIS_VALUE = 0.3;
   var CARD_DRAW_VALUE5 = 1.2;
   var PUNCH_DMG = [4, 5, 6];
   var PUNCH_DMG_II = [5, 6, 7];
@@ -1761,9 +1761,9 @@ var Game = (() => {
   };
 
   // src/characters/pyromancer/constants.ts
-  var FM_VALUE = 1;
-  var BURN_VALUE = 2.5;
-  var KNOCKDOWN_VALUE = 2.2;
+  var FM_VALUE = 0.7;
+  var BURN_VALUE = 4;
+  var KNOCKDOWN_VALUE = 1.5;
   var STUN_EXTRA_PHASE_VALUE = 5;
   var FIREBALL_DMG = [4, 6, 8];
   var HOT_STREAK_BASE = 5;

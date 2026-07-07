@@ -10,7 +10,7 @@ export const NEVERMORE_ACTIVATION_VALUE = 1.3
 // Jeton Feather (cap 5) : monnaie flexible — 1 = relance du Nevermore Die Roll, 2 = ±1
 // dessus, 3 = une activation (3 × 0.8 ≈ 2.4 vs activation 1.3 : la conversion en activation
 // est le plancher, la flexibilité paie le reste).
-export const FEATHER_VALUE = 0.8
+export const FEATHER_VALUE = 0.3 // calibré v5 : 0.18±0.82 (les plumes n'agissent que sur le dé Nevermore)
 export const FEATHER_CAP = 5
 
 // Hex (unique) : les 6 de l'adversaire deviennent des faces BLANCHES jusqu'à la fin de son

@@ -1,10 +1,10 @@
 // Druid — constantes d'EV (ESTIMATIONS INITIALES, à calibrer). Chiffres de jeu : SPEC.md
 // (scans user 2026-07-06).
-export const SHAPE_SHIFT_VALUE = 1.2   // une transformation à la demande (Cat +2/attaque, Bear défense)
-export const REGEN2_VALUE = 2.2        // soigne 2 puis 1 (≈3 PV étalés, cap 2)
-export const WOUND_VALUE = 1.6         // ~1.6 dégât attendu avant retrait (1 + P(1-3)=1/2 chaîne)
+export const SHAPE_SHIFT_VALUE = 1.45  // calibré v5 : 1.46±1.01
+export const REGEN2_VALUE = 2.9        // calibré v5 : 2.92±0.95
+export const WOUND_VALUE = 1.4         // calibré v5 : 1.38±0.99
 export const CARD_DRAW_VALUE = 1.3
-export const CP_TO_DMG_EQUIV = 0.75
+export const CP_TO_DMG_EQUIV = 0.55 // calibré v5 : 0.52±0.84
 export const HEAL_VALUE = 0.9          // 1 PV soigné ≈ un peu moins d'1 dégât
 
 export const FEROCITY_DMG = [4, 5, 6]

@@ -1,9 +1,9 @@
 // Thor — valeurs EV (SPEC.md vérifiée). Les valeurs de jetons sont des ESTIMATIONS
 // initiales à calibrer (banc calibration/), comme rv/dr.
-export const EK_VALUE = 0.6 // +1 dmg sur BL/Odinforce, 4 -> pioche
-export const GB_VALUE = 0.9 // 1/3 par jeton de rendre l'attaque indéfendable
+export const EK_VALUE = 0.85 // calibré v5 : échelle 0.46/0.91/3.43 (cumul 1/2/4) — convexe, 0.85/jeton
+export const GB_VALUE = 1.35 // calibré v5 : 1.37±1.32 (cumul 2 : 2.40)
 export const HEAL_VALUE = 1.0
-export const CP_TO_DMG_EQUIV = 1.3
+export const CP_TO_DMG_EQUIV = 0.85 // calibré v5 : 0.86±1.26
 export const CARD_DRAW_VALUE = 1.2
 
 export const HAMMERED_DMG = [4, 5, 7] // 3/4/5 marteaux

@@ -1,10 +1,10 @@
 // Spider-Man — valeurs EV (SPEC.md vérifiée). Les valeurs de jetons sont des ESTIMATIONS
 // initiales à calibrer (banc calibration/), comme rv/dr/th.
-export const COMBO_VALUE = 4.0 // Offensive Roll Phase complète en plus (~une attaque moyenne)
-export const WEBBED_VALUE = 3.5 // 2 iso indéf immédiats + prochaine attaque normale devient indéf (~1,5 de défense annulée)
-export const INVIS_VALUE = 1.5 // défendre contre une attaque indéfendable + carburant Ambush!/Nice Try!
+export const COMBO_VALUE = 4.7 // calibré v5 : 4.68±1.98 — le Combo vaut vraiment une attaque
+export const WEBBED_VALUE = 1.5 // calibré v5 : 1.49±1.57 (j'avais surévalué la conversion indéf)
+export const INVIS_VALUE = 0.3 // calibré v5 : -1.42±1.65 (à peu près nul — plancher conservateur)
 export const HEAL_VALUE = 1.0
-export const CP_TO_DMG_EQUIV = 1.3
+export const CP_TO_DMG_EQUIV = 0.8 // calibré v5 : bruité (-1.08±1.28), aligné sur th/py ~0.8
 export const CARD_DRAW_VALUE = 1.2
 
 export const PUNCH_DMG = [4, 5, 6] // 3/4/5 Thwip
