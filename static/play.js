@@ -454,9 +454,12 @@
           rawLine = `<div class="lead" style="margin-top:4px">🎲 dés seuls : garder [${raw.kept.join(',')||'rien'}] → EV ${raw.ev.toFixed(1)} · tes cartes ajoutent +${Math.max(0, adv.ev - raw.ev).toFixed(1)}</div>`;
         }
       }
+      // « s'arrêter » (valeur terminale) ≠ la ligne « garder tout » du tableau (qui conserve
+      // l'option de changer d'avis à la relance suivante) — les deux chiffres diffèrent
+      // légitimement, le libellé « tout garder » les confondait (user-caught).
       $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
-        stop ? `S'ARRÊTER — tout garder vaut ${adv.keepAllEv.toFixed(1)}`
-             : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · tout garder = ${adv.keepAllEv.toFixed(1)}`}</div>${
+        stop ? `S'ARRÊTER — finir sur ces dés vaut ${adv.keepAllEv.toFixed(1)}`
+             : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · s'arrêter ici = ${adv.keepAllEv.toFixed(1)}`}</div>${
         hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}${rawLine}`;
       return;
     }

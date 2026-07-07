@@ -1396,8 +1396,8 @@ var Game = (() => {
   };
 
   // src/characters/thor/constants.ts
-  var EK_VALUE = 0.5;
-  var EK_MARGINAL = [0.45, 0.45, 0.55, 2];
+  var EK_VALUE = 0.6;
+  var EK_MARGINAL = [0.6, 0.6, 0.6, 0.6];
   function ekValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -1407,9 +1407,9 @@ var Game = (() => {
     }
     return total;
   }
-  var GB_VALUE = 1.2;
+  var GB_VALUE = 0.9;
   var HEAL_VALUE = 1;
-  var CP_TO_DMG_EQUIV4 = 0.85;
+  var CP_TO_DMG_EQUIV4 = 1.3;
   var HAMMERED_DMG = [4, 5, 7];
   var HAMMERED_DMG_II = [5, 6, 7];
   var HAMMERED_DMG_III = [5, 6, 8];

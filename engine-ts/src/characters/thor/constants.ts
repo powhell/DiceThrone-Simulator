@@ -1,10 +1,14 @@
 // Thor — valeurs EV (SPEC.md vérifiée). Les valeurs de jetons sont des ESTIMATIONS
 // initiales à calibrer (banc calibration/), comme rv/dr.
-export const EK_VALUE = 0.5 // valeur d'un gain UNITAIRE (marginal bas mesuré ~0.45) — l'échelle complète est EK_MARGINAL
+export const EK_VALUE = 0.6 // REVERT aux originales — duel 240 parties : originales 26.7% > convexes 22.5%
 // calibré v5 : cumuls mesurés 0.46 (1) / 0.91 (2) / 3.43 (4) — CONVEXE : le 4e jeton porte la
 // pioche. Un 0.85 à plat gonflait Mighty Summon/les navettes et Thor se buffait au lieu
 // d'attaquer (36% -> 29% mesuré). Gains multiples : ekValueOfGaining.
-export const EK_MARGINAL = [0.45, 0.45, 0.55, 2.0]
+// DOSSIER OUVERT (2026-07-07) : ni les valeurs calibrées v5 (flat 0.85 : 28.9%) ni l'échelle
+// convexe mesurée (22.5%) ne battent les originales (36.3% en matrice complète). Le problème
+// de Thor n'est PAS ses jetons : structurel vs fm/sm (kit défendable vs défenses punitives).
+// Prochaine piste : A/B au niveau des habiletés + croiser avec karnyx (stats humaines).
+export const EK_MARGINAL = [0.6, 0.6, 0.6, 0.6]
 export function ekValueOfGaining(current: number, gained: number): number {
   let total = 0
   for (let i = 0; i < gained; i++) {
@@ -14,9 +18,9 @@ export function ekValueOfGaining(current: number, gained: number): number {
   }
   return total
 }
-export const GB_VALUE = 1.2 // calibré v5 : 1er jeton 1.37, cumul 2 = 2.40 -> moyenne 1.2 (le flat 1.35 sur-payait les gains x2)
+export const GB_VALUE = 0.9 // REVERT aux originales (voir dossier ouvert ci-dessus)
 export const HEAL_VALUE = 1.0
-export const CP_TO_DMG_EQUIV = 0.85 // calibré v5 : 0.86±1.26
+export const CP_TO_DMG_EQUIV = 1.3 // REVERT aux originales (voir dossier ouvert ci-dessus)
 export const CARD_DRAW_VALUE = 1.2
 
 export const HAMMERED_DMG = [4, 5, 7] // 3/4/5 marteaux
