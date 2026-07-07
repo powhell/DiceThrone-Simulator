@@ -9,6 +9,7 @@ import type { FMState } from '../characters/forgemaster/config.js'
 import type { RVState } from '../characters/raveness/config.js'
 import type { DRState } from '../characters/druid/config.js'
 import type { THState } from '../characters/thor/config.js'
+import type { SMState } from '../characters/spiderman/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -24,6 +25,7 @@ import * as nx from './hero/nx.rules.js'
 import * as rv from './hero/rv.rules.js'
 import * as dr from './hero/dr.rules.js'
 import * as th from './hero/th.rules.js'
+import * as sm from './hero/sm.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -38,6 +40,11 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 // verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
 // indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
 export function defenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'sm') {
+    // Spider-Sense : P(>=1 Spider sur 2 dés)=0.306 x ceil(dmg/2) ~ 0.9 sur une attaque de 6 ;
+    // Counterpunch : contre 3 x 1/2 = 1.5. L'IA choisit le meilleur -> taxe moyenne ~1.5.
+    return 1.5
+  }
   if (opponent.heroId === 'bw') {
     // Sabotage 3 des : contre 1.5, prevenus 0.5 (Sabotage II, 4 des : 2.0 / 0.67)
     return opponent.upgradesInPlay.includes('sabotage-ii') ? 2.67 : 2.0
@@ -81,7 +88,16 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState {
+  if (player.heroId === 'sm') {
+    return {
+      comboHeld: (player.tokens.combo ?? 0) > 0,
+      invisHeld: (player.tokens.invisibility ?? 0) > 0,
+      oppWebbed: (opponent.tokens.webbed ?? 0) > 0,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'dr') {
     return {
       form: dr.formOf(player), shapeShift: player.tokens.shapeShift ?? 0,
@@ -179,6 +195,11 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.minesDrawUsedThisTurn = false
   self.thrownThisTurn = 0
   self.ekDrawUsedThisTurn = false
+  self.comboSpentThisTurn = false
+  self.smAttackedThisPhase = false
+  self.swingEscapeArmed = false
+  self.smInvisDefendArmed = false
+  self.smInvisRerollArmed = false
 
   // Regenerate (soigne, flip/retire) + Wound (1 dmg + d6 4-6 retire) — jetons Druid,
   // portables par n'importe qui (Wound s'inflige a l'adversaire).
@@ -580,6 +601,42 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     else { self.hp = Math.min(self.hp + 3, 60); log(state, playerIdx, phase, `Strength of the Woods!: rolled ${sw} -> Heal 3`) }
     return
   }
+  if (card.id === 'yikes') {
+    const g = sm.gainInvisibility(self)
+    log(state, playerIdx, phase, `Yikes!: ${g ? 'gained Invisibility' : 'Invisibility already held (stack 1)'}`)
+    return
+  }
+  if (card.id === 'radioactive-blood') {
+    const g = sm.gainCombo(self)
+    log(state, playerIdx, phase, `Radioactive Blood!: ${g ? 'gained Combo' : 'Combo already held (stack 1)'}`)
+    return
+  }
+  if (card.id === 'web-shooters') {
+    const r = sm.inflictWebbed(opp)
+    if (r.gained) { queueDamage(state, (1 - playerIdx) as 0 | 1, r.isoDamage); flushDamage(state); log(state, playerIdx, phase, 'Web Shooters!: Webbed inflicted (2 isolated undefendable dmg)'); checkGameOver(state) }
+    else log(state, playerIdx, phase, 'Web Shooters!: opponent already Webbed (stack 1) — no effect')
+    return
+  }
+  if (card.id === 'booyah') {
+    const by = rollDie(rng)
+    if (by <= 3) { const g = sm.gainInvisibility(self); log(state, playerIdx, phase, `Booyah!: rolled ${by} (Thwip) -> ${g ? 'gained Invisibility' : 'Invisibility already held'}`) }
+    else if (by <= 5) {
+      const r = sm.inflictWebbed(opp)
+      if (r.gained) { queueDamage(state, (1 - playerIdx) as 0 | 1, r.isoDamage); flushDamage(state); log(state, playerIdx, phase, `Booyah!: rolled ${by} (Web) -> Webbed inflicted (2 iso dmg)`); checkGameOver(state) }
+      else log(state, playerIdx, phase, `Booyah!: rolled ${by} (Web) -> opponent already Webbed`)
+    } else { const g = sm.gainCombo(self); log(state, playerIdx, phase, `Booyah!: rolled ${by} (Spider) -> ${g ? 'gained Combo' : 'Combo already held'}`) }
+    return
+  }
+  if (card.id === 'milkshake-me') {
+    self.hp = Math.min(self.hp + 3, 60)
+    log(state, playerIdx, phase, 'Milkshake Me!: healed 3')
+    return
+  }
+  if (card.id === 'cha-ching') {
+    grantCp(self, 2)
+    log(state, playerIdx, phase, 'Cha-Ching!: +2 CP')
+    return
+  }
   const eff = card.effect
   if (!eff) {
     log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP — TODO(user): effect not structured yet, no game-state change applied`)
@@ -757,19 +814,22 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak', 'yikes', 'radioactive-blood']
 
-// Conditions d'eligibilite propres aux instants Thor (textes verifies).
+// Conditions d'eligibilite propres aux instants Thor/Spider-Man (textes verifies).
 function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolean {
   const self = state.players[playerIdx]
   if (id === 'time-to-hammer') return self.mjolnirAway === true // Retrieve : il doit etre chez l'adversaire
   if (id === 'stormbreak') return (self.thrownThisTurn ?? 0) >= 2
+  // Stack 1 : gagner un jeton déjà détenu = carte gaspillée
+  if (id === 'yikes') return (self.tokens.invisibility ?? 0) < 1
+  if (id === 'radioactive-blood') return (self.tokens.combo ?? 0) < 1
   return true
 }
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1139,6 +1199,17 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // two different policies face off, e.g. an RL agent defending against a scripted attacker).
   const policy = policies[defenderIdx]
 
+  // Webbed (sm, jeton vérifié) : « The next time a player afflicted with this token is Attacked
+  // with normal damage, the damage type becomes undefendable instead and this token is
+  // immediately removed. » — pas de jet de défense du tout (Invisibility peut encore intervenir
+  // dans queueAttackDamageVsArmor).
+  if ((defender.tokens.webbed ?? 0) > 0 && incomingDamage > 0) {
+    defender.tokens.webbed = 0
+    log(state, defenderIdx, 'defense', 'Webbed: incoming attack becomes UNDEFENDABLE, token removed')
+    queueAttackDamageVsArmor(state, attackerIdx, incomingDamage, false, rng, policies)
+    return
+  }
+
   // DRP3: roll the defense dice, then open the alter window (Golden Rule: the ATTACKER may Tip It!/
   // Helping Hand! the defender's dice; the defender may Better D! to reroll all of them), THEN
   // count on the final dice. The roll's effects (prevention, counter-damage, Dreadful/Grim Pursuit
@@ -1157,6 +1228,40 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     defenseDice = rollDice(dr.thickHideDiceCount(defender), rng) // Thick Hide : 2 (Bear 4)
   } else if (defender.heroId === 'rv') {
     defenseDice = rollDice(5, rng) // Nothing More : 5 des
+  } else if (defender.heroId === 'sm') {
+    // Deux Defensive Abilities, choix libre du défenseur (ruling user) : humain = sa
+    // préférence pré-armée (smDefenseMode), IA = heuristique EV.
+    defender.spiderSensePrevented = false
+    const mode = defender.humanControlled && defender.smDefenseMode
+      ? defender.smDefenseMode
+      : sm.chooseDefenseHeuristic(incomingDamage, (defender.tokens.invisibility ?? 0) > 0)
+    defender.smDefenseActive = mode
+    if (mode === 'counter') {
+      defenseDice = rollDice(3, rng) // Counterpunch
+      log(state, defenderIdx, 'defense', 'Defensive Ability: Counterpunch (3 dice)')
+    } else {
+      defenseDice = rollDice(2, rng) // Spider-Sense
+      log(state, defenderIdx, 'defense', 'Defensive Ability: Spider-Sense (2 dice)')
+      // Invisibility -> Roll Attempt additionnel (board vérifié) : si le jet a raté, on peut
+      // dépenser le jeton et relancer. IA : dès que l'attaque vaut >= 4 ; humain : pré-armé.
+      if (!sm.spiderSenseSuccess(defenseDice, false) && (defender.tokens.invisibility ?? 0) > 0
+        && (defender.humanControlled ? defender.smInvisRerollArmed === true : incomingDamage >= 4)) {
+        defender.tokens.invisibility = 0
+        defenseDice = rollDice(2, rng)
+        log(state, defenderIdx, 'defense', `Spider-Sense: Invisibility spent -> additional Roll Attempt [${defenseDice.join(',')}]`)
+      }
+      // Swing Escape! (1 CP, jouable APRÈS le jet — carte vérifiée) : Spider-Sense réussit
+      // sur Web au lieu de Spider. Joué seulement quand ça convertit échec -> succès.
+      if (!sm.spiderSenseSuccess(defenseDice, false) && sm.spiderSenseSuccess(defenseDice, true)
+        && defender.hand.includes('swing-escape') && defender.cp >= 1
+        && (defender.humanControlled ? defender.swingEscapeArmed === true : incomingDamage >= 3)) {
+        defender.cp -= 1
+        defender.hand.splice(defender.hand.indexOf('swing-escape'), 1)
+        defender.discard.push('swing-escape')
+        defender.smDefenseActive = 'sense-swing'
+        log(state, defenderIdx, 'defense', 'Swing Escape!: Spider-Sense succeeds on Web instead of Spider')
+      }
+    }
   } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
   } else if (defender.heroId === 'fm') {
@@ -1228,6 +1333,20 @@ export function finalizeDefenseRoll(
     if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage)
     log(state, defenderIdx, 'defense', `Nothing More${upgradedNM ? ' II' : ''}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ''}`)
     if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx])
+  } else if (defender.heroId === 'sm') {
+    const mode = defender.smDefenseActive ?? 'sense'
+    defender.smDefenseActive = undefined
+    if (mode === 'counter') {
+      const back = sm.counterpunchDamage(finalDefenseDice)
+      if (back > 0) queueDamage(state, attackerIdx, back)
+      log(state, defenderIdx, 'defense', `Counterpunch: prevented 0, ${back} dmg back`)
+    } else {
+      // « On Spider, prevent 1/2 dmg (rounded up) » — UNE fois si >=1 Spider (ruling user).
+      const success = sm.spiderSenseSuccess(finalDefenseDice, mode === 'sense-swing')
+      damagePrevented = success ? sm.spiderSensePrevention(incomingDamage) : 0
+      defender.spiderSensePrevented = success && damagePrevented > 0
+      log(state, defenderIdx, 'defense', `Spider-Sense${mode === 'sense-swing' ? ' (Swing Escape)' : ''}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : 'prevented 0 (no success face)'}, 0 dmg back`)
+    }
   } else if (defender.heroId === 'nx') {
     damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
     log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
@@ -1300,11 +1419,16 @@ export function finalizeDefenseRoll(
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
-  const ids = DEFENSIVE_CARD_IDS.filter(id => defender.hand.includes(id))
+  const ids = DEFENSIVE_CARD_IDS.filter(id => {
+    if (!defender.hand.includes(id)) return false
+    if (id === 'nice-try') return (defender.tokens.invisibility ?? 0) > 0 // défausse le jeton
+    if (id === 'invisible-punch') return defender.spiderSensePrevented === true // "si tu as prévenu via Spider-Sense"
+    return true
+  })
   if (eludeEligible && defender.hand.includes('elude')) ids.push('elude')
   return ids.filter(id => defender.cp >= (cardById(hero, id)?.cpCost ?? 0))
 }
@@ -1375,6 +1499,19 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     log(state, defenderIdx, 'defense', `Elude!: ignored all ${remaining} incoming dmg`)
     return 0
   }
+  if (cardId === 'nice-try') {
+    if ((defender.tokens.invisibility ?? 0) < 1) { log(state, defenderIdx, 'defense', 'Nice Try!: no Invisibility to discard — no effect'); return remaining }
+    defender.tokens.invisibility = 0
+    const prevented = Math.min(remaining, 3)
+    log(state, defenderIdx, 'defense', `Nice Try!: Invisibility discarded, prevented ${prevented} dmg`)
+    return remaining - prevented
+  }
+  if (cardId === 'invisible-punch') {
+    if (defender.spiderSensePrevented !== true) { log(state, defenderIdx, 'defense', 'Invisible Punch!: no Spider-Sense prevention this attack — no effect'); return remaining }
+    queueDamage(state, (1 - defenderIdx) as 0 | 1, 3)
+    log(state, defenderIdx, 'defense', 'Invisible Punch!: 3 dmg back (Spider-Sense prevented)')
+    return remaining
+  }
   return remaining
 }
 
@@ -1382,7 +1519,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush']
 
 function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1392,6 +1529,9 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
     if (!card || self.cp < (card.cpCost ?? 0)) return false
     if (id === 'lethal-swipe' || id === 'surprise-bite') {
       return self.heroId === 'dr' && (self.form === 'cat')
+    }
+    if (id === 'ambush') {
+      return self.heroId === 'sm' && (self.tokens.invisibility ?? 0) > 0 // défausse le jeton
     }
     if (id === 'stone-beak' || id === 'talon-strike') {
       if (self.heroId !== 'rv') return false
@@ -1464,6 +1604,12 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
     hh.spendGrimPursuit(self, 1)
     log(state, playerIdx, 'resolveAttack', 'Unescapable!: spent 1 Grim Pursuit, attack is now undefendable')
     return { ...current, undefendable: true }
+  }
+  if (cardId === 'ambush') {
+    if ((self.tokens.invisibility ?? 0) < 1) return current // le jeton a pu partir entre l'éligibilité et la résolution
+    self.tokens.invisibility = 0
+    log(state, playerIdx, 'resolveAttack', 'Ambush!: Invisibility discarded, +3 dmg')
+    return { ...current, dmg: current.dmg + 3 }
   }
   if (cardId === 'cranial-assist') {
     // Cranial Assist! rewards attacking whoever holds the Haunted Head. The head is a bag token now,
@@ -1592,7 +1738,7 @@ function applyHHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   // Theoretical on HH (every ability deals dmg) but guarded uniformly with applyBWAbility.
   if (dmg <= 0) log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
   else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies)
-  else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Dreadful Charge'))
+  else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Dreadful Charge'), rng, policies)
 
   if (tokens.head > 0 && data.cardDrawIfHasHead) {
     drawCards(self, 1, rng)
@@ -1653,7 +1799,7 @@ function applyFMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   } else if ((data.defendable ?? true) && !modified.undefendable) {
     resolveDefense(state, playerIdx, dmg, rng, policies)
   } else {
-    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Final Touches'))
+    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith('Final Touches'), rng, policies)
   }
 }
 
@@ -1688,10 +1834,10 @@ function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: R
   if (dmg <= 0) {
     log(state, playerIdx, 'resolveAttack', `${name}: deals no damage — no defense roll`)
   } else if (data.defendable ?? true) {
-    if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false)
+    if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies)
     else resolveDefense(state, playerIdx, dmg, rng, policies)
   } else {
-    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"))
+    queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"), rng, policies)
   }
 
   // Logged (was silent — same visibility complaint as HH's token gains).
@@ -1765,9 +1911,20 @@ function searchDeckForUpgrades(state: GameState, playerIdx: 0 | 1, count: number
 // Queue+flush attack damage that bypasses the defense roll (undefendable/ultimate), letting a
 // Forgemaster defender's Ultimanium Shield prevent 2 first (verified leaflet: works vs normal,
 // undefendable and pure dmg; NOT vs an Ultimate or collateral).
-function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: number, isUltimate: boolean): void {
+function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: number, isUltimate: boolean, rng?: RNG, policies?: [Policy, Policy]): void {
   const defenderIdx = (1 - attackerIdx) as 0 | 1
   const defender = state.players[defenderIdx]
+  // Invisibility (sm, jeton vérifié) : « When Attacked with an undefendable Attack, may spend
+  // this token to activate a Defensive Ability. » Pas contre les Ultimates (même règle que le
+  // bouclier Ultimanium — interprétation, voir SPEC). IA : dès 5 dmg ; humain : pré-armé.
+  if ((defender.tokens.invisibility ?? 0) > 0 && !isUltimate && dmg > 0 && rng && policies
+    && (defender.humanControlled ? defender.smInvisDefendArmed === true : dmg >= 5)) {
+    defender.tokens.invisibility = 0
+    defender.smInvisDefendArmed = false
+    log(state, defenderIdx, 'defense', 'Invisibility spent: defending against the undefendable Attack')
+    resolveDefense(state, attackerIdx, dmg, rng, policies)
+    return
+  }
   if (defender.heroId === 'fm' && dmg > 0) {
     const eff = fm.armorEffects(defender, isUltimate ? 'ultimate' : 'undefendable')
     if (eff.prevented > 0) {
@@ -1792,6 +1949,10 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   const opp = state.players[(1 - playerIdx) as 0 | 1]
   const oState = oracleStateFor(self, opp)
 
+  // Combo (sm) : « resulted in an Attack » — remis à zéro à chaque Offensive Roll Phase,
+  // posé par applySMAbility quand une attaque part vraiment.
+  if (self.heroId === 'sm') self.smAttackedThisPhase = false
+
   const candidates = resolveMatchedAbilities(self.heroId, dice, oState)
   if (candidates.length === 0) {
     log(state, playerIdx, 'resolveAttack', 'No ability matched (Whiff)')
@@ -1807,6 +1968,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'rv') applyRVAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'dr') applyDRAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'th') applyTHAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'sm') applySMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -1826,7 +1988,7 @@ export function resolveNaraxusAbility(state: GameState, bossIdx: 0 | 1, dice: nu
     if (removed) log(state, bossIdx, 'resolveAttack', `Swoop: removed ${removed} from Naraxus`)
     boss.hp = Math.min(boss.hp + 4, nx.NX_HEAL_CAP)
     log(state, bossIdx, 'resolveAttack', 'Swoop: healed 4')
-    queueAttackDamageVsArmor(state, bossIdx, 3, false) // 3 indefendables
+    queueAttackDamageVsArmor(state, bossIdx, 3, false, rng, policies) // 3 indefendables
   }
 
   if (face === 1) { swoop(); return }
@@ -1861,7 +2023,7 @@ export function resolveNaraxusAbility(state: GameState, bossIdx: 0 | 1, dice: nu
       hero.discard.push(pick)
       log(state, bossIdx, 'resolveAttack', `Thundering Roar: hero discarded ${pick}`)
     }
-    queueAttackDamageVsArmor(state, bossIdx, 8, false) // 8 indefendables
+    queueAttackDamageVsArmor(state, bossIdx, 8, false, rng, policies) // 8 indefendables
     return
   }
   // face 6 - Dragon's Might
@@ -1941,7 +2103,7 @@ function applyRVAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
     if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
-    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
     else resolveDefense(state, playerIdx, result.dmg, rng, policies)
   }
 
@@ -2053,7 +2215,7 @@ function applyDRAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
       log(state, playerIdx, 'resolveAttack', 'Cat Form: +2 dmg, Wound inflicted')
     }
     if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
-    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
     else resolveDefense(state, playerIdx, result.dmg, rng, policies)
   }
 
@@ -2177,7 +2339,7 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     // Le total final n'apparaissait nulle part dans le journal : on passait des effets
     // directement aux dés de défense, et l'user ne pouvait pas voir que l'EK était compté.
     log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
-    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
     else resolveDefense(state, playerIdx, result.dmg, rng, policies)
   }
 
@@ -2298,6 +2460,103 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   log(state, playerIdx, 'resolveAttack', `Whiff — no Thor ability matched (${name})`)
 }
 
+// --- Spider-Man ------------------------------------------------------------------------------
+function applySMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+
+  const gainCombo = (label: string) => {
+    const g = sm.gainCombo(self)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g ? 'gained Combo' : 'Combo already held (stack 1)'}`)
+  }
+  const gainInvis = (label: string) => {
+    const g = sm.gainInvisibility(self)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g ? 'gained Invisibility' : 'Invisibility already held (stack 1)'}`)
+  }
+  const inflictWebbed = (label: string) => {
+    const r = sm.inflictWebbed(opp)
+    if (r.gained) { queueDamage(state, oppIdx, r.isoDamage); log(state, playerIdx, 'resolveAttack', `${label}: Webbed inflicted (2 isolated undefendable dmg)`) }
+    else log(state, playerIdx, 'resolveAttack', `${label}: opponent already Webbed (stack 1) — no effect`)
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    self.smAttackedThisPhase = true // condition du Combo : l'ORP a produit une Attaque
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Punch')) {
+    const a = dice.filter(d => d <= 3).length
+    const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0
+    const table = has('punch-ii') ? [5, 6, 7] : [4, 5, 6]
+    if (has('punch-ii')) {
+      const counts = new Map<number, number>()
+      for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+      if (Math.max(...counts.values()) >= 4) gainCombo('Punch II (4-of-a-kind)')
+    }
+    attack(table[tier], true)
+    return
+  }
+  if (name.startsWith('C-C-C-Combo')) {
+    attack(has('combo-ii') ? 6 : 5, true)
+    gainCombo('C-C-C-Combo') // « Deal X dmg. Gain Combo. »
+    return
+  }
+  if (name.startsWith('Web Shot')) {
+    gainInvis('Web Shot')
+    inflictWebbed('Web Shot')
+    flushDamage(state)
+    checkGameOver(state)
+    return
+  }
+  if (name.startsWith('Spider-Reflexes')) {
+    const two = [rollDie(rng), rollDie(rng)]
+    const total = two[0] + two[1]
+    log(state, playerIdx, 'resolveAttack', `Spider-Reflexes: rolled [${two.join(',')}] -> ${total} dmg`)
+    if (total <= 5) gainCombo('Spider-Reflexes (total <= 5)')
+    attack(total, true)
+    return
+  }
+  if (name.startsWith('Wall Crawler')) {
+    gainInvis('Wall Crawler')
+    attack(7, true)
+    return
+  }
+  if (name.startsWith('Ensnare')) {
+    const large = name.includes('5-straight')
+    if (large) { drawCards(self, 1, rng); log(state, playerIdx, 'resolveAttack', 'Ensnare (large): drew 1') }
+    const dmg = has('ensnare-ii') ? (large ? 9 : 6) : (large ? 8 : 5)
+    attack(dmg, true)
+    if (!state.gameOver) { inflictWebbed('Ensnare'); flushDamage(state); checkGameOver(state) } // « Then inflict Webbed » — après l'attaque
+    return
+  }
+  if (name.startsWith('Combo Up')) {
+    gainCombo('Combo Up')
+    attack(2, false)
+    return
+  }
+  if (name.startsWith('Venom Punch')) {
+    gainInvis('Venom Punch')
+    attack(has('venom-punch-ii') ? 8 : 7, false)
+    return
+  }
+  if (name.startsWith('Venom Shockwave')) {
+    gainInvis('Venom Shockwave')
+    inflictWebbed('Venom Shockwave') // « Inflict Webbed. Then deal 13 dmg. » — l'ultimate est indéfendable, le jeton survit
+    attack(13, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Spider-Man ability matched (${name})`)
+}
+
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
   const self = state.players[playerIdx]
   if ((self.tokens.hex ?? 0) > 0) {
@@ -2335,6 +2594,20 @@ export function playTurn(state: GameState, playerIdx: 0 | 1, rng: RNG, policies:
   const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies)
   resolveAbilityPhase(state, playerIdx, finalDice, rng, policies)
   if (checkGameOver(state)) return
+
+  // Combo (sm, jeton vérifié) : si l'ORP a produit une Attaque, dépense à la conclusion de la
+  // Defensive Roll Phase adverse -> Offensive Roll Phase additionnelle (même cible, 1x/tour).
+  // L'IA dépense toujours (une attaque moyenne vaut ~5 ; garder le jeton ne rapporte rien de plus).
+  const smSelf = state.players[playerIdx]
+  if (smSelf.heroId === 'sm' && (smSelf.tokens.combo ?? 0) > 0 && !smSelf.comboSpentThisTurn && smSelf.smAttackedThisPhase === true) {
+    smSelf.tokens.combo = 0
+    smSelf.comboSpentThisTurn = true
+    log(state, playerIdx, 'resolveAttack', 'Combo spent: additional Offensive Roll Phase')
+    const d2 = playOffensiveRollPhase(state, playerIdx, rng, policy)
+    const f2 = resolveOffensiveAlterWindow(state, playerIdx, d2, rng, policies)
+    resolveAbilityPhase(state, playerIdx, f2, rng, policies)
+    if (checkGameOver(state)) return
+  }
 
   playMainPhase(state, playerIdx, 'main2', policies, rng)
   playDiscardPhase(state, playerIdx, policy)

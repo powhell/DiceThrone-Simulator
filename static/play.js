@@ -72,6 +72,13 @@
            C:'<g class="glyph"><path d="M16 22 Q36 10 56 28" fill="none" stroke-width="4" stroke-linecap="round"/><circle cx="37" cy="33" r="9" fill="none" stroke-width="5"/><circle cx="37" cy="33" r="3"/><path d="M8 50 L27 39 L33 49 Z"/></g>'},
       symName:{A:'Talon',B:'Aile',C:'Œil'},
       col:{A:'#e8e26a',B:'#8fd6a0',C:'#e87ab8'} },
+    sm: { name:'Spider-Man', crest:'SM', cls:v=>v<=3?'A':v<=5?'B':'C',
+      // Thwip = main "thwip" (index+auriculaire levés), Web = toile, Spider = araignée
+      sym:{A:'<g class="glyph"><path d="M20 30 L20 14 M28 28 L28 10 M28 28 L36 30 L36 20 M44 30 L44 16 M20 30 Q18 44 28 50 L40 50 Q48 44 44 30 Z" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           B:'<g class="glyph"><path d="M32 8 L32 56 M12 20 L52 44 M52 20 L12 44 M32 8 Q44 20 52 20 M32 8 Q20 20 12 20 M52 44 Q44 44 32 56 M12 44 Q20 44 32 56 M22 26 Q32 20 42 26 M18 38 Q32 46 46 38" fill="none" stroke-width="2.5" stroke-linecap="round"/></g>',
+           C:'<g class="glyph"><ellipse cx="32" cy="36" rx="7" ry="11"/><circle cx="32" cy="20" r="5"/><path d="M27 28 L12 16 M27 34 L10 30 M27 40 L12 46 M29 46 L18 58 M37 28 L52 16 M37 34 L54 30 M37 40 L52 46 M35 46 L46 58" fill="none" stroke-width="3.5" stroke-linecap="round"/></g>'},
+      symName:{A:'Thwip',B:'Toile',C:'Spider'},
+      col:{A:'#7ec8e8',B:'#e8e8e8',C:'#e2211f'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -81,7 +88,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -198,6 +205,9 @@
     if (t.regen2 || t.regen1) out.push(`<span class="tok" style="border-color:#3f8f5f"><b>🌿 Regen</b> ${t.regen2?t.regen2+'×②':''}${t.regen2&&t.regen1?' ':''}${t.regen1?t.regen1+'×①':''}</span>`);
     if (t.wound) out.push(`<span class="tok" style="border-color:#b03a3a"><b>🩸 Wound</b> ${t.wound}</span>`);
     if (t.feather) out.push(`<span class="tok" style="border-color:#3f7a4f"><b>🪶 Feather</b> ${t.feather}</span>`);
+    if (t.combo) out.push(`<span class="tok" style="border-color:#3a7ab0"><b>👊 Combo</b> (2ᵉ phase d'attaque)</span>`);
+    if (t.invisibility) out.push(`<span class="tok" style="border-color:#c04a6a"><b>👤 Invisibility</b></span>`);
+    if (t.webbed) out.push(`<span class="tok" style="border-color:#9a9a9a"><b>🕸️ Webbed</b> (prochaine attaque normale subie = indéf.)</span>`);
     if (t.hex) out.push(`<span class="tok" style="border-color:#8a4fbf"><b>⬡ Hex</b> (tes 6 = blancs ce tour)</span>`);
     if (t.nevermore) {
       const rvP = g.state.players.find(x=>x.heroId==='rv');
@@ -566,6 +576,11 @@
         Lance 5 dés : ${up?'1 contre-dégât PAR Talon':'≥2 Talons = 2 contre-dégâts (une fois)'}<br>
         ≥2 Ailes = préviens 2 (une fois) · ≥2 Œils = Active Nevermore</div>`;
     }
+    if (heroKey==='sm'){
+      return `<div class="defbox"><b>🛡️ Spider-Sense / Counterpunch</b> (au choix à chaque attaque)<br>
+        Spider-Sense : 2 dés — ≥1 Spider = préviens la MOITIÉ (arrondi sup., une fois)<br>
+        · peut défausser Invisibility → relance · Counterpunch : 3 dés — 1 contre-dégât par Thwip</div>`;
+    }
     if (heroKey==='nx'){
       return `<div class="defbox"><b>🛡️ Dragon Scales</b><br>
         Lance 1 dé : 1 = prévient 1 · 2-5 = prévient 3 · 6 = prévient 5<br>
@@ -779,6 +794,27 @@
       }));
     }
   }
+  function addSmDefBtns(c){
+    // Choix de défense + dépenses d'Invisibility pré-armés AVANT le jet (leçon Guard Break :
+    // jamais de décision automatique pour le joueur humain).
+    if (HUMAN!=='sm') return;
+    const you=g.state.players[g.humanIdx];
+    const mode = you.smDefenseMode;
+    c.appendChild(btn(`🛡️ Défense : ${mode==='counter'?'👊 Counterpunch (3 dés, contre)':mode==='sense'?'🕷️ Spider-Sense (2 dés, prévention ½)':'🤖 Auto (heuristique)'}`,'', ()=>{
+      you.smDefenseMode = mode===undefined ? 'sense' : mode==='sense' ? 'counter' : undefined;
+      renderControls();
+    }));
+    if ((you.tokens.invisibility||0)>0){
+      c.appendChild(btn(`${you.smInvisDefendArmed?'✅ ':''}👤 Invisibility : défendre contre l'INDÉFENDABLE (défausse le jeton)`, you.smInvisDefendArmed?'primary':'', ()=>{
+        you.smInvisDefendArmed=!you.smInvisDefendArmed; renderControls(); }));
+      c.appendChild(btn(`${you.smInvisRerollArmed?'✅ ':''}👤 Invisibility : relance auto si Spider-Sense rate (défausse le jeton)`, you.smInvisRerollArmed?'primary':'', ()=>{
+        you.smInvisRerollArmed=!you.smInvisRerollArmed; renderControls(); }));
+    }
+    if (you.hand.includes('swing-escape') && you.cp>=1){
+      c.appendChild(btn(`${you.swingEscapeArmed?'✅ ':''}🕸️ Swing Escape! : Spider-Sense réussit sur Toile (payé 1 CP seulement si ça convertit)`, you.swingEscapeArmed?'primary':'', ()=>{
+        you.swingEscapeArmed=!you.swingEscapeArmed; renderControls(); }));
+    }
+  }
   function addNvToggle(c){
     if (HUMAN!=='rv') return;
     c.appendChild(btn(`🐦‍⬛ Nevermore : ${nvModeLabel()}`,'', ()=>{
@@ -805,6 +841,7 @@
       s.textContent = a && a.abilityName ? `${formatAbility(aiHero,a.abilityName).name} arrive (${a.defendable?`~${a.incomingDamage} dégâts, défendable`:'indéfendable !'}) :` : 'Attaque entrante :';
       addMorphBtns(c); // 🐻 passer Ours AVANT de lancer ta défense (Shape Shift à tout moment)
       addThorBtns(c); // 🔨 navette Mjölnir possible à tout moment (défausse 1 carte)
+      addSmDefBtns(c); // 🕷️ choix Spider-Sense/Counterpunch + dépenses Invisibility pré-armées
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
     } else if (phase==='upkeep' && HUMAN==='fm') {
@@ -850,6 +887,16 @@
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       addFmBtns(c);
       addThorBtns(c, true); // ⚡×4→pioche (Main Phase, leaflet) + navette Mjölnir
+      // Combo (sm) : la dépense officielle est « à la conclusion de la Defensive Roll Phase
+      // adverse » — dans le flux UI, juste après le BILAN, donc offerte en arrivant en main2.
+      const youC = g.state.players[g.humanIdx];
+      if (phase==='main2' && HUMAN==='sm' && (youC.tokens.combo||0)>0 && !youC.comboSpentThisTurn && youC.smAttackedThisPhase===true){
+        c.appendChild(btn('👊 Combo : Offensive Roll Phase supplémentaire (même cible, 1×/tour)','primary', ()=>{
+          youC.tokens.combo=0; youC.comboSpentThisTurn=true;
+          log('👊 <b>Combo</b> dépensé : nouvelle Offensive Roll Phase !');
+          phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll();
+        }));
+      }
       c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
@@ -1775,6 +1822,30 @@
     if (/^Druid Form: gained Regenerate/.test(msg)) return `🧙 <b>Druide</b> : +Regenerate ② (fin de tour)`;
     if ((m = msg.match(/^Ferocity: (\d)-of-a-kind -> Wound inflicted/))) return `<b>Ferocity</b> : ${m[1]} identiques → 🩸 Wound`;
     if ((m = msg.match(/^(Forest's \w+|Protect the Forest|Wrath of Nature|Wild Realignment|Nature's Cure|Savage Maul|Rainfall): (.+)$/))) return `<b>${m[1]}</b> : ${m[2]}`;
+    // --- Spider-Man ---
+    if (/^Defensive Ability: Spider-Sense/.test(msg)) return `🛡️ Défense choisie : <b>Spider-Sense</b> (2 dés — Spider = préviens ½)`;
+    if (/^Defensive Ability: Counterpunch/.test(msg)) return `🛡️ Défense choisie : <b>Counterpunch</b> (3 dés — 1 contre-dégât par Thwip)`;
+    if ((m = msg.match(/^Spider-Sense: Invisibility spent -> additional Roll Attempt \[([\d,]+)\]/))) return `👤 <b>Invisibility</b> dépensée : Spider-Sense relance → [${m[1]}]`;
+    if (/^Swing Escape!: Spider-Sense succeeds on Web/.test(msg)) return `🕸️ <b>Swing Escape!</b> : Spider-Sense réussit sur Toile au lieu de Spider (1 CP)`;
+    if ((m = msg.match(/^Spider-Sense( \(Swing Escape\))?: prevented (\d+)/))) return `🛡️ <b>Spider-Sense${m[1]?' + Swing Escape':''}</b> : ${m[2]==='0'?'raté — rien prévenu':`préviens <b>${m[2]}</b> (moitié arrondie sup.)`}`;
+    if ((m = msg.match(/^Counterpunch: prevented 0, (\d+) dmg back/))) return `🛡️ <b>Counterpunch</b> : ${m[1]} contre-dégât(s), rien prévenu`;
+    if (/^Webbed: incoming attack becomes UNDEFENDABLE/.test(msg)) return `🕸️ <b>Webbed</b> : l'attaque devient <b>INDÉFENDABLE</b> — jeton retiré`;
+    if (/^Invisibility spent: defending/.test(msg)) return `👤 <b>Invisibility</b> dépensée : tu DÉFENDS contre l'attaque indéfendable`;
+    if (/^Combo spent: additional Offensive Roll Phase/.test(msg)) return `👊 <b>Combo</b> dépensé : Offensive Roll Phase supplémentaire !`;
+    if ((m = msg.match(/^Spider-Reflexes: rolled \[([\d,]+)\] -> (\d+) dmg/))) return `<b>Spider-Reflexes</b> : 2d6 [${m[1]}] → <b>${m[2]} dégâts</b>`;
+    if ((m = msg.match(/^(.+?): Webbed inflicted/))) return `🕸️ <b>${m[1]}</b> : inflige <b>Webbed</b> (2 dégâts isolés indéfendables)`;
+    if ((m = msg.match(/^(.+?): opponent already Webbed/))) return `🕸️ <b>${m[1]}</b> : déjà Webbed (stack 1) — sans effet`;
+    if ((m = msg.match(/^(.+?): gained Invisibility/))) return `👤 <b>${m[1]}</b> : gagne <b>Invisibility</b>`;
+    if ((m = msg.match(/^(.+?): Invisibility already held/))) return `👤 <b>${m[1]}</b> : Invisibility déjà en main (stack 1)`;
+    if ((m = msg.match(/^(.+?): gained Combo/))) return `👊 <b>${m[1]}</b> : gagne <b>Combo</b>`;
+    if ((m = msg.match(/^(.+?): Combo already held/))) return `👊 <b>${m[1]}</b> : Combo déjà en main (stack 1)`;
+    if ((m = msg.match(/^Booyah!: rolled (\d) \((\w+)\) -> (.+)$/))) return `🎲 <b>Booyah!</b> : ${m[1]} (${({Thwip:'Thwip',Web:'Toile',Spider:'Spider'})[m[2]]||m[2]}) → ${m[3].replace('gained Invisibility','+Invisibility 👤').replace('Invisibility already held','Invisibility déjà en main').replace('Webbed inflicted (2 iso dmg)','Webbed infligé 🕸️ (2 dégâts isolés)').replace('opponent already Webbed','déjà Webbed — sans effet').replace('gained Combo','+Combo 👊').replace('Combo already held','Combo déjà en main')}`;
+    if (/^Milkshake Me!: healed 3/.test(msg)) return `🥤 <b>Milkshake Me!</b> : soigne 3`;
+    if (/^Cha-Ching!: \+2 CP/.test(msg)) return `💰 <b>Cha-Ching!</b> : +2 CP`;
+    if (/^Ambush!: Invisibility discarded/.test(msg)) return `👤⚔️ <b>Ambush!</b> : Invisibility défaussée → +3 dégâts`;
+    if ((m = msg.match(/^Nice Try!: Invisibility discarded, prevented (\d+)/))) return `👤🛡️ <b>Nice Try!</b> : Invisibility défaussée → préviens ${m[1]}`;
+    if (/^Invisible Punch!: 3 dmg back/.test(msg)) return `👊 <b>Invisible Punch!</b> : 3 dégâts en retour (prévention Spider-Sense)`;
+    if (/^Ensnare \(large\): drew 1/.test(msg)) return `<b>Ensnare</b> (grande suite) : pioche 1`;
     if ((m = msg.match(/^Nevermore Die Roll: (\d)(.*)$/))) {
       const suites={' — gains Hex (6s are blanks this turn)':' — tu gagnes Hex (tes 6 sont blancs ce tour)',
         ' — must discard 1 of choice':' — tu dois défausser 1 carte',
@@ -1849,6 +1920,10 @@
     'Mighty Summon':'+2 GB ·Heal 3 ·EK/coll. 4','Chain Lightning':'4d6: 2 meilleurs +3 coll.',
     'Odinforce':'6 +5d6 effets ·relance ·+EK','Bottled Lightning':'8+EK ·🔨×3 ·+2 GB',
     'Lightning Rod':'9 ·🔨 ·+1 EK','Thunder Bolt':'12 ·🔨 ·+2 EK',
+    // Spider-Man
+    'Punch':'5/6/7 ·4-kind: Combo','C-C-C-Combo':'6 ·+Combo (+alt Web Shot BBC)',
+    'Ensnare':'6 ·+Webbed','Ensnare (grande)':'pioche ·9 ·+Webbed',
+    'Venom Punch':'8 indéf. ·+Invis. (+alt Combo Up CCC)',
   };
   // Exigence modifiée par l'upgrade (seul cas connu : Fowl Friend II passe à BBB — ruling user)
   const REF_II_REQ = { 'Fowl Friend':'BBB' };
@@ -1864,6 +1939,7 @@
     'Hammered':['hammered-ii','hammered-iii'],'Mighty Summon':'mighty-summon-ii',
     'Chain Lightning':'chain-lightning-ii','Odinforce':'odinforce-ii',
     'Bottled Lightning':'bottled-lightning-ii','Lightning Rod':'lightning-rod-ii','Thunder Bolt':'thunder-bolt-ii',
+    'Punch':'punch-ii','C-C-C-Combo':'combo-ii','Ensnare':'ensnare-ii','Ensnare (grande)':'ensnare-ii','Venom Punch':'venom-punch-ii',
   };
   // Résout le tier actif d'une habileté (gère les paliers multiples type Hammered II/III).
   function refUpgradeInfo(name, upgradesInPlay){
@@ -1909,6 +1985,14 @@
       {name:'Murder of Crows',req:'AABBB',dmg:'5 +jet 4'},
       {name:'Chamber',req:'CCCC',dmg:'7 indéf. ·Activ.x2'},
       {name:'Fantastic Terrors',req:'CCCCC',dmg:'13 ·Hex ·ULT'} ],
+    sm:[ {name:'Punch',req:'AAA+',dmg:'4/5/6'},
+      {name:'C-C-C-Combo',req:'AACC',dmg:'5 ·+Combo'},
+      {name:'Spider-Reflexes',req:'ABBC',dmg:'2d6 = dmg ·≤5: Combo'},
+      {name:'Wall Crawler',req:'AABBB',dmg:'7 ·+Invisibility'},
+      {name:'Ensnare',req:'SUITE 4',dmg:'5 ·+Webbed'},
+      {name:'Ensnare (grande)',req:'SUITE 5',dmg:'pioche ·8 ·+Webbed'},
+      {name:'Venom Punch',req:'CCCC',dmg:'7 indéf. ·+Invis.'},
+      {name:'Venom Shockwave',req:'CCCCC',dmg:'13 ·Invis.+Webbed ·ULT'} ],
     nx:[ {name:'1 · Swoop',req:'—',dmg:'3 indéf. ·soin 4 ·-1 statut'},
       {name:'2 · Ember Spark',req:'—',dmg:'8 ·mill 3'},
       {name:'3 · Gashing Bite',req:'—',dmg:'4d6: top2'},
@@ -1927,9 +2011,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv','dr','th'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr','th','sm'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>

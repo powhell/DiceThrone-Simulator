@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -64,6 +64,22 @@ export interface PlayerState {
   mjolnirAway?: boolean
   thrownThisTurn?: number
   ekDrawUsedThisTurn?: boolean
+  // Spider-Man : le jeton Combo se dépense 1x/tour (texte vérifié) ; smAttackedThisPhase =
+  // l'Offensive Roll Phase courante a produit une Attaque (condition du Combo).
+  comboSpentThisTurn?: boolean
+  smAttackedThisPhase?: boolean
+  // Préférence de défense du joueur humain ('sense'/'counter', undefined = heuristique) ;
+  // smDefenseActive = la défense résolue pour l'attaque EN COURS ('sense-swing' = Swing
+  // Escape! payé, succès sur Web au lieu de Spider), posé au jet, consommé au comptage.
+  smDefenseMode?: 'sense' | 'counter'
+  smDefenseActive?: 'sense' | 'sense-swing' | 'counter'
+  // Toggles humains pré-armés : Swing Escape! (payé seulement si ça convertit échec->succès)
+  // et « dépenser Invisibility pour défendre contre l'indéfendable » (l'IA a ses heuristiques).
+  swingEscapeArmed?: boolean
+  smInvisDefendArmed?: boolean
+  smInvisRerollArmed?: boolean
+  // La défense qui vient de se résoudre a prévenu via Spider-Sense (condition d'Invisible Punch!).
+  spiderSensePrevented?: boolean
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

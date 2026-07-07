@@ -41,8 +41,8 @@ Source : `characters/Spider_Man/board/*.jpg`, `leaflet/*`, `cards/*.jpg` (14 car
 - Ensnare II (2 CP) : 6 dmg + Webbed / grande : pioche 1, **9** dmg + Webbed.
 - Venom Punch II (2 CP) : Invisibility + **8** indéfendables ; + **COMBO UP** (CCC) : **Combo** + 2 dmg indéfendables.
 
-## Interprétations à confirmer (⚠)
-1. Spider-Sense « On 🕷 » = une seule prévention de ½ si ≥1 Spider sur les 2 dés (application du ruling Thor n°1 « on = une fois »). Le Roll Attempt additionnel (défausse Invisibility) relance les dés non gardés, répétable tant qu'on a le jeton (stack 1 → 1 fois).
-2. Deux Defensive Abilities : le défenseur choisit librement laquelle activer à chaque attaque (règle standard supposée).
-3. Combo : l'Offensive Roll Phase additionnelle est complète (3 lancers, l'adversaire peut défendre normalement la 2ᵉ attaque).
+## Rulings confirmés par l'user (2026-07-06)
+1. ✅ Spider-Sense « On 🕷 » = une seule prévention de ½ si ≥1 Spider sur les 2 dés (ruling « on = une fois »). Le Roll Attempt additionnel (défausse Invisibility) relance les dés non gardés (stack 1 → 1 fois).
+2. ✅ Deux Defensive Abilities : le défenseur choisit librement laquelle activer à chaque attaque.
+3. ✅ Combo : l'Offensive Roll Phase additionnelle est complète (3 lancers, l'adversaire peut défendre normalement la 2ᵉ attaque).
 4. Ambush! : « AM » lu comme Attack Modifier (jouable pendant la résolution de ta propre attaque).

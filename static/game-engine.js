@@ -152,7 +152,7 @@ var Game = (() => {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
   function emptyBag() {
-    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0 };
+    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0, combo: 0, webbed: 0, invisibility: 0 };
   }
   function hasHead(p) {
     return p.tokens.head > 0;
@@ -1603,9 +1603,164 @@ var Game = (() => {
     }
   };
 
+  // src/characters/spiderman/constants.ts
+  var COMBO_VALUE = 4;
+  var WEBBED_VALUE = 3.5;
+  var INVIS_VALUE = 1.5;
+  var CARD_DRAW_VALUE5 = 1.2;
+  var PUNCH_DMG = [4, 5, 6];
+  var PUNCH_DMG_II = [5, 6, 7];
+  var CCC_COMBO_DMG = 5;
+  var CCC_COMBO_DMG_II = 6;
+  var SPIDER_REFLEXES_EV = 7;
+  var SPIDER_REFLEXES_P_COMBO = 10 / 36;
+  var WALL_CRAWLER_DMG = 7;
+  var ENSNARE_SMALL_DMG = 5;
+  var ENSNARE_SMALL_DMG_II = 6;
+  var ENSNARE_LARGE_DMG = 8;
+  var ENSNARE_LARGE_DMG_II = 9;
+  var VENOM_PUNCH_DMG = 7;
+  var VENOM_PUNCH_DMG_II = 8;
+  var VENOM_SHOCKWAVE_DMG = 13;
+  var COMBO_UP_DMG = 2;
+
+  // src/characters/spiderman/abilities.ts
+  function smFaceToSymbol(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function classify7(dice) {
+    let A = 0, B = 0, C = 0;
+    for (const d of dice) {
+      if (d <= 3) A += 1;
+      else if (d <= 5) B += 1;
+      else C += 1;
+    }
+    return { A, B, C };
+  }
+  function hasStraight7(dice, len) {
+    const uniq = [...new Set(dice)].sort((a, b) => a - b);
+    let run = 1;
+    for (let i = 1; i < uniq.length; i++) {
+      run = uniq[i] === uniq[i - 1] + 1 ? run + 1 : 1;
+      if (run >= len) return true;
+    }
+    return false;
+  }
+  function maxOfAKind4(dice) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    return Math.max(...counts.values());
+  }
+  function getCandidates7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds = [], defenseTax = 0) {
+    const { A: a, B: b, C: c } = classify7(dice);
+    const has = (id) => upgradeIds.includes(id);
+    const out = [];
+    const tax = (defendable) => defendable ? defenseTax : 0;
+    const comboV = comboHeld ? 0 : COMBO_VALUE;
+    const invisV = invisHeld ? 0 : INVIS_VALUE;
+    const webbedV = oppWebbed ? 0 : WEBBED_VALUE;
+    if (a >= 3) {
+      const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
+      const dmg = (has("punch-ii") ? PUNCH_DMG_II : PUNCH_DMG)[tier];
+      const comboBonus = has("punch-ii") && maxOfAKind4(dice) >= 4 ? comboV : 0;
+      const label = a >= 5 ? "Punch 5A (AAAAA)" : a >= 4 ? "Punch 4A (AAAA)" : "Punch 3A (AAA)";
+      out.push([label, dmg + comboBonus - tax(true), dmg]);
+    }
+    if (a >= 2 && c >= 2) {
+      const dmg = has("combo-ii") ? CCC_COMBO_DMG_II : CCC_COMBO_DMG;
+      out.push(["C-C-C-Combo (AACC)", dmg + comboV - tax(true), dmg]);
+    }
+    if (b >= 2 && c >= 1 && has("combo-ii")) {
+      out.push(["Web Shot (BBC)", invisV + webbedV, 0]);
+    }
+    if (a >= 1 && b >= 2 && c >= 1) {
+      out.push(["Spider-Reflexes (ABBC)", SPIDER_REFLEXES_EV + SPIDER_REFLEXES_P_COMBO * comboV - tax(true), SPIDER_REFLEXES_EV]);
+    }
+    if (a >= 2 && b >= 3) {
+      out.push(["Wall Crawler (AABBB)", WALL_CRAWLER_DMG + invisV - tax(true), WALL_CRAWLER_DMG]);
+    }
+    if (hasStraight7(dice, 5)) {
+      const dmg = has("ensnare-ii") ? ENSNARE_LARGE_DMG_II : ENSNARE_LARGE_DMG;
+      out.push(["Ensnare (5-straight)", dmg + webbedV + CARD_DRAW_VALUE5 - tax(true), dmg]);
+    } else if (hasStraight7(dice, 4)) {
+      const dmg = has("ensnare-ii") ? ENSNARE_SMALL_DMG_II : ENSNARE_SMALL_DMG;
+      out.push(["Ensnare (4-straight)", dmg + webbedV - tax(true), dmg]);
+    }
+    if (c >= 3 && has("venom-punch-ii")) {
+      out.push(["Combo Up (CCC)", COMBO_UP_DMG + comboV, COMBO_UP_DMG]);
+    }
+    if (c >= 4) {
+      const dmg = has("venom-punch-ii") ? VENOM_PUNCH_DMG_II : VENOM_PUNCH_DMG;
+      out.push(["Venom Punch (CCCC)", dmg + invisV, dmg]);
+    }
+    if (c >= 5) {
+      out.push(["Venom Shockwave (CCCCC)", VENOM_SHOCKWAVE_DMG + invisV + webbedV, VENOM_SHOCKWAVE_DMG]);
+    }
+    out.push(["Whiff", 0, 0]);
+    return out;
+  }
+  function bestAbilityValue7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds, defenseTax).map(([, v]) => v));
+  }
+  function bestAbilityName7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds, defenseTax);
+    let best = cands[0];
+    for (const cand of cands) if (cand[1] > best[1]) best = cand;
+    return best[0];
+  }
+  function buildAbilityBoard7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds = [], defenseTax = 0) {
+    const matched = new Map(getCandidates7(dice, comboHeld, invisHeld, oppWebbed, upgradeIds, defenseTax).map(([n, v, d]) => [n, [v, d]]));
+    const all = [
+      "Punch 3A (AAA)",
+      "Punch 4A (AAAA)",
+      "Punch 5A (AAAAA)",
+      "C-C-C-Combo (AACC)",
+      "Spider-Reflexes (ABBC)",
+      "Wall Crawler (AABBB)",
+      "Ensnare (4-straight)",
+      "Ensnare (5-straight)",
+      "Venom Punch (CCCC)",
+      "Venom Shockwave (CCCCC)"
+    ];
+    if (upgradeIds.includes("combo-ii")) all.push("Web Shot (BBC)");
+    if (upgradeIds.includes("venom-punch-ii")) all.push("Combo Up (CCC)");
+    return all.map((name) => {
+      const hit = matched.get(name);
+      return { name, matched: !!hit, value: hit ? hit[0] : 0, baseDamage: hit ? hit[1] : 0 };
+    });
+  }
+
+  // src/characters/spiderman/config.ts
+  var smConfig = {
+    id: "sm",
+    faceToSymbol(face) {
+      return smFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      const evalFn = (d) => bestAbilityValue7(d, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName7(dice, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard7(dice, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates7(dice, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      const w = state.wildcards || {};
+      const wc = (w.sixIt ? 1 : 0) + (w.soWild ? 2 : 0) + (w.twiceAsWild ? 4 : 0) + (w.samesies ? 8 : 0) + (w.tipIt ? 16 : 0);
+      return `${state.comboHeld ? 1 : 0}${state.invisHeld ? 1 : 0}${state.oppWebbed ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgrades}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : heroId === "sm" ? smConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -2510,6 +2665,285 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/sm/hero.json
+  var hero_default7 = {
+    id: "sm",
+    name: "Spider-Man",
+    diceAnatomy: "1-3 = Thwip (A), 4-5 = Web (B), 6 = Spider (C). V\xE9rifi\xE9 leaflet (scan user 2026-07-06).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    source: "Board + leaflet + 14 cartes scann\xE9s user 2026-07-06. Spec compl\xE8te : characters/Spider_Man/SPEC.md. Rulings user : Spider-Sense 'On Spider' = une fois si >=1 Spider ; d\xE9fenseur choisit librement entre les 2 d\xE9fenses ; Combo = Offensive Roll Phase compl\xE8te additionnelle.",
+    tokens: [
+      { id: "combo", name: "Combo", startingCount: 0, stackCap: 1, description: "Unique Status Effect. If your Offensive Roll Phase resulted in an Attack, you may spend this token at the conclusion of your opponent's Defensive Roll Phase: immediately target the same opponent with an additional Offensive Roll Phase. Can only spend once per turn. Not transferable." },
+      { id: "webbed", name: "Webbed", startingCount: 0, stackCap: 1, description: "Negative Status Effect. When inflicted, deal 2 as an isolated source of undefendable dmg. The next time the afflicted player is Attacked with normal damage, the damage becomes undefendable instead and this token is removed." },
+      { id: "invisibility", name: "Invisibility", startingCount: 0, stackCap: 1, description: "Unique Status Effect. When Attacked with an undefendable Attack, may spend this token to activate a Defensive Ability. Not transferable. Also fuel for Ambush!/Nice Try!/Spider-Sense extra Roll Attempt." }
+    ],
+    flags: [],
+    abilities: [
+      {
+        id: "punch_3a",
+        boardName: "Punch 3A (AAA)",
+        dicePattern: "AAA",
+        baseDamage: 4,
+        defendable: true,
+        upgradedBy: { upgradeId: "punch-ii", baseDamage: 5, numberMatchBonus: { ofAKind: 4, tokensGrantedToSelf: { combo: 1 } } },
+        verified: true
+      },
+      {
+        id: "punch_4a",
+        boardName: "Punch 4A (AAAA)",
+        dicePattern: "AAAA",
+        baseDamage: 5,
+        defendable: true,
+        upgradedBy: { upgradeId: "punch-ii", baseDamage: 6, numberMatchBonus: { ofAKind: 4, tokensGrantedToSelf: { combo: 1 } } },
+        verified: true
+      },
+      {
+        id: "punch_5a",
+        boardName: "Punch 5A (AAAAA)",
+        dicePattern: "AAAAA",
+        baseDamage: 6,
+        defendable: true,
+        upgradedBy: { upgradeId: "punch-ii", baseDamage: 7, numberMatchBonus: { ofAKind: 4, tokensGrantedToSelf: { combo: 1 } } },
+        verified: true
+      },
+      {
+        id: "ccc_combo",
+        boardName: "C-C-C-Combo (AACC)",
+        dicePattern: "AACC",
+        baseDamage: 5,
+        defendable: true,
+        tokensGrantedToSelf: { combo: 1 },
+        upgradedBy: { upgradeId: "combo-ii", baseDamage: 6 },
+        verified: true
+      },
+      {
+        id: "spider_reflexes",
+        boardName: "Spider-Reflexes (ABBC)",
+        dicePattern: "ABBC",
+        baseDamage: 0,
+        defendable: true,
+        reflexRoll: { dice: 2, comboIfTotalAtMost: 5 },
+        notes: "Roll 2 dice and deal dmg equal to the total roll value (E=7). If the final roll value is 5 or less, gain Combo.",
+        verified: true
+      },
+      {
+        id: "wall_crawler",
+        boardName: "Wall Crawler (AABBB)",
+        dicePattern: "AABBB",
+        baseDamage: 7,
+        defendable: true,
+        tokensGrantedToSelf: { invisibility: 1 },
+        verified: true
+      },
+      {
+        id: "ensnare_small",
+        boardName: "Ensnare (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 5,
+        defendable: true,
+        tokensInflictedOnOpponent: { webbed: 1 },
+        upgradedBy: { upgradeId: "ensnare-ii", baseDamage: 6 },
+        notes: "Deal dmg, THEN inflict Webbed (les 2 iso dmg du jeton tombent apr\xE8s l'attaque).",
+        verified: true
+      },
+      {
+        id: "ensnare_large",
+        boardName: "Ensnare (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 8,
+        defendable: true,
+        draw: 1,
+        tokensInflictedOnOpponent: { webbed: 1 },
+        upgradedBy: { upgradeId: "ensnare-ii", baseDamage: 9 },
+        notes: "Draw 1. Deal dmg. Then inflict Webbed.",
+        verified: true
+      },
+      {
+        id: "venom_punch",
+        boardName: "Venom Punch (CCCC)",
+        dicePattern: "CCCC",
+        baseDamage: 7,
+        defendable: false,
+        tokensGrantedToSelf: { invisibility: 1 },
+        upgradedBy: { upgradeId: "venom-punch-ii", baseDamage: 8 },
+        verified: true
+      },
+      {
+        id: "venom_shockwave",
+        boardName: "Venom Shockwave (CCCCC)",
+        dicePattern: "CCCCC",
+        baseDamage: 13,
+        defendable: false,
+        ultimate: true,
+        tokensGrantedToSelf: { invisibility: 1 },
+        tokensInflictedOnOpponent: { webbed: 1 },
+        notes: "Gain Invisibility. Inflict Webbed. Then deal 13 dmg (Ultimate = ind\xE9fendable).",
+        verified: true
+      }
+    ],
+    altAbilities: [
+      {
+        id: "web_shot",
+        boardName: "Web Shot (BBC)",
+        dicePattern: "BBC",
+        baseDamage: 0,
+        defendable: true,
+        requiresUpgradeId: "combo-ii",
+        tokensGrantedToSelf: { invisibility: 1 },
+        tokensInflictedOnOpponent: { webbed: 1 },
+        notes: "Gain Invisibility. Inflict Webbed (les 2 iso dmg du jeton = seule source de d\xE9g\xE2ts).",
+        verified: true
+      },
+      {
+        id: "combo_up",
+        boardName: "Combo Up (CCC)",
+        dicePattern: "CCC",
+        baseDamage: 2,
+        defendable: false,
+        requiresUpgradeId: "venom-punch-ii",
+        tokensGrantedToSelf: { combo: 1 },
+        notes: "Gain Combo. Then deal 2 undefendable dmg.",
+        verified: true
+      }
+    ],
+    passives: [],
+    defense: {
+      name: "Spider-Sense / Counterpunch",
+      diceCount: "2 (Spider-Sense) ou 3 (Counterpunch) \u2014 au choix du d\xE9fenseur",
+      text: "Spider-Sense \u2014 Defense Roll 2: On Spider, prevent 1/2 dmg (rounded up), une fois (ruling user). You may discard Invisibility to take an additional Roll Attempt. Counterpunch \u2014 Defense Roll 3: Deal 1 dmg x Thwip.",
+      verified: true
+    },
+    cards: [
+      {
+        id: "punch-ii",
+        name: "Punch II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "punch",
+        text: "AAA: 5. AAAA: 6. AAAAA: 7. On 4-of-a-kind (#'s), gain Combo.",
+        verified: true
+      },
+      {
+        id: "combo-ii",
+        name: "C-C-C-Combo II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "ccc_combo",
+        text: "AACC: Deal 6 dmg. Gain Combo. Adds alt WEB SHOT (BBC): Gain Invisibility. Inflict Webbed.",
+        verified: true
+      },
+      {
+        id: "ensnare-ii",
+        name: "Ensnare II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "ensnare",
+        text: "Small Straight: 6 dmg, then inflict Webbed. Large Straight: Draw 1, 9 dmg, then inflict Webbed.",
+        verified: true
+      },
+      {
+        id: "venom-punch-ii",
+        name: "Venom Punch II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "venom_punch",
+        text: "CCCC: Gain Invisibility. Deal 8 undefendable dmg. Adds alt COMBO UP (CCC): Gain Combo. Then deal 2 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "yikes",
+        name: "Yikes!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "instant",
+        text: "Instant Action. Gain Invisibility.",
+        verified: true
+      },
+      {
+        id: "radioactive-blood",
+        name: "Radioactive Blood!",
+        kind: "action",
+        cpCost: 3,
+        actionTiming: "instant",
+        text: "Instant Action. Gain Combo.",
+        verified: true
+      },
+      {
+        id: "swing-escape",
+        name: "Swing Escape!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Your Spider-Sense Defensive Ability succeeds on Web instead of Spider (this card can be played after your dice have been rolled).",
+        verified: true
+      },
+      {
+        id: "nice-try",
+        name: "Nice Try!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. Discard Invisibility: prevent 3 dmg.",
+        verified: true
+      },
+      {
+        id: "invisible-punch",
+        name: "Invisible Punch!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. If you prevented dmg via Spider-Sense, deal 3 dmg.",
+        verified: true
+      },
+      {
+        id: "ambush",
+        name: "Ambush!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Discard Invisibility: add 3 dmg.",
+        verified: true
+      },
+      {
+        id: "web-shooters",
+        name: "Web Shooters!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Inflict Webbed on a chosen player.",
+        verified: true
+      },
+      {
+        id: "booyah",
+        name: "Booyah!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Roll 1 die: On Thwip, gain Invisibility. On Web, inflict Webbed. On Spider, gain Combo.",
+        verified: true
+      },
+      {
+        id: "milkshake-me",
+        name: "Milkshake Me!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Heal 3.",
+        verified: true
+      },
+      {
+        id: "cha-ching",
+        name: "Cha-Ching!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Gain 2 CP.",
+        verified: true
+      }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -2541,6 +2975,7 @@ var Game = (() => {
   var rvHero = hero_default4;
   var drHero = hero_default5;
   var thHero = hero_default6;
+  var smHero = hero_default7;
   var commonCards = common_cards_default;
   var nxHero = {
     id: "nx",
@@ -2557,7 +2992,7 @@ var Game = (() => {
     cards: []
   };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "nx" ? nxHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "sm" ? smHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const pools = [
@@ -2590,7 +3025,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -3212,11 +3647,50 @@ var Game = (() => {
     };
   }
 
+  // src/sim/hero/sm.rules.ts
+  var COMBO_CAP = 1;
+  var WEBBED_CAP = 1;
+  var INVIS_CAP = 1;
+  function createInitialSMTokens() {
+    return emptyBag();
+  }
+  function gainCombo(p) {
+    const before = p.tokens.combo ?? 0;
+    p.tokens.combo = Math.min(COMBO_CAP, before + 1);
+    return p.tokens.combo - before;
+  }
+  function gainInvisibility(p) {
+    const before = p.tokens.invisibility ?? 0;
+    p.tokens.invisibility = Math.min(INVIS_CAP, before + 1);
+    return p.tokens.invisibility - before;
+  }
+  function inflictWebbed(target) {
+    if ((target.tokens.webbed ?? 0) >= WEBBED_CAP) return { gained: false, isoDamage: 0 };
+    target.tokens.webbed = 1;
+    return { gained: true, isoDamage: 2 };
+  }
+  function spiderSenseSuccess(dice, swingEscape) {
+    return swingEscape ? dice.some((d) => d >= 4 && d <= 5) : dice.some((d) => d === 6);
+  }
+  function spiderSensePrevention(incomingDamage) {
+    return Math.ceil(incomingDamage / 2);
+  }
+  function counterpunchDamage(dice) {
+    return dice.filter((d) => d <= 3).length;
+  }
+  function chooseDefenseHeuristic(incomingDamage, hasInvisibility) {
+    const pSense = hasInvisibility ? 1 - Math.pow(5 / 6, 4) : 1 - Math.pow(5 / 6, 2);
+    return pSense * spiderSensePrevention(incomingDamage) >= 1.5 ? "sense" : "counter";
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
   }
   function defenseTaxFor(opponent) {
+    if (opponent.heroId === "sm") {
+      return 1.5;
+    }
     if (opponent.heroId === "bw") {
       return opponent.upgradesInPlay.includes("sabotage-ii") ? 2.67 : 2;
     }
@@ -3250,6 +3724,16 @@ var Game = (() => {
     };
   }
   function oracleStateFor(player, opponent) {
+    if (player.heroId === "sm") {
+      return {
+        comboHeld: (player.tokens.combo ?? 0) > 0,
+        invisHeld: (player.tokens.invisibility ?? 0) > 0,
+        oppWebbed: (opponent.tokens.webbed ?? 0) > 0,
+        upgradeIds: player.upgradesInPlay,
+        defenseTax: defenseTaxFor(opponent),
+        wildcards: wildcardFlagsFor(player)
+      };
+    }
     if (player.heroId === "dr") {
       return {
         form: formOf(player),
@@ -3346,6 +3830,11 @@ var Game = (() => {
     self.minesDrawUsedThisTurn = false;
     self.thrownThisTurn = 0;
     self.ekDrawUsedThisTurn = false;
+    self.comboSpentThisTurn = false;
+    self.smAttackedThisPhase = false;
+    self.swingEscapeArmed = false;
+    self.smInvisDefendArmed = false;
+    self.smInvisRerollArmed = false;
     if ((self.tokens.regen2 ?? 0) > 0 || (self.tokens.regen1 ?? 0) > 0 || (self.tokens.wound ?? 0) > 0) {
       const rw = upkeepRegenAndWound(self, rng);
       if (rw.healed > 0) log(state, playerIdx, "upkeep", `Regenerate: healed ${rw.healed}`);
@@ -3689,6 +4178,55 @@ var Game = (() => {
       }
       return;
     }
+    if (card.id === "yikes") {
+      const g = gainInvisibility(self);
+      log(state, playerIdx, phase, `Yikes!: ${g ? "gained Invisibility" : "Invisibility already held (stack 1)"}`);
+      return;
+    }
+    if (card.id === "radioactive-blood") {
+      const g = gainCombo(self);
+      log(state, playerIdx, phase, `Radioactive Blood!: ${g ? "gained Combo" : "Combo already held (stack 1)"}`);
+      return;
+    }
+    if (card.id === "web-shooters") {
+      const r = inflictWebbed(opp);
+      if (r.gained) {
+        queueDamage(state, 1 - playerIdx, r.isoDamage);
+        flushDamage(state);
+        log(state, playerIdx, phase, "Web Shooters!: Webbed inflicted (2 isolated undefendable dmg)");
+        checkGameOver(state);
+      } else log(state, playerIdx, phase, "Web Shooters!: opponent already Webbed (stack 1) \u2014 no effect");
+      return;
+    }
+    if (card.id === "booyah") {
+      const by = rollDie(rng);
+      if (by <= 3) {
+        const g = gainInvisibility(self);
+        log(state, playerIdx, phase, `Booyah!: rolled ${by} (Thwip) -> ${g ? "gained Invisibility" : "Invisibility already held"}`);
+      } else if (by <= 5) {
+        const r = inflictWebbed(opp);
+        if (r.gained) {
+          queueDamage(state, 1 - playerIdx, r.isoDamage);
+          flushDamage(state);
+          log(state, playerIdx, phase, `Booyah!: rolled ${by} (Web) -> Webbed inflicted (2 iso dmg)`);
+          checkGameOver(state);
+        } else log(state, playerIdx, phase, `Booyah!: rolled ${by} (Web) -> opponent already Webbed`);
+      } else {
+        const g = gainCombo(self);
+        log(state, playerIdx, phase, `Booyah!: rolled ${by} (Spider) -> ${g ? "gained Combo" : "Combo already held"}`);
+      }
+      return;
+    }
+    if (card.id === "milkshake-me") {
+      self.hp = Math.min(self.hp + 3, 60);
+      log(state, playerIdx, phase, "Milkshake Me!: healed 3");
+      return;
+    }
+    if (card.id === "cha-ching") {
+      grantCp(self, 2);
+      log(state, playerIdx, phase, "Cha-Ching!: +2 CP");
+      return;
+    }
     const eff = card.effect;
     if (!eff) {
       log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP \u2014 TODO(user): effect not structured yet, no game-state change applied`);
@@ -3817,14 +4355,16 @@ var Game = (() => {
     }
     resolveResponseWindow(state, [playerIdx, oppIdx], { windowType: "mainPhase", phase }, rng, policies, enumerateWindowActions, applyWindowAction);
   }
-  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble", "broken-stillness", "quick-morph", "power-trip", "time-to-hammer", "stormbreak"];
+  var INSTANT_SELFBUFF_IDS = ["getting-paid", "double-up", "triple-up", "dark-surprise", "assemble", "broken-stillness", "quick-morph", "power-trip", "time-to-hammer", "stormbreak", "yikes", "radioactive-blood"];
   function instantEligible(state, playerIdx, id) {
     const self = state.players[playerIdx];
     if (id === "time-to-hammer") return self.mjolnirAway === true;
     if (id === "stormbreak") return (self.thrownThisTurn ?? 0) >= 2;
+    if (id === "yikes") return (self.tokens.invisibility ?? 0) < 1;
+    if (id === "radioactive-blood") return (self.tokens.combo ?? 0) < 1;
     return true;
   }
-  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods"];
+  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods", "web-shooters", "booyah", "milkshake-me", "cha-ching"];
   function anyoneHasHead(state) {
     return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0;
   }
@@ -4144,6 +4684,12 @@ var Game = (() => {
     const defenderIdx = 1 - attackerIdx;
     const defender = state.players[defenderIdx];
     const policy = policies[defenderIdx];
+    if ((defender.tokens.webbed ?? 0) > 0 && incomingDamage > 0) {
+      defender.tokens.webbed = 0;
+      log(state, defenderIdx, "defense", "Webbed: incoming attack becomes UNDEFENDABLE, token removed");
+      queueAttackDamageVsArmor(state, attackerIdx, incomingDamage, false, rng, policies);
+      return;
+    }
     let hallowedUpgraded = false;
     let defenseDice;
     if (defender.heroId === "th") {
@@ -4156,6 +4702,29 @@ var Game = (() => {
       defenseDice = rollDice(thickHideDiceCount(defender), rng);
     } else if (defender.heroId === "rv") {
       defenseDice = rollDice(5, rng);
+    } else if (defender.heroId === "sm") {
+      defender.spiderSensePrevented = false;
+      const mode = defender.humanControlled && defender.smDefenseMode ? defender.smDefenseMode : chooseDefenseHeuristic(incomingDamage, (defender.tokens.invisibility ?? 0) > 0);
+      defender.smDefenseActive = mode;
+      if (mode === "counter") {
+        defenseDice = rollDice(3, rng);
+        log(state, defenderIdx, "defense", "Defensive Ability: Counterpunch (3 dice)");
+      } else {
+        defenseDice = rollDice(2, rng);
+        log(state, defenderIdx, "defense", "Defensive Ability: Spider-Sense (2 dice)");
+        if (!spiderSenseSuccess(defenseDice, false) && (defender.tokens.invisibility ?? 0) > 0 && (defender.humanControlled ? defender.smInvisRerollArmed === true : incomingDamage >= 4)) {
+          defender.tokens.invisibility = 0;
+          defenseDice = rollDice(2, rng);
+          log(state, defenderIdx, "defense", `Spider-Sense: Invisibility spent -> additional Roll Attempt [${defenseDice.join(",")}]`);
+        }
+        if (!spiderSenseSuccess(defenseDice, false) && spiderSenseSuccess(defenseDice, true) && defender.hand.includes("swing-escape") && defender.cp >= 1 && (defender.humanControlled ? defender.swingEscapeArmed === true : incomingDamage >= 3)) {
+          defender.cp -= 1;
+          defender.hand.splice(defender.hand.indexOf("swing-escape"), 1);
+          defender.discard.push("swing-escape");
+          defender.smDefenseActive = "sense-swing";
+          log(state, defenderIdx, "defense", "Swing Escape!: Spider-Sense succeeds on Web instead of Spider");
+        }
+      }
     } else if (defender.heroId === "nx") {
       defenseDice = [rollDie(rng)];
     } else if (defender.heroId === "fm") {
@@ -4209,6 +4778,19 @@ var Game = (() => {
       if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage);
       log(state, defenderIdx, "defense", `Nothing More${upgradedNM ? " II" : ""}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ""}`);
       if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx]);
+    } else if (defender.heroId === "sm") {
+      const mode = defender.smDefenseActive ?? "sense";
+      defender.smDefenseActive = void 0;
+      if (mode === "counter") {
+        const back = counterpunchDamage(finalDefenseDice);
+        if (back > 0) queueDamage(state, attackerIdx, back);
+        log(state, defenderIdx, "defense", `Counterpunch: prevented 0, ${back} dmg back`);
+      } else {
+        const success = spiderSenseSuccess(finalDefenseDice, mode === "sense-swing");
+        damagePrevented = success ? spiderSensePrevention(incomingDamage) : 0;
+        defender.spiderSensePrevented = success && damagePrevented > 0;
+        log(state, defenderIdx, "defense", `Spider-Sense${mode === "sense-swing" ? " (Swing Escape)" : ""}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : "prevented 0 (no success face)"}, 0 dmg back`);
+      }
     } else if (defender.heroId === "nx") {
       damagePrevented = dragonScalesPrevent(finalDefenseDice[0]);
       log(state, defenderIdx, "defense", `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`);
@@ -4266,10 +4848,15 @@ var Game = (() => {
     );
     finalizePendingAttackDamage(state);
   }
-  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil", "shrug-off", "dont-poke-the-bear", "indomitable-will", "invulnerability"];
+  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil", "shrug-off", "dont-poke-the-bear", "indomitable-will", "invulnerability", "nice-try", "invisible-punch"];
   function eligibleDefensiveCardIds(defender, eludeEligible) {
     const hero = heroTemplateFor(defender.heroId);
-    const ids = DEFENSIVE_CARD_IDS.filter((id) => defender.hand.includes(id));
+    const ids = DEFENSIVE_CARD_IDS.filter((id) => {
+      if (!defender.hand.includes(id)) return false;
+      if (id === "nice-try") return (defender.tokens.invisibility ?? 0) > 0;
+      if (id === "invisible-punch") return defender.spiderSensePrevented === true;
+      return true;
+    });
     if (eludeEligible && defender.hand.includes("elude")) ids.push("elude");
     return ids.filter((id) => defender.cp >= (cardById(hero, id)?.cpCost ?? 0));
   }
@@ -4345,9 +4932,28 @@ var Game = (() => {
       log(state, defenderIdx, "defense", `Elude!: ignored all ${remaining} incoming dmg`);
       return 0;
     }
+    if (cardId === "nice-try") {
+      if ((defender.tokens.invisibility ?? 0) < 1) {
+        log(state, defenderIdx, "defense", "Nice Try!: no Invisibility to discard \u2014 no effect");
+        return remaining;
+      }
+      defender.tokens.invisibility = 0;
+      const prevented = Math.min(remaining, 3);
+      log(state, defenderIdx, "defense", `Nice Try!: Invisibility discarded, prevented ${prevented} dmg`);
+      return remaining - prevented;
+    }
+    if (cardId === "invisible-punch") {
+      if (defender.spiderSensePrevented !== true) {
+        log(state, defenderIdx, "defense", "Invisible Punch!: no Spider-Sense prevention this attack \u2014 no effect");
+        return remaining;
+      }
+      queueDamage(state, 1 - defenderIdx, 3);
+      log(state, defenderIdx, "defense", "Invisible Punch!: 3 dmg back (Spider-Sense prevented)");
+      return remaining;
+    }
     return remaining;
   }
-  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite"];
+  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite", "ambush"];
   function eligibleAttackModifierCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ATTACK_MODIFIER_CARD_IDS.filter((id) => {
@@ -4356,6 +4962,9 @@ var Game = (() => {
       if (!card || self.cp < (card.cpCost ?? 0)) return false;
       if (id === "lethal-swipe" || id === "surprise-bite") {
         return self.heroId === "dr" && self.form === "cat";
+      }
+      if (id === "ambush") {
+        return self.heroId === "sm" && (self.tokens.invisibility ?? 0) > 0;
       }
       if (id === "stone-beak" || id === "talon-strike") {
         if (self.heroId !== "rv") return false;
@@ -4415,6 +5024,12 @@ var Game = (() => {
       spendGrimPursuit(self, 1);
       log(state, playerIdx, "resolveAttack", "Unescapable!: spent 1 Grim Pursuit, attack is now undefendable");
       return { ...current, undefendable: true };
+    }
+    if (cardId === "ambush") {
+      if ((self.tokens.invisibility ?? 0) < 1) return current;
+      self.tokens.invisibility = 0;
+      log(state, playerIdx, "resolveAttack", "Ambush!: Invisibility discarded, +3 dmg");
+      return { ...current, dmg: current.dmg + 3 };
     }
     if (cardId === "cranial-assist") {
       const oppHasHead = hasHead(opp);
@@ -4516,7 +5131,7 @@ var Game = (() => {
     undefendableOverride = modified.undefendable;
     if (dmg <= 0) log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
     else if ((data.defendable ?? true) && !undefendableOverride) resolveDefense(state, playerIdx, dmg, rng, policies);
-    else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Dreadful Charge"));
+    else queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Dreadful Charge"), rng, policies);
     if (tokens.head > 0 && data.cardDrawIfHasHead) {
       drawCards(self, 1, rng);
       log(state, playerIdx, "resolveAttack", `${name}: drew 1 card (Haunted Head)`);
@@ -4569,7 +5184,7 @@ var Game = (() => {
     } else if ((data.defendable ?? true) && !modified.undefendable) {
       resolveDefense(state, playerIdx, dmg, rng, policies);
     } else {
-      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Final Touches"));
+      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Final Touches"), rng, policies);
     }
   }
   function applyBWAbility(state, playerIdx, name, rng, policies) {
@@ -4598,10 +5213,10 @@ var Game = (() => {
     if (dmg <= 0) {
       log(state, playerIdx, "resolveAttack", `${name}: deals no damage \u2014 no defense roll`);
     } else if (data.defendable ?? true) {
-      if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false);
+      if (modified.undefendable) queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies);
       else resolveDefense(state, playerIdx, dmg, rng, policies);
     } else {
-      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"));
+      queueAttackDamageVsArmor(state, playerIdx, dmg, name.startsWith("Widow's Bite"), rng, policies);
     }
     const bwGains = [];
     if (data.cpGain) {
@@ -4661,9 +5276,16 @@ var Game = (() => {
     self.deck = remaining;
     return found;
   }
-  function queueAttackDamageVsArmor(state, attackerIdx, dmg, isUltimate) {
+  function queueAttackDamageVsArmor(state, attackerIdx, dmg, isUltimate, rng, policies) {
     const defenderIdx = 1 - attackerIdx;
     const defender = state.players[defenderIdx];
+    if ((defender.tokens.invisibility ?? 0) > 0 && !isUltimate && dmg > 0 && rng && policies && (defender.humanControlled ? defender.smInvisDefendArmed === true : dmg >= 5)) {
+      defender.tokens.invisibility = 0;
+      defender.smInvisDefendArmed = false;
+      log(state, defenderIdx, "defense", "Invisibility spent: defending against the undefendable Attack");
+      resolveDefense(state, attackerIdx, dmg, rng, policies);
+      return;
+    }
     if (defender.heroId === "fm" && dmg > 0) {
       const eff = armorEffects(defender, isUltimate ? "ultimate" : "undefendable");
       if (eff.prevented > 0) {
@@ -4688,6 +5310,7 @@ var Game = (() => {
     }
     const opp = state.players[1 - playerIdx];
     const oState = oracleStateFor(self, opp);
+    if (self.heroId === "sm") self.smAttackedThisPhase = false;
     const candidates = resolveMatchedAbilities(self.heroId, dice, oState);
     if (candidates.length === 0) {
       log(state, playerIdx, "resolveAttack", "No ability matched (Whiff)");
@@ -4701,6 +5324,7 @@ var Game = (() => {
     else if (self.heroId === "rv") applyRVAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "dr") applyDRAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "th") applyTHAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "sm") applySMAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
@@ -4715,7 +5339,7 @@ var Game = (() => {
       if (removed) log(state, bossIdx, "resolveAttack", `Swoop: removed ${removed} from Naraxus`);
       boss.hp = Math.min(boss.hp + 4, NX_HEAL_CAP);
       log(state, bossIdx, "resolveAttack", "Swoop: healed 4");
-      queueAttackDamageVsArmor(state, bossIdx, 3, false);
+      queueAttackDamageVsArmor(state, bossIdx, 3, false, rng, policies);
     };
     if (face === 1) {
       swoop();
@@ -4750,7 +5374,7 @@ var Game = (() => {
         hero.discard.push(pick);
         log(state, bossIdx, "resolveAttack", `Thundering Roar: hero discarded ${pick}`);
       }
-      queueAttackDamageVsArmor(state, bossIdx, 8, false);
+      queueAttackDamageVsArmor(state, bossIdx, 8, false, rng, policies);
       return;
     }
     resolveDefense(state, bossIdx, 10, rng, policies);
@@ -4814,7 +5438,7 @@ var Game = (() => {
         log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
         return;
       }
-      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
       else resolveDefense(state, playerIdx, result.dmg, rng, policies);
     };
     if (name.startsWith("Peck")) {
@@ -4922,7 +5546,7 @@ var Game = (() => {
         log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
         return;
       }
-      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
       else resolveDefense(state, playerIdx, result.dmg, rng, policies);
     };
     const counts = /* @__PURE__ */ new Map();
@@ -5043,7 +5667,7 @@ var Game = (() => {
         if (gb.success) result = { ...result, undefendable: true };
       }
       log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
-      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
       else resolveDefense(state, playerIdx, result.dmg, rng, policies);
     };
     if (name.startsWith("Hammered")) {
@@ -5168,6 +5792,110 @@ var Game = (() => {
     }
     log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Thor ability matched (${name})`);
   }
+  function applySMAbility(state, playerIdx, name, dice, rng, policies) {
+    const self = state.players[playerIdx];
+    const oppIdx = 1 - playerIdx;
+    const opp = state.players[oppIdx];
+    const policy = policies[playerIdx];
+    const has = (id) => self.upgradesInPlay.includes(id);
+    const gainCombo2 = (label) => {
+      const g = gainCombo(self);
+      log(state, playerIdx, "resolveAttack", `${label}: ${g ? "gained Combo" : "Combo already held (stack 1)"}`);
+    };
+    const gainInvis = (label) => {
+      const g = gainInvisibility(self);
+      log(state, playerIdx, "resolveAttack", `${label}: ${g ? "gained Invisibility" : "Invisibility already held (stack 1)"}`);
+    };
+    const inflictWebbed2 = (label) => {
+      const r = inflictWebbed(opp);
+      if (r.gained) {
+        queueDamage(state, oppIdx, r.isoDamage);
+        log(state, playerIdx, "resolveAttack", `${label}: Webbed inflicted (2 isolated undefendable dmg)`);
+      } else log(state, playerIdx, "resolveAttack", `${label}: opponent already Webbed (stack 1) \u2014 no effect`);
+    };
+    const attack = (dmg, defendable, ultimate = false) => {
+      let result = { dmg, undefendable: !defendable || ultimate };
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
+      for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (result.dmg <= 0) {
+        log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
+        return;
+      }
+      self.smAttackedThisPhase = true;
+      log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
+      else resolveDefense(state, playerIdx, result.dmg, rng, policies);
+    };
+    if (name.startsWith("Punch")) {
+      const a = dice.filter((d) => d <= 3).length;
+      const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
+      const table = has("punch-ii") ? [5, 6, 7] : [4, 5, 6];
+      if (has("punch-ii")) {
+        const counts = /* @__PURE__ */ new Map();
+        for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+        if (Math.max(...counts.values()) >= 4) gainCombo2("Punch II (4-of-a-kind)");
+      }
+      attack(table[tier], true);
+      return;
+    }
+    if (name.startsWith("C-C-C-Combo")) {
+      attack(has("combo-ii") ? 6 : 5, true);
+      gainCombo2("C-C-C-Combo");
+      return;
+    }
+    if (name.startsWith("Web Shot")) {
+      gainInvis("Web Shot");
+      inflictWebbed2("Web Shot");
+      flushDamage(state);
+      checkGameOver(state);
+      return;
+    }
+    if (name.startsWith("Spider-Reflexes")) {
+      const two = [rollDie(rng), rollDie(rng)];
+      const total = two[0] + two[1];
+      log(state, playerIdx, "resolveAttack", `Spider-Reflexes: rolled [${two.join(",")}] -> ${total} dmg`);
+      if (total <= 5) gainCombo2("Spider-Reflexes (total <= 5)");
+      attack(total, true);
+      return;
+    }
+    if (name.startsWith("Wall Crawler")) {
+      gainInvis("Wall Crawler");
+      attack(7, true);
+      return;
+    }
+    if (name.startsWith("Ensnare")) {
+      const large = name.includes("5-straight");
+      if (large) {
+        drawCards(self, 1, rng);
+        log(state, playerIdx, "resolveAttack", "Ensnare (large): drew 1");
+      }
+      const dmg = has("ensnare-ii") ? large ? 9 : 6 : large ? 8 : 5;
+      attack(dmg, true);
+      if (!state.gameOver) {
+        inflictWebbed2("Ensnare");
+        flushDamage(state);
+        checkGameOver(state);
+      }
+      return;
+    }
+    if (name.startsWith("Combo Up")) {
+      gainCombo2("Combo Up");
+      attack(2, false);
+      return;
+    }
+    if (name.startsWith("Venom Punch")) {
+      gainInvis("Venom Punch");
+      attack(has("venom-punch-ii") ? 8 : 7, false);
+      return;
+    }
+    if (name.startsWith("Venom Shockwave")) {
+      gainInvis("Venom Shockwave");
+      inflictWebbed2("Venom Shockwave");
+      attack(13, false, true);
+      return;
+    }
+    log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Spider-Man ability matched (${name})`);
+  }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
     if ((self.tokens.hex ?? 0) > 0) {
@@ -5198,6 +5926,16 @@ var Game = (() => {
     const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies);
     resolveAbilityPhase(state, playerIdx, finalDice, rng, policies);
     if (checkGameOver(state)) return;
+    const smSelf = state.players[playerIdx];
+    if (smSelf.heroId === "sm" && (smSelf.tokens.combo ?? 0) > 0 && !smSelf.comboSpentThisTurn && smSelf.smAttackedThisPhase === true) {
+      smSelf.tokens.combo = 0;
+      smSelf.comboSpentThisTurn = true;
+      log(state, playerIdx, "resolveAttack", "Combo spent: additional Offensive Roll Phase");
+      const d2 = playOffensiveRollPhase(state, playerIdx, rng, policy);
+      const f2 = resolveOffensiveAlterWindow(state, playerIdx, d2, rng, policies);
+      resolveAbilityPhase(state, playerIdx, f2, rng, policies);
+      if (checkGameOver(state)) return;
+    }
     playMainPhase(state, playerIdx, "main2", policies, rng);
     playDiscardPhase(state, playerIdx, policy);
     playEndOfTurn(state, playerIdx);
@@ -5218,7 +5956,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : heroId === "sm" ? createInitialSMTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
