@@ -152,7 +152,7 @@ var Game = (() => {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
   function emptyBag() {
-    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0, combo: 0, webbed: 0, invisibility: 0 };
+    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0, combo: 0, webbed: 0, invisibility: 0, fireMastery: 0, burn: 0, knockdown: 0, stun: 0 };
   }
   function hasHead(p) {
     return p.tokens.head > 0;
@@ -1758,9 +1758,181 @@ var Game = (() => {
     }
   };
 
+  // src/characters/pyromancer/constants.ts
+  var FM_VALUE = 1;
+  var BURN_VALUE = 2.5;
+  var KNOCKDOWN_VALUE = 2.2;
+  var STUN_EXTRA_PHASE_VALUE = 5;
+  var FIREBALL_DMG = [4, 6, 8];
+  var HOT_STREAK_BASE = 5;
+  var HOT_STREAK_BASE_II = 6;
+  var IGNITE_BASE = 4;
+  var IGNITE_BASE_II = 5;
+  var PYROBLAST_DMG = 6;
+  var COMBUSTION_DMG_PER_TOKEN = 3;
+  var COMBUSTION_DMG_PER_TOKEN_II = 4;
+  var METEORITE_COLLATERAL = 2;
+  var METEORITE_COLLATERAL_II = 3;
+  var SCORCH_DMG = 6;
+  var ULT_DMG = 12;
+  var ULT_COLLATERAL = 2;
+
+  // src/characters/pyromancer/abilities.ts
+  function pyFaceToSymbol(face) {
+    return face <= 3 ? "A" : face === 4 ? "B" : face === 5 ? "C" : "D";
+  }
+  function classify8(dice) {
+    let A = 0, B = 0, C = 0, D = 0;
+    for (const d of dice) {
+      if (d <= 3) A += 1;
+      else if (d === 4) B += 1;
+      else if (d === 5) C += 1;
+      else D += 1;
+    }
+    return { A, B, C, D };
+  }
+  function hasStraight8(dice, len) {
+    const uniq = [...new Set(dice)].sort((a, b) => a - b);
+    let run = 1;
+    for (let i = 1; i < uniq.length; i++) {
+      run = uniq[i] === uniq[i - 1] + 1 ? run + 1 : 1;
+      if (run >= len) return true;
+    }
+    return false;
+  }
+  function getCandidates8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds = [], defenseTax = 0) {
+    const { A: a, B: b, C: c, D: d } = classify8(dice);
+    const has = (id) => upgradeIds.includes(id);
+    const out = [];
+    const tax = (defendable) => defendable ? defenseTax : 0;
+    const burnV = oppBurned ? 0 : BURN_VALUE;
+    const knockV = oppKnocked ? 0 : KNOCKDOWN_VALUE;
+    const gainFm2 = (n) => Math.min(fmCap2, fm + n) - fm;
+    if (a >= 3) {
+      const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
+      const dmg = FIREBALL_DMG[tier];
+      const fmGain = gainFm2(has("fireball-ii") ? 2 : 1);
+      const label = a >= 5 ? "Fireball 5F (AAAAA)" : a >= 4 ? "Fireball 4F (AAAA)" : "Fireball 3F (AAA)";
+      out.push([label, dmg + fmGain * FM_VALUE - tax(true), dmg]);
+    }
+    if (c >= 2) {
+      const up = has("burning-soul-ii");
+      const fmGain = gainFm2(2 * c);
+      let v = fmGain * FM_VALUE + c;
+      if (up && c >= 3) v += burnV;
+      if (up && c >= 4) v += FM_VALUE;
+      out.push(["Burning Soul (CC)", v, c]);
+    }
+    if (a >= 1 && b >= 1 && c >= 1 && d >= 1) {
+      const per = has("combustion-ii") ? COMBUSTION_DMG_PER_TOKEN_II : COMBUSTION_DMG_PER_TOKEN;
+      const removable = Math.min(4, Math.min(fmCap2, fm + 1));
+      const dmg = removable * per;
+      out.push(["Combustion (ABCD)", dmg - removable * FM_VALUE + FM_VALUE, dmg]);
+    }
+    if (a >= 4 && d >= 1) {
+      const dice2 = has("pyroblast-ii") || has("pyroblast-iii") ? 2 : 1;
+      const perDie = 0.5 * 3 + (burnV + 2 * FM_VALUE + knockV) / 6;
+      const reroll = has("pyroblast-iii") ? 0.4 : 0;
+      out.push(["Pyroblast (AAAAD)", PYROBLAST_DMG + dice2 * perDie + reroll - tax(true), PYROBLAST_DMG]);
+    }
+    if (hasStraight8(dice, 4)) {
+      const base = has("hot-streak-ii") ? HOT_STREAK_BASE_II : HOT_STREAK_BASE;
+      const fmAfter = Math.min(fmCap2, fm + 2);
+      const dmg = base + fmAfter;
+      out.push(["Hot Streak (4-straight)", dmg + (fmAfter - fm) * FM_VALUE - tax(true), dmg]);
+    }
+    if (hasStraight8(dice, 5)) {
+      const up = has("ignite-ii");
+      const base = up ? IGNITE_BASE_II : IGNITE_BASE;
+      const fmAfter = Math.min(fmCap2, fm + 2);
+      const dmg = base + 2 * fmAfter;
+      out.push(["Ignite (5-straight)", dmg + (fmAfter - fm) * FM_VALUE + (up ? burnV : 0) - tax(true), dmg]);
+    }
+    if (a >= 2 && b >= 2 && has("hot-streak-ii")) {
+      out.push(["Scorch (AABB)", SCORCH_DMG + gainFm2(2) * FM_VALUE + burnV - tax(true), SCORCH_DMG]);
+    }
+    if (b >= 2 && c >= 2 && has("ignite-ii")) {
+      const fmGain = Math.min(fmCap2 + 1, fm + 5) - fm;
+      out.push(["Blazing Soul (BBCC)", fmGain * FM_VALUE + FM_VALUE + knockV, 0]);
+    }
+    if (d >= 3 && has("meteorite-ii")) {
+      out.push(["Meteoroid (DDD)", knockV + burnV + STUN_EXTRA_PHASE_VALUE, 0]);
+    }
+    if (d >= 4) {
+      const coll = has("meteorite-ii") ? METEORITE_COLLATERAL_II : METEORITE_COLLATERAL;
+      const fmAfter = Math.min(fmCap2, fm + 2);
+      const dmg = fmAfter + coll;
+      out.push(["Meteorite (DDDD)", dmg + (fmAfter - fm) * FM_VALUE + STUN_EXTRA_PHASE_VALUE, dmg]);
+    }
+    if (d >= 5) {
+      out.push(["Scorch the Earth (DDDDD)", ULT_DMG + ULT_COLLATERAL + gainFm2(3) * FM_VALUE + knockV + burnV, ULT_DMG + ULT_COLLATERAL]);
+    }
+    out.push(["Whiff", 0, 0]);
+    return out;
+  }
+  function bestAbilityValue8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds, defenseTax).map(([, v]) => v));
+  }
+  function bestAbilityName8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds, defenseTax);
+    let best = cands[0];
+    for (const cand of cands) if (cand[1] > best[1]) best = cand;
+    return best[0];
+  }
+  function buildAbilityBoard8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds = [], defenseTax = 0) {
+    const matched = new Map(getCandidates8(dice, fm, fmCap2, oppBurned, oppKnocked, upgradeIds, defenseTax).map(([n, v, dd]) => [n, [v, dd]]));
+    const all = [
+      "Fireball 3F (AAA)",
+      "Fireball 4F (AAAA)",
+      "Fireball 5F (AAAAA)",
+      "Burning Soul (CC)",
+      "Combustion (ABCD)",
+      "Pyroblast (AAAAD)",
+      "Hot Streak (4-straight)",
+      "Ignite (5-straight)",
+      "Meteorite (DDDD)",
+      "Scorch the Earth (DDDDD)"
+    ];
+    if (upgradeIds.includes("hot-streak-ii")) all.push("Scorch (AABB)");
+    if (upgradeIds.includes("ignite-ii")) all.push("Blazing Soul (BBCC)");
+    if (upgradeIds.includes("meteorite-ii")) all.push("Meteoroid (DDD)");
+    return all.map((name) => {
+      const hit = matched.get(name);
+      return { name, matched: !!hit, value: hit ? hit[0] : 0, baseDamage: hit ? hit[1] : 0 };
+    });
+  }
+
+  // src/characters/pyromancer/config.ts
+  var pyConfig = {
+    id: "py",
+    faceToSymbol(face) {
+      return pyFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      const evalFn = (d) => bestAbilityValue8(d, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName8(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard8(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates8(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      const w = state.wildcards || {};
+      const wc = (w.sixIt ? 1 : 0) + (w.soWild ? 2 : 0) + (w.twiceAsWild ? 4 : 0) + (w.samesies ? 8 : 0) + (w.tipIt ? 16 : 0);
+      return `${Math.min(state.fireMastery, state.fmCap)}|${state.fmCap}|${state.oppBurned ? 1 : 0}${state.oppKnocked ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgrades}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : heroId === "sm" ? smConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : heroId === "sm" ? smConfig : heroId === "py" ? pyConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -2944,6 +3116,305 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/py/hero.json
+  var hero_default8 = {
+    id: "py",
+    name: "Pyromancer",
+    diceAnatomy: "1-3 = Flame (A), 4 = Blaze (B), 5 = Fiery Soul (C), 6 = Meteor (D). V\xE9rifi\xE9 leaflet (scan user 2026-07-06).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    source: "Board + leaflet + 14 cartes scann\xE9s user 2026-07-06. Spec compl\xE8te : characters/Pyromancer/SPEC.md. Rulings user : Molten Armor II/III Burn = un Flame ET un Blaze ; Knockdown = choix du porteur ; Burning Soul = 2 FM par Fiery Soul ; Burn+Knockdown+Stun cumulables.",
+    tokens: [
+      { id: "fireMastery", name: "Fire Mastery", startingCount: 0, stackCap: 5, description: "Positive. Stack limit 5 (augmentable par Fire Up!/Blazing Soul/Burning Soul II). \xC0 TON upkeep, tu dois 'cool off' en retirant 1 jeton. Booste les habilet\xE9s." },
+      { id: "burn", name: "Burn", startingCount: 0, stackCap: 1, description: "Negative. Le porteur re\xE7oit 2 dmg \xE0 son Upkeep Phase. Persistant." },
+      { id: "knockdown", name: "Knockdown", startingCount: 0, stackCap: 1, description: "Negative. Avant le d\xE9but de son Offensive Roll Phase, le porteur paie 2 CP pour retirer le jeton, SINON il saute son Offensive Roll Phase puis retire le jeton." },
+      { id: "stun", name: "Stun", startingCount: 0, stackCap: 1, description: "Negative. Le porteur ne peut RIEN faire pendant l'Attaque. \xC0 la fin de l'Attaque, l'infligeur retire le jeton et cible imm\xE9diatement le m\xEAme adversaire avec une Offensive Roll Phase additionnelle." }
+    ],
+    flags: [],
+    abilities: [
+      {
+        id: "fireball_3a",
+        boardName: "Fireball 3F (AAA)",
+        dicePattern: "AAA",
+        baseDamage: 4,
+        defendable: true,
+        tokensGrantedToSelf: { fireMastery: 1 },
+        upgradedBy: { upgradeId: "fireball-ii", tokensGrantedToSelf: { fireMastery: 2 } },
+        verified: true
+      },
+      {
+        id: "fireball_4a",
+        boardName: "Fireball 4F (AAAA)",
+        dicePattern: "AAAA",
+        baseDamage: 6,
+        defendable: true,
+        tokensGrantedToSelf: { fireMastery: 1 },
+        upgradedBy: { upgradeId: "fireball-ii", tokensGrantedToSelf: { fireMastery: 2 } },
+        verified: true
+      },
+      {
+        id: "fireball_5a",
+        boardName: "Fireball 5F (AAAAA)",
+        dicePattern: "AAAAA",
+        baseDamage: 8,
+        defendable: true,
+        tokensGrantedToSelf: { fireMastery: 1 },
+        upgradedBy: { upgradeId: "fireball-ii", tokensGrantedToSelf: { fireMastery: 2 } },
+        verified: true
+      },
+      {
+        id: "burning_soul",
+        boardName: "Burning Soul (CC)",
+        dicePattern: "CC",
+        baseDamage: 0,
+        defendable: false,
+        notes: "Gain 2 FM PAR Fiery Soul (ruling user). 1 collat\xE9ral PAR Fiery Soul. II : SSS -> Burn, SSSS -> stack limit FM +1.",
+        upgradedBy: { upgradeId: "burning-soul-ii" },
+        verified: true
+      },
+      {
+        id: "combustion",
+        boardName: "Combustion (ABCD)",
+        dicePattern: "ABCD",
+        baseDamage: 0,
+        defendable: false,
+        tokensGrantedToSelf: { fireMastery: 1 },
+        notes: "+1 FM ; puis retire jusqu'\xE0 4 FM -> 3 dmg ind\xE9fendables PAR jeton retir\xE9 (4 avec la II).",
+        upgradedBy: { upgradeId: "combustion-ii" },
+        verified: true
+      },
+      {
+        id: "pyroblast",
+        boardName: "Pyroblast (AAAAD)",
+        dicePattern: "AAAAD",
+        baseDamage: 6,
+        defendable: true,
+        bonusRoll: { dice: 1, onA: "add3dmg", onB: "inflictBurn", onC: "fireMastery2", onD: "inflictKnockdown" },
+        upgradedBy: { upgradeId: "pyroblast-iii", bonusRollDice: 2 },
+        notes: "6 dmg + 1d6 d'effets (II : 2d6 ; III : 2d6 + relance optionnelle d'1 d\xE9).",
+        verified: true
+      },
+      {
+        id: "hot_streak",
+        boardName: "Hot Streak (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 5,
+        defendable: true,
+        tokensGrantedToSelf: { fireMastery: 2 },
+        notes: "+2 FM PUIS 5 + 1 dmg par FM (6 + 1/FM avec la II).",
+        upgradedBy: { upgradeId: "hot-streak-ii", baseDamage: 6 },
+        verified: true
+      },
+      {
+        id: "ignite",
+        boardName: "Ignite (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 4,
+        defendable: true,
+        tokensGrantedToSelf: { fireMastery: 2 },
+        notes: "+2 FM PUIS 4 + 2 dmg par FM (II : 5 + 2/FM + inflige Burn).",
+        upgradedBy: { upgradeId: "ignite-ii", baseDamage: 5 },
+        verified: true
+      },
+      {
+        id: "meteorite",
+        boardName: "Meteorite (DDDD)",
+        dicePattern: "DDDD",
+        baseDamage: 0,
+        defendable: false,
+        tokensGrantedToSelf: { fireMastery: 2 },
+        tokensInflictedOnOpponent: { stun: 1 },
+        notes: "+2 FM ; inflige Stun ; 1 dmg ind\xE9f PAR FM ; +2 collat\xE9raux (3 avec la II). Stun -> Offensive Roll Phase additionnelle apr\xE8s l'attaque.",
+        upgradedBy: { upgradeId: "meteorite-ii" },
+        verified: true
+      },
+      {
+        id: "scorch_the_earth",
+        boardName: "Scorch the Earth (DDDDD)",
+        dicePattern: "DDDDD",
+        baseDamage: 12,
+        defendable: false,
+        ultimate: true,
+        tokensGrantedToSelf: { fireMastery: 3 },
+        tokensInflictedOnOpponent: { knockdown: 1, burn: 1 },
+        notes: "+3 FM ; inflige Knockdown & Burn ; 12 dmg (Ultimate) ; +2 collat\xE9raux.",
+        verified: true
+      }
+    ],
+    altAbilities: [
+      {
+        id: "scorch",
+        boardName: "Scorch (AABB)",
+        dicePattern: "AABB",
+        baseDamage: 6,
+        defendable: true,
+        requiresUpgradeId: "hot-streak-ii",
+        tokensGrantedToSelf: { fireMastery: 2 },
+        tokensInflictedOnOpponent: { burn: 1 },
+        notes: "+2 FM. Inflige Burn. 6 dmg.",
+        verified: true
+      },
+      {
+        id: "blazing_soul",
+        boardName: "Blazing Soul (BBCC)",
+        dicePattern: "BBCC",
+        baseDamage: 0,
+        defendable: false,
+        requiresUpgradeId: "ignite-ii",
+        tokensGrantedToSelf: { fireMastery: 5 },
+        tokensInflictedOnOpponent: { knockdown: 1 },
+        notes: "Stack limit FM +1 (permanent). +5 FM. Inflige Knockdown.",
+        verified: true
+      },
+      {
+        id: "meteoroid",
+        boardName: "Meteoroid (DDD)",
+        dicePattern: "DDD",
+        baseDamage: 0,
+        defendable: false,
+        requiresUpgradeId: "meteorite-ii",
+        tokensInflictedOnOpponent: { knockdown: 1, burn: 1, stun: 1 },
+        notes: "Inflige Knockdown, Burn ET Stun (pas de d\xE9g\xE2ts). Stun -> Offensive Roll Phase additionnelle.",
+        verified: true
+      }
+    ],
+    passives: [],
+    defense: {
+      name: "Molten Armor",
+      diceCount: "5",
+      text: "Defense Roll 5. Gain 1 Fire Mastery par Fiery Soul. Deal 1 dmg par Flame \xE0 l'attaquant. II (+1 CP) : + si >=1 Flame ET >=1 Blaze, inflige Burn (ruling user : les deux). III (+3 CP) : gain aussi 1 FM par Meteor et 1 dmg par Meteor.",
+      verified: true
+    },
+    cards: [
+      {
+        id: "fireball-ii",
+        name: "Fireball II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "fireball",
+        text: "AAA: 4. AAAA: 6. AAAAA: 8. Gain 2 Fire Mastery.",
+        verified: true
+      },
+      {
+        id: "burning-soul-ii",
+        name: "Burning Soul II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "burning_soul",
+        text: "CC: On SSS inflict Burn. On SSSS increase Fire Mastery stack limit by 1. Gain 2 x S Fire Mastery. Deal 1 x S collateral dmg to all opponents.",
+        verified: true
+      },
+      {
+        id: "combustion-ii",
+        name: "Combustion II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "combustion",
+        text: "ABCD: Gain 1 Fire Mastery. Then remove up to 4 Fire Mastery tokens and deal 4 undefendable dmg per token removed.",
+        verified: true
+      },
+      {
+        id: "pyroblast-ii",
+        name: "Pyroblast II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "pyroblast",
+        text: "AAAAD: Deal 6 dmg and roll 2 dice: Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
+        verified: true
+      },
+      {
+        id: "pyroblast-iii",
+        name: "Pyroblast III",
+        kind: "upgrade",
+        cpCost: 3,
+        upgradeSlot: "pyroblast",
+        text: "AAAAD: Deal 6 dmg and roll 2 dice (may re-roll 1): Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
+        verified: true
+      },
+      {
+        id: "hot-streak-ii",
+        name: "Hot Streak II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "hot_streak",
+        text: "Small Straight: Gain 2 Fire Mastery. Then deal 6 + 1 dmg per Fire Mastery. Adds alt SCORCH (AABB): Gain 2 Fire Mastery. Inflict Burn. Deal 6 dmg.",
+        verified: true
+      },
+      {
+        id: "ignite-ii",
+        name: "Ignite II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "ignite",
+        text: "Large Straight: Gain 2 Fire Mastery. Inflict Burn. Then deal 5 + 2 dmg per Fire Mastery. Adds alt BLAZING SOUL (BBCC): Increase Fire Mastery stack limit by 1. Then gain 5 Fire Mastery. Inflict Knockdown.",
+        verified: true
+      },
+      {
+        id: "meteorite-ii",
+        name: "Meteorite II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "meteorite",
+        text: "DDDD: Gain 2 Fire Mastery. Inflict Stun. Then deal 1 undefendable dmg per Fire Mastery. Additionally, deal 3 collateral dmg. Adds alt METEOROID (DDD): Inflict Knockdown, Burn, and Stun.",
+        verified: true
+      },
+      {
+        id: "molten-armor-ii",
+        name: "Molten Armor II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "defense",
+        text: "Defense Roll 5: Gain 1 x FierySoul Fire Mastery. On Flame AND Blaze, inflict Burn. Deal 1 x Flame dmg.",
+        verified: true
+      },
+      {
+        id: "molten-armor-iii",
+        name: "Molten Armor III",
+        kind: "upgrade",
+        cpCost: 3,
+        upgradeSlot: "defense",
+        text: "Defense Roll 5: Gain 1 x FierySoul + 1 x Meteor Fire Mastery. On Flame AND Blaze, inflict Burn. Deal 1 x Flame + 1 x Meteor dmg.",
+        verified: true
+      },
+      {
+        id: "warm-up",
+        name: "Warm Up!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Gain 1 Fire Mastery. Then spend CP as desired and gain 1 additional Fire Mastery for each CP spent.",
+        verified: true
+      },
+      {
+        id: "fire-up",
+        name: "Fire Up!",
+        kind: "action",
+        cpCost: 3,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Increase Fire Mastery stack limit by 1. Then gain 2 Fire Mastery.",
+        verified: true
+      },
+      {
+        id: "huzzah",
+        name: "Huzzah!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Roll 1 die: On Flame, add 3 dmg. On Blaze, inflict Burn. On Fiery Soul, gain 2 Fire Mastery. On Meteor, inflict Knockdown.",
+        verified: true
+      },
+      {
+        id: "red-hot",
+        name: "Red Hot!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Add 1 dmg per Fire Mastery.",
+        verified: true
+      }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -2976,6 +3447,7 @@ var Game = (() => {
   var drHero = hero_default5;
   var thHero = hero_default6;
   var smHero = hero_default7;
+  var pyHero = hero_default8;
   var commonCards = common_cards_default;
   var nxHero = {
     id: "nx",
@@ -2992,7 +3464,7 @@ var Game = (() => {
     cards: []
   };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "sm" ? smHero : heroId === "nx" ? nxHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "sm" ? smHero : heroId === "py" ? pyHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const pools = [
@@ -3025,7 +3497,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : heroId === "py" ? pyConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -3683,11 +4155,59 @@ var Game = (() => {
     return pSense * spiderSensePrevention(incomingDamage) >= 1.5 ? "sense" : "counter";
   }
 
+  // src/sim/hero/py.rules.ts
+  var FM_BASE_CAP = 5;
+  var BURN_UPKEEP_DMG = 2;
+  var KNOCKDOWN_COST = 2;
+  function createInitialPYTokens() {
+    return emptyBag();
+  }
+  function fmCap(p) {
+    return FM_BASE_CAP + (p.fmCapBonus ?? 0);
+  }
+  function gainFm(p, n) {
+    const before = p.tokens.fireMastery ?? 0;
+    p.tokens.fireMastery = Math.min(fmCap(p), before + n);
+    return p.tokens.fireMastery - before;
+  }
+  function coolOff(p) {
+    if ((p.tokens.fireMastery ?? 0) <= 0) return false;
+    p.tokens.fireMastery -= 1;
+    return true;
+  }
+  function inflictNegative(target, kind) {
+    const before = target.tokens[kind] ?? 0;
+    target.tokens[kind] = Math.min(1, before + 1);
+    return target.tokens[kind] - before;
+  }
+  function moltenArmorEffects(dice, tier) {
+    const flames = dice.filter((d) => d <= 3).length;
+    const blazes = dice.filter((d) => d === 4).length;
+    const souls = dice.filter((d) => d === 5).length;
+    const meteors = dice.filter((d) => d === 6).length;
+    return {
+      fmGain: souls + (tier >= 3 ? meteors : 0),
+      counterDamage: flames + (tier >= 3 ? meteors : 0),
+      inflictBurn: tier >= 2 && flames >= 1 && blazes >= 1
+    };
+  }
+  function pyroBonusDieEffects(face) {
+    return {
+      addDmg: face <= 3 ? 3 : 0,
+      burn: face === 4,
+      fm: face === 5 ? 2 : 0,
+      knockdown: face === 6
+    };
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
   }
   function defenseTaxFor(opponent) {
+    if (opponent.heroId === "py") {
+      return opponent.upgradesInPlay.includes("molten-armor-iii") ? 2.5 + 5 / 6 : 2.5;
+    }
     if (opponent.heroId === "sm") {
       return 1.5;
     }
@@ -3724,6 +4244,17 @@ var Game = (() => {
     };
   }
   function oracleStateFor(player, opponent) {
+    if (player.heroId === "py") {
+      return {
+        fireMastery: player.tokens.fireMastery ?? 0,
+        fmCap: fmCap(player),
+        oppBurned: (opponent.tokens.burn ?? 0) > 0,
+        oppKnocked: (opponent.tokens.knockdown ?? 0) > 0,
+        upgradeIds: player.upgradesInPlay,
+        defenseTax: defenseTaxFor(opponent),
+        wildcards: wildcardFlagsFor(player)
+      };
+    }
     if (player.heroId === "sm") {
       return {
         comboHeld: (player.tokens.combo ?? 0) > 0,
@@ -3835,6 +4366,14 @@ var Game = (() => {
     self.swingEscapeArmed = false;
     self.smInvisDefendArmed = false;
     self.smInvisRerollArmed = false;
+    if ((self.tokens.burn ?? 0) > 0) {
+      self.hp -= BURN_UPKEEP_DMG;
+      log(state, playerIdx, "upkeep", `Burn: received ${BURN_UPKEEP_DMG} dmg (persistent)`);
+      if (checkGameOver(state)) return;
+    }
+    if ((self.tokens.fireMastery ?? 0) > 0 && coolOff(self)) {
+      log(state, playerIdx, "upkeep", `Fire Mastery cool off: -1 (now ${self.tokens.fireMastery})`);
+    }
     if ((self.tokens.regen2 ?? 0) > 0 || (self.tokens.regen1 ?? 0) > 0 || (self.tokens.wound ?? 0) > 0) {
       const rw = upkeepRegenAndWound(self, rng);
       if (rw.healed > 0) log(state, playerIdx, "upkeep", `Regenerate: healed ${rw.healed}`);
@@ -4227,6 +4766,23 @@ var Game = (() => {
       log(state, playerIdx, phase, "Cha-Ching!: +2 CP");
       return;
     }
+    if (card.id === "warm-up") {
+      const g1 = gainFm(self, 1);
+      const room = fmCap(self) - (self.tokens.fireMastery ?? 0);
+      const want = self.humanControlled ? Math.max(0, Math.min(self.warmUpCpChoice ?? 0, self.cp)) : Math.min(self.cp, room);
+      const spend = Math.min(want, self.cp);
+      self.cp -= spend;
+      const g2 = spend > 0 ? gainFm(self, spend) : 0;
+      self.warmUpCpChoice = void 0;
+      log(state, playerIdx, phase, `Warm Up!: +${g1 + g2} Fire Mastery (${spend} CP spent)`);
+      return;
+    }
+    if (card.id === "fire-up") {
+      self.fmCapBonus = (self.fmCapBonus ?? 0) + 1;
+      const g = gainFm(self, 2);
+      log(state, playerIdx, phase, `Fire Up!: Fire Mastery stack limit +1 (now ${fmCap(self)}), +${g} Fire Mastery`);
+      return;
+    }
     const eff = card.effect;
     if (!eff) {
       log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP \u2014 TODO(user): effect not structured yet, no game-state change applied`);
@@ -4364,7 +4920,7 @@ var Game = (() => {
     if (id === "radioactive-blood") return (self.tokens.combo ?? 0) < 1;
     return true;
   }
-  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods", "web-shooters", "booyah", "milkshake-me", "cha-ching"];
+  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods", "web-shooters", "booyah", "milkshake-me", "cha-ching", "warm-up", "fire-up"];
   function anyoneHasHead(state) {
     return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0;
   }
@@ -4684,6 +5240,12 @@ var Game = (() => {
     const defenderIdx = 1 - attackerIdx;
     const defender = state.players[defenderIdx];
     const policy = policies[defenderIdx];
+    if ((defender.tokens.stun ?? 0) > 0 && incomingDamage > 0) {
+      log(state, defenderIdx, "defense", "Stun: no defense possible \u2014 damage goes through");
+      queueDamage(state, defenderIdx, incomingDamage);
+      flushDamage(state);
+      return;
+    }
     if ((defender.tokens.webbed ?? 0) > 0 && incomingDamage > 0) {
       defender.tokens.webbed = 0;
       log(state, defenderIdx, "defense", "Webbed: incoming attack becomes UNDEFENDABLE, token removed");
@@ -4701,6 +5263,8 @@ var Game = (() => {
       }
       defenseDice = rollDice(thickHideDiceCount(defender), rng);
     } else if (defender.heroId === "rv") {
+      defenseDice = rollDice(5, rng);
+    } else if (defender.heroId === "py") {
       defenseDice = rollDice(5, rng);
     } else if (defender.heroId === "sm") {
       defender.spiderSensePrevented = false;
@@ -4778,6 +5342,17 @@ var Game = (() => {
       if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage);
       log(state, defenderIdx, "defense", `Nothing More${upgradedNM ? " II" : ""}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ""}`);
       if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx]);
+    } else if (defender.heroId === "py") {
+      const tier = defender.upgradesInPlay.includes("molten-armor-iii") ? 3 : defender.upgradesInPlay.includes("molten-armor-ii") ? 2 : 1;
+      const eff = moltenArmorEffects(finalDefenseDice, tier);
+      if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage);
+      const fmGained = eff.fmGain > 0 ? gainFm(defender, eff.fmGain) : 0;
+      let burnMsg = "";
+      if (eff.inflictBurn) {
+        const g = inflictNegative(attacker, "burn");
+        burnMsg = g > 0 ? ", Burn inflicted on attacker" : ", Burn already on attacker";
+      }
+      log(state, defenderIdx, "defense", `Molten Armor${tier > 1 ? ` ${"I".repeat(tier)}` : ""}: prevented 0, ${eff.counterDamage} dmg back, +${fmGained} Fire Mastery${burnMsg}`);
     } else if (defender.heroId === "sm") {
       const mode = defender.smDefenseActive ?? "sense";
       defender.smDefenseActive = void 0;
@@ -4953,7 +5528,7 @@ var Game = (() => {
     }
     return remaining;
   }
-  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite", "ambush"];
+  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite", "ambush", "huzzah", "red-hot"];
   function eligibleAttackModifierCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ATTACK_MODIFIER_CARD_IDS.filter((id) => {
@@ -4966,6 +5541,10 @@ var Game = (() => {
       if (id === "ambush") {
         return self.heroId === "sm" && (self.tokens.invisibility ?? 0) > 0;
       }
+      if (id === "red-hot") {
+        return self.heroId === "py" && (self.tokens.fireMastery ?? 0) > 0;
+      }
+      if (id === "huzzah") return self.heroId === "py";
       if (id === "stone-beak" || id === "talon-strike") {
         if (self.heroId !== "rv") return false;
         if (id === "stone-beak" && (self.tokens.nevermore ?? 0) > 0) return false;
@@ -5030,6 +5609,23 @@ var Game = (() => {
       self.tokens.invisibility = 0;
       log(state, playerIdx, "resolveAttack", "Ambush!: Invisibility discarded, +3 dmg");
       return { ...current, dmg: current.dmg + 3 };
+    }
+    if (cardId === "red-hot") {
+      const fmNow = self.tokens.fireMastery ?? 0;
+      log(state, playerIdx, "resolveAttack", `Red Hot!: +${fmNow} dmg (1 per Fire Mastery)`);
+      return { ...current, dmg: current.dmg + fmNow };
+    }
+    if (cardId === "huzzah") {
+      if (!rng) {
+        return { ...current, dmg: current.dmg + 2 };
+      }
+      const hz = rollDie(rng);
+      const eff = pyroBonusDieEffects(hz);
+      if (eff.burn) inflictNegative(opp, "burn");
+      if (eff.knockdown) inflictNegative(opp, "knockdown");
+      if (eff.fm > 0) gainFm(self, eff.fm);
+      log(state, playerIdx, "resolveAttack", `Huzzah!: rolled ${hz} -> ${eff.addDmg > 0 ? `+${eff.addDmg} dmg` : eff.burn ? "Burn inflicted" : eff.fm > 0 ? "+2 Fire Mastery" : "Knockdown inflicted"}`);
+      return { ...current, dmg: current.dmg + eff.addDmg };
     }
     if (cardId === "cranial-assist") {
       const oppHasHead = hasHead(opp);
@@ -5279,7 +5875,7 @@ var Game = (() => {
   function queueAttackDamageVsArmor(state, attackerIdx, dmg, isUltimate, rng, policies) {
     const defenderIdx = 1 - attackerIdx;
     const defender = state.players[defenderIdx];
-    if ((defender.tokens.invisibility ?? 0) > 0 && !isUltimate && dmg > 0 && rng && policies && (defender.humanControlled ? defender.smInvisDefendArmed === true : dmg >= 5)) {
+    if ((defender.tokens.invisibility ?? 0) > 0 && !isUltimate && dmg > 0 && rng && policies && (defender.tokens.stun ?? 0) === 0 && (defender.humanControlled ? defender.smInvisDefendArmed === true : dmg >= 5)) {
       defender.tokens.invisibility = 0;
       defender.smInvisDefendArmed = false;
       log(state, defenderIdx, "defense", "Invisibility spent: defending against the undefendable Attack");
@@ -5325,6 +5921,7 @@ var Game = (() => {
     else if (self.heroId === "dr") applyDRAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "th") applyTHAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "sm") applySMAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "py") applyPYAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
@@ -5896,6 +6493,139 @@ var Game = (() => {
     }
     log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Spider-Man ability matched (${name})`);
   }
+  function applyPYAbility(state, playerIdx, name, dice, rng, policies) {
+    const self = state.players[playerIdx];
+    const oppIdx = 1 - playerIdx;
+    const opp = state.players[oppIdx];
+    const policy = policies[playerIdx];
+    const has = (id) => self.upgradesInPlay.includes(id);
+    const fmOf = () => self.tokens.fireMastery ?? 0;
+    const gainFm2 = (n, label) => {
+      const g = gainFm(self, n);
+      log(state, playerIdx, "resolveAttack", `${label}: +${g} Fire Mastery (now ${fmOf()}/${fmCap(self)})`);
+    };
+    const inflict = (kind, label) => {
+      const g = inflictNegative(opp, kind);
+      log(state, playerIdx, "resolveAttack", `${label}: ${kind} ${g > 0 ? "inflicted" : "already on opponent (stack 1)"}`);
+    };
+    const attack = (dmg, defendable, ultimate = false) => {
+      let result = { dmg, undefendable: !defendable || ultimate };
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
+      for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (result.dmg <= 0) {
+        log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
+        return;
+      }
+      log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
+      else resolveDefense(state, playerIdx, result.dmg, rng, policies);
+    };
+    if (name.startsWith("Fireball")) {
+      const flames = dice.filter((d) => d <= 3).length;
+      const tier = flames >= 5 ? 2 : flames >= 4 ? 1 : 0;
+      gainFm2(has("fireball-ii") ? 2 : 1, "Fireball");
+      attack([4, 6, 8][tier], true);
+      return;
+    }
+    if (name.startsWith("Burning Soul")) {
+      const souls = dice.filter((d) => d === 5).length;
+      const up = has("burning-soul-ii");
+      if (up && souls >= 4) {
+        self.fmCapBonus = (self.fmCapBonus ?? 0) + 1;
+        log(state, playerIdx, "resolveAttack", `Burning Soul II: Fire Mastery stack limit +1 (now ${fmCap(self)})`);
+      }
+      gainFm2(2 * souls, "Burning Soul");
+      if (up && souls >= 3) inflict("burn", "Burning Soul II");
+      queueDamage(state, oppIdx, souls);
+      log(state, playerIdx, "resolveAttack", `Burning Soul: ${souls} collateral dmg`);
+      flushDamage(state);
+      checkGameOver(state);
+      return;
+    }
+    if (name.startsWith("Combustion")) {
+      gainFm2(1, "Combustion");
+      const removable = Math.min(4, fmOf());
+      self.tokens.fireMastery = fmOf() - removable;
+      const per = has("combustion-ii") ? 4 : 3;
+      const dmg = removable * per;
+      log(state, playerIdx, "resolveAttack", `Combustion: removed ${removable} Fire Mastery -> ${dmg} undefendable dmg`);
+      if (dmg > 0) queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies);
+      return;
+    }
+    if (name.startsWith("Pyroblast")) {
+      const nDice = has("pyroblast-ii") || has("pyroblast-iii") ? 2 : 1;
+      let rolls = [];
+      for (let i = 0; i < nDice; i++) rolls.push(rollDie(rng));
+      log(state, playerIdx, "resolveAttack", `Pyroblast roll [${rolls.join(",")}]`);
+      if (has("pyroblast-iii")) {
+        const idx = rolls.findIndex((f) => f > 3);
+        if (idx >= 0) {
+          rolls[idx] = rollDie(rng);
+          log(state, playerIdx, "resolveAttack", `Pyroblast III re-roll -> [${rolls.join(",")}]`);
+        }
+      }
+      let add = 0;
+      for (const f of rolls) {
+        const eff = pyroBonusDieEffects(f);
+        add += eff.addDmg;
+        if (eff.burn) inflict("burn", "Pyroblast");
+        if (eff.knockdown) inflict("knockdown", "Pyroblast");
+        if (eff.fm > 0) gainFm2(eff.fm, "Pyroblast");
+      }
+      attack(6 + add, true);
+      return;
+    }
+    if (name.startsWith("Hot Streak")) {
+      gainFm2(2, "Hot Streak");
+      attack((has("hot-streak-ii") ? 6 : 5) + fmOf(), true);
+      return;
+    }
+    if (name.startsWith("Ignite")) {
+      gainFm2(2, "Ignite");
+      if (has("ignite-ii")) inflict("burn", "Ignite II");
+      attack((has("ignite-ii") ? 5 : 4) + 2 * fmOf(), true);
+      return;
+    }
+    if (name.startsWith("Scorch the Earth")) {
+      gainFm2(3, "Scorch the Earth");
+      inflict("knockdown", "Scorch the Earth");
+      inflict("burn", "Scorch the Earth");
+      queueDamage(state, oppIdx, 2);
+      attack(12, false, true);
+      return;
+    }
+    if (name.startsWith("Scorch")) {
+      gainFm2(2, "Scorch");
+      inflict("burn", "Scorch");
+      attack(6, true);
+      return;
+    }
+    if (name.startsWith("Blazing Soul")) {
+      self.fmCapBonus = (self.fmCapBonus ?? 0) + 1;
+      log(state, playerIdx, "resolveAttack", `Blazing Soul: Fire Mastery stack limit +1 (now ${fmCap(self)})`);
+      gainFm2(5, "Blazing Soul");
+      inflict("knockdown", "Blazing Soul");
+      return;
+    }
+    if (name.startsWith("Meteoroid")) {
+      inflict("knockdown", "Meteoroid");
+      inflict("burn", "Meteoroid");
+      inflict("stun", "Meteoroid");
+      return;
+    }
+    if (name.startsWith("Meteorite")) {
+      gainFm2(2, "Meteorite");
+      inflict("stun", "Meteorite");
+      const coll = has("meteorite-ii") ? 3 : 2;
+      queueDamage(state, oppIdx, coll);
+      log(state, playerIdx, "resolveAttack", `Meteorite: ${coll} collateral dmg`);
+      const dmg = fmOf();
+      log(state, playerIdx, "resolveAttack", `Meteorite: ${dmg} undefendable dmg (1 per Fire Mastery)`);
+      queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies);
+      return;
+    }
+    log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Pyromancer ability matched (${name})`);
+  }
   function playEndOfTurn(state, playerIdx) {
     const self = state.players[playerIdx];
     if ((self.tokens.hex ?? 0) > 0) {
@@ -5922,10 +6652,33 @@ var Game = (() => {
     if (checkGameOver(state)) return;
     playIncomePhase(state, playerIdx, rng);
     playMainPhase(state, playerIdx, "main1", policies, rng);
-    const dice = playOffensiveRollPhase(state, playerIdx, rng, policy);
-    const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies);
-    resolveAbilityPhase(state, playerIdx, finalDice, rng, policies);
-    if (checkGameOver(state)) return;
+    const kdSelf = state.players[playerIdx];
+    let skipOffense = false;
+    if ((kdSelf.tokens.knockdown ?? 0) > 0) {
+      kdSelf.tokens.knockdown = 0;
+      if (kdSelf.cp >= KNOCKDOWN_COST) {
+        kdSelf.cp -= KNOCKDOWN_COST;
+        log(state, playerIdx, "roll", `Knockdown: paid ${KNOCKDOWN_COST} CP, token removed`);
+      } else {
+        skipOffense = true;
+        log(state, playerIdx, "roll", "Knockdown: cannot pay \u2014 skips Offensive Roll Phase, token removed");
+      }
+    }
+    if (!skipOffense) {
+      const dice = playOffensiveRollPhase(state, playerIdx, rng, policy);
+      const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies);
+      resolveAbilityPhase(state, playerIdx, finalDice, rng, policies);
+      if (checkGameOver(state)) return;
+    }
+    const stunOpp = state.players[1 - playerIdx];
+    for (let guard = 0; (stunOpp.tokens.stun ?? 0) > 0 && guard < 3; guard++) {
+      stunOpp.tokens.stun = 0;
+      log(state, playerIdx, "resolveAttack", "Stun: token removed \u2014 additional Offensive Roll Phase vs the stunned opponent");
+      const dS = playOffensiveRollPhase(state, playerIdx, rng, policy);
+      const fS = resolveOffensiveAlterWindow(state, playerIdx, dS, rng, policies);
+      resolveAbilityPhase(state, playerIdx, fS, rng, policies);
+      if (checkGameOver(state)) return;
+    }
     const smSelf = state.players[playerIdx];
     if (smSelf.heroId === "sm" && (smSelf.tokens.combo ?? 0) > 0 && !smSelf.comboSpentThisTurn && smSelf.smAttackedThisPhase === true) {
       smSelf.tokens.combo = 0;
@@ -5956,7 +6709,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : heroId === "sm" ? createInitialSMTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : heroId === "sm" ? createInitialSMTokens() : heroId === "py" ? createInitialPYTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
@@ -6243,7 +6996,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : self.heroId === "sm" ? smConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : self.heroId === "sm" ? smConfig : self.heroId === "py" ? pyConfig : bwConfig;
     const state = oracleStateFor(self, opp);
     state.wildcards = {
       sixIt: self.hand.includes("six-it") && self.cp >= 1,

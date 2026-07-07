@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -80,6 +80,13 @@ export interface PlayerState {
   smInvisRerollArmed?: boolean
   // La défense qui vient de se résoudre a prévenu via Spider-Sense (condition d'Invisible Punch!).
   spiderSensePrevented?: boolean
+  // Pyromancer : bonus permanent au stack limit de Fire Mastery (Fire Up!/Blazing Soul/
+  // Burning Soul II — cap effectif = 5 + bonus) ; warmUpCpChoice = CP que le joueur humain
+  // veut dépenser sur Warm Up! (l'IA a son heuristique) ; knockdownPay = préférence humaine
+  // pré-armée (payer 2 CP au lieu de sauter l'Offensive Roll Phase).
+  fmCapBonus?: number
+  warmUpCpChoice?: number
+  knockdownPay?: boolean
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

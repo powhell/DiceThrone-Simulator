@@ -32,7 +32,7 @@
     if(!raw) return '';
     const s=String(raw); const st=s.match(/(\d)\s*-?\s*straight|suite\s*(\d)/i);
     if(st) return `<span class="straightbadge">SUITE ${st[1]||st[2]}</span>`;
-    const letters=s.match(/[ABC]/g);
+    const letters=s.match(/[ABCD]/g); // D = 4e symbole (Pyromancer : Meteor)
     if(letters&&letters.length) return `<span class="patt">${letters.map(c=>symIcon(hero,c)).join('')}</span>`;
     return `<span class="req">${s}</span>`;
   }
@@ -79,6 +79,14 @@
            C:'<g class="glyph"><ellipse cx="32" cy="36" rx="7" ry="11"/><circle cx="32" cy="20" r="5"/><path d="M27 28 L12 16 M27 34 L10 30 M27 40 L12 46 M29 46 L18 58 M37 28 L52 16 M37 34 L54 30 M37 40 L52 46 M35 46 L46 58" fill="none" stroke-width="3.5" stroke-linecap="round"/></g>'},
       symName:{A:'Thwip',B:'Toile',C:'Spider'},
       col:{A:'#7ec8e8',B:'#e8e8e8',C:'#e2211f'} },
+    py: { name:'Pyromancer', crest:'PY', cls:v=>v<=3?'A':v===4?'B':v===5?'C':'D',
+      // 4 symboles (leaflet) : Flame, Blaze (soleil noir), Fiery Soul (emblème), Meteor
+      sym:{A:'<g class="glyph"><path d="M32 8 Q44 22 40 32 Q48 28 46 20 Q56 32 50 44 Q44 54 32 54 Q20 54 14 44 Q10 34 18 24 Q17 32 24 34 Q20 20 32 8 Z"/></g>',
+           B:'<g class="glyph"><circle cx="32" cy="32" r="8"/><path d="M32 10 L36 24 L32 20 L28 24 Z M54 32 L40 36 L44 32 L40 28 Z M32 54 L28 40 L32 44 L36 40 Z M10 32 L24 28 L20 32 L24 36 Z M47 17 L38 26 L40 20 L44 22 Z M47 47 L38 38 L44 40 L42 44 Z M17 47 L26 38 L24 44 L20 42 Z M17 17 L26 26 L20 24 L22 20 Z"/></g>',
+           C:'<g class="glyph"><path d="M32 6 Q40 18 36 26 Q44 22 44 14 Q54 26 46 40 L54 36 Q50 50 32 56 Q14 50 10 36 L18 40 Q10 26 20 14 Q20 22 28 26 Q24 18 32 6 Z M32 34 Q37 40 32 48 Q27 40 32 34 Z"/></g>',
+           D:'<g class="glyph"><ellipse cx="30" cy="34" rx="10" ry="8" transform="rotate(-25 30 34)"/><path d="M44 14 L52 8 M46 20 Q56 16 60 8" fill="none" stroke-width="3.5" stroke-linecap="round"/><path d="M14 52 Q24 50 40 40" fill="none" stroke-width="3.5" stroke-linecap="round"/><path d="M8 44 Q20 44 24 38" fill="none" stroke-width="2.5" stroke-linecap="round"/></g>'},
+      symName:{A:'Flame',B:'Blaze',C:'Fiery Soul',D:'Meteor'},
+      col:{A:'#f2d24b',B:'#3a3a3a',C:'#c8452a',D:'#e8e2d0'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -88,7 +96,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -206,6 +214,10 @@
     if (t.wound) out.push(`<span class="tok" style="border-color:#b03a3a"><b>🩸 Wound</b> ${t.wound}</span>`);
     if (t.feather) out.push(`<span class="tok" style="border-color:#3f7a4f"><b>🪶 Feather</b> ${t.feather}</span>`);
     if (t.combo) out.push(`<span class="tok" style="border-color:#3a7ab0"><b>👊 Combo</b> (2ᵉ phase d'attaque)</span>`);
+    if (p.heroId==='py' || t.fireMastery) out.push(`<span class="tok" style="border-color:#d0542a"><b>🔥 Fire Mastery</b> ${t.fireMastery||0}/${5+(p.fmCapBonus||0)}</span>`);
+    if (t.burn) out.push(`<span class="tok" style="border-color:#e8a02a"><b>🔥 Burn</b> (2 dmg/upkeep, persistant)</span>`);
+    if (t.knockdown) out.push(`<span class="tok" style="border-color:#c8b03a"><b>💥 Knockdown</b> (2 CP ou saute l'attaque)</span>`);
+    if (t.stun) out.push(`<span class="tok" style="border-color:#6a5acd"><b>🌀 Stun</b></span>`);
     if (t.invisibility) out.push(`<span class="tok" style="border-color:#c04a6a"><b>👤 Invisibility</b></span>`);
     if (t.webbed) out.push(`<span class="tok" style="border-color:#9a9a9a"><b>🕸️ Webbed</b> (prochaine attaque normale subie = indéf.)</span>`);
     if (t.hex) out.push(`<span class="tok" style="border-color:#8a4fbf"><b>⬡ Hex</b> (tes 6 = blancs ce tour)</span>`);
@@ -576,6 +588,12 @@
         Lance 5 dés : ${up?'1 contre-dégât PAR Talon':'≥2 Talons = 2 contre-dégâts (une fois)'}<br>
         ≥2 Ailes = préviens 2 (une fois) · ≥2 Œils = Active Nevermore</div>`;
     }
+    if (heroKey==='py'){
+      const t3 = p.upgradesInPlay.includes('molten-armor-iii'), t2 = p.upgradesInPlay.includes('molten-armor-ii');
+      return `<div class="defbox"><b>🛡️ Molten Armor${t3?' III':t2?' II':''}</b><br>
+        Lance 5 dés : +1 Fire Mastery par Fiery Soul${t3?' et par Meteor':''} · 1 contre-dégât par Flame${t3?' et par Meteor':''}<br>
+        ${(t2||t3)?'≥1 Flame ET ≥1 Blaze : inflige Burn · ':''}(aucune prévention)</div>`;
+    }
     if (heroKey==='sm'){
       return `<div class="defbox"><b>🛡️ Spider-Sense / Counterpunch</b> (au choix à chaque attaque)<br>
         Spider-Sense : 2 dés — ≥1 Spider = préviens la MOITIÉ (arrondi sup., une fois)<br>
@@ -897,7 +915,31 @@
           phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll();
         }));
       }
-      c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
+      // Stun (py) : tu l'as infligé pendant ton attaque — retire le jeton et rejoue une
+      // Offensive Roll Phase complète contre l'adversaire (jeton vérifié).
+      const aiStun = g.state.players[g.aiIdx];
+      if (phase==='main2' && (aiStun.tokens.stun||0)>0){
+        c.appendChild(btn('🌀 Stun : Offensive Roll Phase supplémentaire contre l\'adversaire','primary', ()=>{
+          aiStun.tokens.stun=0;
+          log('🌀 <b>Stun</b> retiré : nouvelle Offensive Roll Phase !');
+          phase='roll'; dice=[]; attempts=0; rollsLeft=2; renderAll();
+        }));
+      }
+      // Knockdown (py te l'a infligé) : payer 2 CP ou sauter TA phase d'attaque (choix, ruling).
+      if (phase==='main1' && (youC.tokens.knockdown||0)>0){
+        const pay = btn('💥 Knockdown : payer 2 CP puis attaquer →','primary', ()=>{
+          youC.cp-=2; youC.tokens.knockdown=0;
+          log('💥 <b>Knockdown</b> : tu paies 2 CP, le jeton est retiré.'); toRoll();
+        }, youC.cp<2);
+        c.appendChild(pay);
+        c.appendChild(btn('💥 Knockdown : sauter ta phase d\'attaque →','gold', ()=>{
+          youC.tokens.knockdown=0;
+          log('💥 <b>Knockdown</b> : tu sautes ton Offensive Roll Phase, le jeton est retiré.');
+          phase='main2'; renderAll();
+        }));
+      } else {
+        c.appendChild(phase==='main1' ? btn('Passer aux dés →','gold', toRoll) : btn('Terminer le tour →','gold', finishHumanTurn));
+      }
     } else if (phase==='roll') {
       if (attempts===0) { c.appendChild(btn('Lancer les dés','primary', doRoll)); }
       else {
@@ -1289,6 +1331,12 @@
         coachNote('main', mainLabel(a), pick.kind==='pass'?'passer':mainLabel(pick));
       }
     } catch (e) {}
+    // Warm Up! (py) : « spend CP as desired » — le choix appartient au joueur, jamais auto.
+    if (a.kind==='playCard' && a.cardId==='warm-up') {
+      const you=g.state.players[g.humanIdx];
+      const k=parseInt(prompt(`Warm Up! : +1 Fire Mastery, puis +1 FM par CP dépensé.\nCombien de CP dépenser ? (0 à ${you.cp})`,'0'));
+      you.warmUpCpChoice = (k>=0 && k<=you.cp) ? k : 0;
+    }
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
   function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; ttaCharges=0; renderAll(); }
   function toAlter(){
@@ -1822,6 +1870,32 @@
     if (/^Druid Form: gained Regenerate/.test(msg)) return `🧙 <b>Druide</b> : +Regenerate ② (fin de tour)`;
     if ((m = msg.match(/^Ferocity: (\d)-of-a-kind -> Wound inflicted/))) return `<b>Ferocity</b> : ${m[1]} identiques → 🩸 Wound`;
     if ((m = msg.match(/^(Forest's \w+|Protect the Forest|Wrath of Nature|Wild Realignment|Nature's Cure|Savage Maul|Rainfall): (.+)$/))) return `<b>${m[1]}</b> : ${m[2]}`;
+    // --- Pyromancer ---
+    if (/^Burn: received 2 dmg/.test(msg)) return `🔥 <b>Burn</b> : 2 dégâts à l'upkeep (persistant)`;
+    if ((m = msg.match(/^Fire Mastery cool off: -1 \(now (\d+)\)/))) return `🔥 <b>Cool off</b> : −1 Fire Mastery (reste ${m[1]})`;
+    if (/^Knockdown: paid 2 CP/.test(msg)) return `💥 <b>Knockdown</b> : paie 2 CP, jeton retiré`;
+    if (/^Knockdown: cannot pay/.test(msg)) return `💥 <b>Knockdown</b> : pas les 2 CP — <b>saute son Offensive Roll Phase</b>, jeton retiré`;
+    if (/^Stun: token removed — additional/.test(msg)) return `🌀 <b>Stun</b> retiré → <b>Offensive Roll Phase supplémentaire</b> !`;
+    if (/^Stun: no defense possible/.test(msg)) return `🌀 <b>Stun</b> : aucune défense possible — les dégâts passent`;
+    if ((m = msg.match(/^(.+?): \+(\d+) Fire Mastery \(now (\d+)\/(\d+)\)/))) return `🔥 <b>${m[1]}</b> : +${m[2]} Fire Mastery (${m[3]}/${m[4]})`;
+    if ((m = msg.match(/^(.+?): (burn|knockdown|stun) (inflicted|already on opponent.*)$/))) {
+      const T={burn:'🔥 Burn',knockdown:'💥 Knockdown',stun:'🌀 Stun'};
+      return `<b>${m[1]}</b> : ${T[m[2]]} ${m[3]==='inflicted'?'infligé':'déjà sur l\'adversaire (stack 1)'}`;
+    }
+    if ((m = msg.match(/^Combustion: removed (\d+) Fire Mastery -> (\d+) undefendable dmg/))) return `<b>Combustion</b> : brûle ${m[1]} Fire Mastery → <b>${m[2]} dégâts indéfendables</b>`;
+    if ((m = msg.match(/^Burning Soul II?: Fire Mastery stack limit \+1 \(now (\d+)\)/))) return `<b>Burning Soul II</b> : stack limit Fire Mastery +1 (max ${m[1]})`;
+    if ((m = msg.match(/^Burning Soul: (\d+) collateral dmg/))) return `<b>Burning Soul</b> : ${m[1]} dégât(s) collatéraux (indéfendables)`;
+    if ((m = msg.match(/^Pyroblast roll \[([\d,]+)\]/))) return `<b>Pyroblast</b> : dé(s) bonus [${m[1]}] (1-3 = +3 dégâts · 4 = Burn · 5 = +2 FM · 6 = Knockdown)`;
+    if ((m = msg.match(/^Pyroblast III re-roll -> \[([\d,]+)\]/))) return `<b>Pyroblast III</b> : relance → [${m[1]}]`;
+    if ((m = msg.match(/^Meteorite: (\d+) collateral dmg/))) return `<b>Meteorite</b> : ${m[1]} dégâts collatéraux`;
+    if ((m = msg.match(/^Meteorite: (\d+) undefendable dmg/))) return `<b>Meteorite</b> : <b>${m[1]} dégâts indéfendables</b> (1 par Fire Mastery)`;
+    if ((m = msg.match(/^Molten Armor( I+)?: prevented 0, (\d+) dmg back, \+(\d+) Fire Mastery(, Burn inflicted on attacker)?(, Burn already on attacker)?/)))
+      return `🛡️ <b>Molten Armor${m[1]||''}</b> : ${m[2]} contre-dégât(s), +${m[3]} 🔥FM${m[4]?', <b>Burn infligé à l\'attaquant</b>':''}${m[5]?', Burn déjà sur l\'attaquant':''}`;
+    if ((m = msg.match(/^Warm Up!: \+(\d+) Fire Mastery \((\d+) CP spent\)/))) return `<b>Warm Up!</b> : +${m[1]} 🔥Fire Mastery (${m[2]} CP dépensés)`;
+    if ((m = msg.match(/^Fire Up!: Fire Mastery stack limit \+1 \(now (\d+)\), \+(\d+) Fire Mastery/))) return `<b>Fire Up!</b> : stack limit +1 (max ${m[1]}), +${m[2]} 🔥FM`;
+    if ((m = msg.match(/^Blazing Soul: Fire Mastery stack limit \+1 \(now (\d+)\)/))) return `<b>Blazing Soul</b> : stack limit Fire Mastery +1 (max ${m[1]})`;
+    if ((m = msg.match(/^Huzzah!: rolled (\d) -> (.+)$/))) return `🎲 <b>Huzzah!</b> : ${m[1]} → ${m[2].replace('dmg','dégâts').replace('Burn inflicted','Burn infligé').replace('Fire Mastery','🔥FM').replace('Knockdown inflicted','Knockdown infligé')}`;
+    if ((m = msg.match(/^Red Hot!: \+(\d+) dmg/))) return `<b>Red Hot!</b> : +${m[1]} dégâts (1 par 🔥FM)`;
     // --- Spider-Man ---
     if (/^Defensive Ability: Spider-Sense/.test(msg)) return `🛡️ Défense choisie : <b>Spider-Sense</b> (2 dés — Spider = préviens ½)`;
     if (/^Defensive Ability: Counterpunch/.test(msg)) return `🛡️ Défense choisie : <b>Counterpunch</b> (3 dés — 1 contre-dégât par Thwip)`;
@@ -1924,6 +1998,11 @@
     'Punch':'5/6/7 ·4-kind: Combo','C-C-C-Combo':'6 ·+Combo (+alt Web Shot BBC)',
     'Ensnare':'6 ·+Webbed','Ensnare (grande)':'pioche ·9 ·+Webbed',
     'Venom Punch':'8 indéf. ·+Invis. (+alt Combo Up CCC)',
+    // Pyromancer (Pyroblast a deux paliers — ':iii' = Pyroblast III)
+    'Fireball':'4/6/8 ·+2 FM','Burning Soul':'+Burn à SSS ·cap+1 à SSSS',
+    'Combustion':'-4 FM max → 4/jeton indéf.','Pyroblast':'6 +2d6 effets','Pyroblast:iii':'6 +2d6 effets ·relance 1',
+    'Hot Streak':'+2 FM ·6 +1/FM (+alt Scorch AABB)','Ignite':'+2 FM ·Burn ·5 +2/FM (+alt Blazing Soul BBCC)',
+    'Meteorite':'+2 FM ·Stun ·1/FM indéf. +3 coll. (+alt Meteoroid DDD)',
   };
   // Exigence modifiée par l'upgrade (seul cas connu : Fowl Friend II passe à BBB — ruling user)
   const REF_II_REQ = { 'Fowl Friend':'BBB' };
@@ -1940,6 +2019,8 @@
     'Chain Lightning':'chain-lightning-ii','Odinforce':'odinforce-ii',
     'Bottled Lightning':'bottled-lightning-ii','Lightning Rod':'lightning-rod-ii','Thunder Bolt':'thunder-bolt-ii',
     'Punch':'punch-ii','C-C-C-Combo':'combo-ii','Ensnare':'ensnare-ii','Ensnare (grande)':'ensnare-ii','Venom Punch':'venom-punch-ii',
+    'Fireball':'fireball-ii','Burning Soul':'burning-soul-ii','Combustion':'combustion-ii',
+    'Pyroblast':['pyroblast-ii','pyroblast-iii'],'Hot Streak':'hot-streak-ii','Ignite':'ignite-ii','Meteorite':'meteorite-ii',
   };
   // Résout le tier actif d'une habileté (gère les paliers multiples type Hammered II/III).
   function refUpgradeInfo(name, upgradesInPlay){
@@ -1993,6 +2074,14 @@
       {name:'Ensnare (grande)',req:'SUITE 5',dmg:'pioche ·8 ·+Webbed'},
       {name:'Venom Punch',req:'CCCC',dmg:'7 indéf. ·+Invis.'},
       {name:'Venom Shockwave',req:'CCCCC',dmg:'13 ·Invis.+Webbed ·ULT'} ],
+    py:[ {name:'Fireball',req:'AAA+',dmg:'4/6/8 ·+1 FM'},
+      {name:'Burning Soul',req:'CC',dmg:'+2 FM/S ·1 coll./S'},
+      {name:'Combustion',req:'ABCD',dmg:'-4 FM max → 3/jeton indéf.'},
+      {name:'Pyroblast',req:'AAAAD',dmg:'6 +1d6 effets'},
+      {name:'Hot Streak',req:'SUITE 4',dmg:'+2 FM ·5 +1/FM'},
+      {name:'Ignite',req:'SUITE 5',dmg:'+2 FM ·4 +2/FM'},
+      {name:'Meteorite',req:'DDDD',dmg:'+2 FM ·Stun ·1/FM indéf. +2 coll.'},
+      {name:'Scorch the Earth',req:'DDDDD',dmg:'12 ·Knockdown+Burn ·ULT'} ],
     nx:[ {name:'1 · Swoop',req:'—',dmg:'3 indéf. ·soin 4 ·-1 statut'},
       {name:'2 · Ember Spark',req:'—',dmg:'8 ·mill 3'},
       {name:'3 · Gashing Bite',req:'—',dmg:'4d6: top2'},
@@ -2011,9 +2100,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm','py'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv','dr','th','sm'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr','th','sm','py'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>

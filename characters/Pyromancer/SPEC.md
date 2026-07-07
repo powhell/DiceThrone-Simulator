@@ -47,8 +47,8 @@ Source : `characters/Pyromancer/board/*.jpg`, `leaflet/Screenshot_{20..24}.png`,
 - Stun = l'attaque se résout SANS défense ni cartes du défenseur, puis l'infligeur enchaîne une Offensive Roll Phase complète (même mécanique moteur que Combo sm, mais déclenchée par l'attaquant).
 - Fire Up!/Blazing Soul/Burning Soul II : cap FM permanent 5→6→7… (pattern featherCapBonus).
 
-## Interprétations à confirmer (⚠)
-1. Molten Armor II/III « On [F][B], inflict Burn » : il faut **au moins un F OU un B** sur les 5 dés, ou **un F ET un B** ? (même icône double sur II et III)
-2. Knockdown : le choix payer 2 CP / sauter l'ORP appartient au porteur au début de sa phase — OK ?
-3. Burning Soul base : « Gain 2 × S » = 2 FM **par** Fiery Soul roulé (4 FM avec SS), pas un fixe — confirmé par la II (« per » aussi) ?
-4. Stun + Knockdown en même temps sur l'adversaire : le stack 1 est PAR jeton (il peut porter Burn + Knockdown + Stun simultanément) ?
+## Rulings confirmés par l'user (2026-07-06)
+1. ✅ Molten Armor II/III « On [F][B], inflict Burn » : il faut **un F ET un B** (les deux) sur les 5 dés.
+2. ✅ Knockdown : le porteur choisit lui-même (payer 2 CP ou sauter son Offensive Roll Phase).
+3. ✅ Burning Soul : 2 FM **par** Fiery Soul roulé (4 avec la paire, 6 avec SSS…).
+4. ✅ Un joueur peut porter Burn + Knockdown + Stun simultanément (stack 1 chacun).

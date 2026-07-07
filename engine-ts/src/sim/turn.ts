@@ -10,6 +10,7 @@ import type { RVState } from '../characters/raveness/config.js'
 import type { DRState } from '../characters/druid/config.js'
 import type { THState } from '../characters/thor/config.js'
 import type { SMState } from '../characters/spiderman/config.js'
+import type { PYState } from '../characters/pyromancer/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -26,6 +27,7 @@ import * as rv from './hero/rv.rules.js'
 import * as dr from './hero/dr.rules.js'
 import * as th from './hero/th.rules.js'
 import * as sm from './hero/sm.rules.js'
+import * as py from './hero/py.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -40,6 +42,10 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 // verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
 // indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
 export function defenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'py') {
+    // Molten Armor : aucune prévention, contre 5 dés x P(Flame)=1/2 = 2.5 (III : +5/6 Meteor)
+    return opponent.upgradesInPlay.includes('molten-armor-iii') ? 2.5 + 5 / 6 : 2.5
+  }
   if (opponent.heroId === 'sm') {
     // Spider-Sense : P(>=1 Spider sur 2 dés)=0.306 x ceil(dmg/2) ~ 0.9 sur une attaque de 6 ;
     // Counterpunch : contre 3 x 1/2 = 1.5. L'IA choisit le meilleur -> taxe moyenne ~1.5.
@@ -88,7 +94,17 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState {
+  if (player.heroId === 'py') {
+    return {
+      fireMastery: player.tokens.fireMastery ?? 0,
+      fmCap: py.fmCap(player),
+      oppBurned: (opponent.tokens.burn ?? 0) > 0,
+      oppKnocked: (opponent.tokens.knockdown ?? 0) > 0,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'sm') {
     return {
       comboHeld: (player.tokens.combo ?? 0) > 0,
@@ -200,6 +216,17 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.swingEscapeArmed = false
   self.smInvisDefendArmed = false
   self.smInvisRerollArmed = false
+
+  // Burn (Pyromancer, jeton vérifié) : 2 dmg à l'upkeep du porteur, PERSISTANT (ne se
+  // retire pas). Fire Mastery « cool off » : le porteur retire 1 jeton (obligatoire).
+  if ((self.tokens.burn ?? 0) > 0) {
+    self.hp -= py.BURN_UPKEEP_DMG
+    log(state, playerIdx, 'upkeep', `Burn: received ${py.BURN_UPKEEP_DMG} dmg (persistent)`)
+    if (checkGameOver(state)) return
+  }
+  if ((self.tokens.fireMastery ?? 0) > 0 && py.coolOff(self)) {
+    log(state, playerIdx, 'upkeep', `Fire Mastery cool off: -1 (now ${self.tokens.fireMastery})`)
+  }
 
   // Regenerate (soigne, flip/retire) + Wound (1 dmg + d6 4-6 retire) — jetons Druid,
   // portables par n'importe qui (Wound s'inflige a l'adversaire).
@@ -637,6 +664,25 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     log(state, playerIdx, phase, 'Cha-Ching!: +2 CP')
     return
   }
+  if (card.id === 'warm-up') {
+    // « Spend CP as desired » : humain = son choix pré-armé (warmUpCpChoice) ; IA = remplit
+    // jusqu'au cap (le FM se dépense via Combustion/Red Hot, 1 CP -> 1 FM est bon taux).
+    const g1 = py.gainFm(self, 1)
+    const room = py.fmCap(self) - (self.tokens.fireMastery ?? 0)
+    const want = self.humanControlled ? Math.max(0, Math.min(self.warmUpCpChoice ?? 0, self.cp)) : Math.min(self.cp, room)
+    const spend = Math.min(want, self.cp)
+    self.cp -= spend
+    const g2 = spend > 0 ? py.gainFm(self, spend) : 0
+    self.warmUpCpChoice = undefined
+    log(state, playerIdx, phase, `Warm Up!: +${g1 + g2} Fire Mastery (${spend} CP spent)`)
+    return
+  }
+  if (card.id === 'fire-up') {
+    self.fmCapBonus = (self.fmCapBonus ?? 0) + 1
+    const g = py.gainFm(self, 2)
+    log(state, playerIdx, phase, `Fire Up!: Fire Mastery stack limit +1 (now ${py.fmCap(self)}), +${g} Fire Mastery`)
+    return
+  }
   const eff = card.effect
   if (!eff) {
     log(state, playerIdx, phase, `Played ${card.name} for ${cost} CP — TODO(user): effect not structured yet, no game-state change applied`)
@@ -829,7 +875,7 @@ function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolea
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1199,6 +1245,15 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
   // two different policies face off, e.g. an RL agent defending against a scripted attacker).
   const policy = policies[defenderIdx]
 
+  // Stun (py, jeton vérifié) : le porteur ne peut RIEN faire pendant l'Attaque — aucune
+  // défense, aucune carte. Les dégâts passent intégralement.
+  if ((defender.tokens.stun ?? 0) > 0 && incomingDamage > 0) {
+    log(state, defenderIdx, 'defense', 'Stun: no defense possible — damage goes through')
+    queueDamage(state, defenderIdx, incomingDamage)
+    flushDamage(state)
+    return
+  }
+
   // Webbed (sm, jeton vérifié) : « The next time a player afflicted with this token is Attacked
   // with normal damage, the damage type becomes undefendable instead and this token is
   // immediately removed. » — pas de jet de défense du tout (Invisibility peut encore intervenir
@@ -1228,6 +1283,8 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     defenseDice = rollDice(dr.thickHideDiceCount(defender), rng) // Thick Hide : 2 (Bear 4)
   } else if (defender.heroId === 'rv') {
     defenseDice = rollDice(5, rng) // Nothing More : 5 des
+  } else if (defender.heroId === 'py') {
+    defenseDice = rollDice(5, rng) // Molten Armor : 5 des
   } else if (defender.heroId === 'sm') {
     // Deux Defensive Abilities, choix libre du défenseur (ruling user) : humain = sa
     // préférence pré-armée (smDefenseMode), IA = heuristique EV.
@@ -1333,6 +1390,19 @@ export function finalizeDefenseRoll(
     if (effNM.counterDamage > 0) queueDamage(state, attackerIdx, effNM.counterDamage)
     log(state, defenderIdx, 'defense', `Nothing More${upgradedNM ? ' II' : ''}: prevented ${effNM.prevented}, ${effNM.counterDamage} dmg back${effNM.activations ? `, Nevermore activation` : ''}`)
     if (effNM.activations > 0) performNevermoreActivations(state, defenderIdx, effNM.activations, rng, policies[defenderIdx])
+  } else if (defender.heroId === 'py') {
+    const tier: 1 | 2 | 3 = defender.upgradesInPlay.includes('molten-armor-iii') ? 3
+      : defender.upgradesInPlay.includes('molten-armor-ii') ? 2 : 1
+    const eff = py.moltenArmorEffects(finalDefenseDice, tier)
+    // Molten Armor ne PRÉVIENT rien : contre-dégâts + FM + Burn (II/III : un F ET un B — ruling).
+    if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage)
+    const fmGained = eff.fmGain > 0 ? py.gainFm(defender, eff.fmGain) : 0
+    let burnMsg = ''
+    if (eff.inflictBurn) {
+      const g = py.inflictNegative(attacker, 'burn')
+      burnMsg = g > 0 ? ', Burn inflicted on attacker' : ', Burn already on attacker'
+    }
+    log(state, defenderIdx, 'defense', `Molten Armor${tier > 1 ? ` ${'I'.repeat(tier)}` : ''}: prevented 0, ${eff.counterDamage} dmg back, +${fmGained} Fire Mastery${burnMsg}`)
   } else if (defender.heroId === 'sm') {
     const mode = defender.smDefenseActive ?? 'sense'
     defender.smDefenseActive = undefined
@@ -1519,7 +1589,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot']
 
 function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1533,6 +1603,10 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
     if (id === 'ambush') {
       return self.heroId === 'sm' && (self.tokens.invisibility ?? 0) > 0 // défausse le jeton
     }
+    if (id === 'red-hot') {
+      return self.heroId === 'py' && (self.tokens.fireMastery ?? 0) > 0 // +1 dmg par FM
+    }
+    if (id === 'huzzah') return self.heroId === 'py'
     if (id === 'stone-beak' || id === 'talon-strike') {
       if (self.heroId !== 'rv') return false
       if (id === 'stone-beak' && (self.tokens.nevermore ?? 0) > 0) return false // doit etre sur la CIBLE
@@ -1610,6 +1684,21 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
     self.tokens.invisibility = 0
     log(state, playerIdx, 'resolveAttack', 'Ambush!: Invisibility discarded, +3 dmg')
     return { ...current, dmg: current.dmg + 3 }
+  }
+  if (cardId === 'red-hot') {
+    const fmNow = self.tokens.fireMastery ?? 0
+    log(state, playerIdx, 'resolveAttack', `Red Hot!: +${fmNow} dmg (1 per Fire Mastery)`)
+    return { ...current, dmg: current.dmg + fmNow }
+  }
+  if (cardId === 'huzzah') {
+    if (!rng) { return { ...current, dmg: current.dmg + 2 } } // scoring : E ~ +1.5 dmg + effets
+    const hz = rollDie(rng)
+    const eff = py.pyroBonusDieEffects(hz)
+    if (eff.burn) py.inflictNegative(opp, 'burn')
+    if (eff.knockdown) py.inflictNegative(opp, 'knockdown')
+    if (eff.fm > 0) py.gainFm(self, eff.fm)
+    log(state, playerIdx, 'resolveAttack', `Huzzah!: rolled ${hz} -> ${eff.addDmg > 0 ? `+${eff.addDmg} dmg` : eff.burn ? 'Burn inflicted' : eff.fm > 0 ? '+2 Fire Mastery' : 'Knockdown inflicted'}`)
+    return { ...current, dmg: current.dmg + eff.addDmg }
   }
   if (cardId === 'cranial-assist') {
     // Cranial Assist! rewards attacking whoever holds the Haunted Head. The head is a bag token now,
@@ -1918,6 +2007,7 @@ function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: num
   // this token to activate a Defensive Ability. » Pas contre les Ultimates (même règle que le
   // bouclier Ultimanium — interprétation, voir SPEC). IA : dès 5 dmg ; humain : pré-armé.
   if ((defender.tokens.invisibility ?? 0) > 0 && !isUltimate && dmg > 0 && rng && policies
+    && (defender.tokens.stun ?? 0) === 0 // Stun (py) : le porteur ne peut RIEN faire pendant l'Attaque
     && (defender.humanControlled ? defender.smInvisDefendArmed === true : dmg >= 5)) {
     defender.tokens.invisibility = 0
     defender.smInvisDefendArmed = false
@@ -1969,6 +2059,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'dr') applyDRAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'th') applyTHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'sm') applySMAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'py') applyPYAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -2557,6 +2648,142 @@ function applySMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   log(state, playerIdx, 'resolveAttack', `Whiff — no Spider-Man ability matched (${name})`)
 }
 
+// --- Pyromancer ------------------------------------------------------------------------------
+function applyPYAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+  const fmOf = () => self.tokens.fireMastery ?? 0
+
+  const gainFm = (n: number, label: string) => {
+    const g = py.gainFm(self, n)
+    log(state, playerIdx, 'resolveAttack', `${label}: +${g} Fire Mastery (now ${fmOf()}/${py.fmCap(self)})`)
+  }
+  const inflict = (kind: 'burn' | 'knockdown' | 'stun', label: string) => {
+    const g = py.inflictNegative(opp, kind)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${kind} ${g > 0 ? 'inflicted' : 'already on opponent (stack 1)'}`)
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Fireball')) {
+    const flames = dice.filter(d => d <= 3).length
+    const tier = flames >= 5 ? 2 : flames >= 4 ? 1 : 0
+    gainFm(has('fireball-ii') ? 2 : 1, 'Fireball')
+    attack([4, 6, 8][tier], true)
+    return
+  }
+  if (name.startsWith('Burning Soul')) {
+    const souls = dice.filter(d => d === 5).length
+    const up = has('burning-soul-ii')
+    if (up && souls >= 4) {
+      self.fmCapBonus = (self.fmCapBonus ?? 0) + 1
+      log(state, playerIdx, 'resolveAttack', `Burning Soul II: Fire Mastery stack limit +1 (now ${py.fmCap(self)})`)
+    }
+    gainFm(2 * souls, 'Burning Soul') // 2 FM PAR Fiery Soul (ruling user)
+    if (up && souls >= 3) inflict('burn', 'Burning Soul II')
+    queueDamage(state, oppIdx, souls) // collatéral = indéfendable isolé
+    log(state, playerIdx, 'resolveAttack', `Burning Soul: ${souls} collateral dmg`)
+    flushDamage(state)
+    checkGameOver(state)
+    return
+  }
+  if (name.startsWith('Combustion')) {
+    gainFm(1, 'Combustion')
+    const removable = Math.min(4, fmOf())
+    self.tokens.fireMastery = fmOf() - removable
+    const per = has('combustion-ii') ? 4 : 3
+    const dmg = removable * per
+    log(state, playerIdx, 'resolveAttack', `Combustion: removed ${removable} Fire Mastery -> ${dmg} undefendable dmg`)
+    if (dmg > 0) queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies)
+    return
+  }
+  if (name.startsWith('Pyroblast')) {
+    const nDice = (has('pyroblast-ii') || has('pyroblast-iii')) ? 2 : 1
+    let rolls: number[] = []
+    for (let i = 0; i < nDice; i++) rolls.push(rollDie(rng))
+    log(state, playerIdx, 'resolveAttack', `Pyroblast roll [${rolls.join(',')}]`)
+    if (has('pyroblast-iii')) {
+      // Relance optionnelle d'1 dé : relance un dé non-Flame (heuristique dégâts)
+      const idx = rolls.findIndex(f => f > 3)
+      if (idx >= 0) {
+        rolls[idx] = rollDie(rng)
+        log(state, playerIdx, 'resolveAttack', `Pyroblast III re-roll -> [${rolls.join(',')}]`)
+      }
+    }
+    let add = 0
+    for (const f of rolls) {
+      const eff = py.pyroBonusDieEffects(f)
+      add += eff.addDmg
+      if (eff.burn) inflict('burn', 'Pyroblast')
+      if (eff.knockdown) inflict('knockdown', 'Pyroblast')
+      if (eff.fm > 0) gainFm(eff.fm, 'Pyroblast')
+    }
+    attack(6 + add, true)
+    return
+  }
+  if (name.startsWith('Hot Streak')) {
+    gainFm(2, 'Hot Streak')
+    attack((has('hot-streak-ii') ? 6 : 5) + fmOf(), true)
+    return
+  }
+  if (name.startsWith('Ignite')) {
+    gainFm(2, 'Ignite')
+    if (has('ignite-ii')) inflict('burn', 'Ignite II')
+    attack((has('ignite-ii') ? 5 : 4) + 2 * fmOf(), true)
+    return
+  }
+  if (name.startsWith('Scorch the Earth')) {
+    gainFm(3, 'Scorch the Earth')
+    inflict('knockdown', 'Scorch the Earth')
+    inflict('burn', 'Scorch the Earth')
+    queueDamage(state, oppIdx, 2) // collatéral
+    attack(12, false, true)
+    return
+  }
+  if (name.startsWith('Scorch')) { // alt Hot Streak II (AABB)
+    gainFm(2, 'Scorch')
+    inflict('burn', 'Scorch')
+    attack(6, true)
+    return
+  }
+  if (name.startsWith('Blazing Soul')) { // alt Ignite II (BBCC)
+    self.fmCapBonus = (self.fmCapBonus ?? 0) + 1
+    log(state, playerIdx, 'resolveAttack', `Blazing Soul: Fire Mastery stack limit +1 (now ${py.fmCap(self)})`)
+    gainFm(5, 'Blazing Soul')
+    inflict('knockdown', 'Blazing Soul')
+    return
+  }
+  if (name.startsWith('Meteoroid')) { // alt Meteorite II (DDD)
+    inflict('knockdown', 'Meteoroid')
+    inflict('burn', 'Meteoroid')
+    inflict('stun', 'Meteoroid') // -> Offensive Roll Phase additionnelle (gérée dans playTurn)
+    return
+  }
+  if (name.startsWith('Meteorite')) {
+    gainFm(2, 'Meteorite')
+    inflict('stun', 'Meteorite')
+    const coll = has('meteorite-ii') ? 3 : 2
+    queueDamage(state, oppIdx, coll)
+    log(state, playerIdx, 'resolveAttack', `Meteorite: ${coll} collateral dmg`)
+    const dmg = fmOf()
+    log(state, playerIdx, 'resolveAttack', `Meteorite: ${dmg} undefendable dmg (1 per Fire Mastery)`)
+    queueAttackDamageVsArmor(state, playerIdx, dmg, false, rng, policies)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Pyromancer ability matched (${name})`)
+}
+
 export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
   const self = state.players[playerIdx]
   if ((self.tokens.hex ?? 0) > 0) {
@@ -2590,10 +2817,41 @@ export function playTurn(state: GameState, playerIdx: 0 | 1, rng: RNG, policies:
   playIncomePhase(state, playerIdx, rng)
   playMainPhase(state, playerIdx, 'main1', policies, rng)
 
-  const dice = playOffensiveRollPhase(state, playerIdx, rng, policy)
-  const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies)
-  resolveAbilityPhase(state, playerIdx, finalDice, rng, policies)
-  if (checkGameOver(state)) return
+  // Knockdown (py, jeton vérifié) : avant le début de l'Offensive Roll Phase, le porteur
+  // paie 2 CP OU saute sa phase (puis retire le jeton — choix du porteur, ruling user).
+  // IA : payer dès que possible (une attaque moyenne vaut plus que 2 CP).
+  const kdSelf = state.players[playerIdx]
+  let skipOffense = false
+  if ((kdSelf.tokens.knockdown ?? 0) > 0) {
+    kdSelf.tokens.knockdown = 0
+    if (kdSelf.cp >= py.KNOCKDOWN_COST) {
+      kdSelf.cp -= py.KNOCKDOWN_COST
+      log(state, playerIdx, 'roll', `Knockdown: paid ${py.KNOCKDOWN_COST} CP, token removed`)
+    } else {
+      skipOffense = true
+      log(state, playerIdx, 'roll', 'Knockdown: cannot pay — skips Offensive Roll Phase, token removed')
+    }
+  }
+
+  if (!skipOffense) {
+    const dice = playOffensiveRollPhase(state, playerIdx, rng, policy)
+    const finalDice = resolveOffensiveAlterWindow(state, playerIdx, dice, rng, policies)
+    resolveAbilityPhase(state, playerIdx, finalDice, rng, policies)
+    if (checkGameOver(state)) return
+  }
+
+  // Stun (py, jeton vérifié) : après la conclusion de l'Attaque, l'infligeur retire le jeton
+  // et cible immédiatement le même adversaire avec une Offensive Roll Phase additionnelle.
+  // Peut légitimement s'enchaîner (re-Meteorite) — garde-fou à 3 phases bonus.
+  const stunOpp = state.players[(1 - playerIdx) as 0 | 1]
+  for (let guard = 0; (stunOpp.tokens.stun ?? 0) > 0 && guard < 3; guard++) {
+    stunOpp.tokens.stun = 0
+    log(state, playerIdx, 'resolveAttack', 'Stun: token removed — additional Offensive Roll Phase vs the stunned opponent')
+    const dS = playOffensiveRollPhase(state, playerIdx, rng, policy)
+    const fS = resolveOffensiveAlterWindow(state, playerIdx, dS, rng, policies)
+    resolveAbilityPhase(state, playerIdx, fS, rng, policies)
+    if (checkGameOver(state)) return
+  }
 
   // Combo (sm, jeton vérifié) : si l'ORP a produit une Attaque, dépense à la conclusion de la
   // Defensive Roll Phase adverse -> Offensive Roll Phase additionnelle (même cible, 1x/tour).

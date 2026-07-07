@@ -9,13 +9,14 @@ import { rvConfig, type RVState } from '../characters/raveness/config.js'
 import { drConfig, type DRState } from '../characters/druid/config.js'
 import { thConfig, type THState } from '../characters/thor/config.js'
 import { smConfig, type SMState } from '../characters/spiderman/config.js'
+import { pyConfig, type PYState } from '../characters/pyromancer/config.js'
 import { heroTemplateFor, resolvedAbilityByBoardName } from './data/load.js'
 import type { AbilityCandidate, HeroId } from './types.js'
 
 export function resolveMatchedAbilities(
   heroId: HeroId,
   dice: number[],
-  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState,
+  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState,
 ): AbilityCandidate[] {
   const template = heroTemplateFor(heroId)
   const upgradeIds = oracleState.upgradeIds ?? []
@@ -31,7 +32,9 @@ export function resolveMatchedAbilities(
             ? thConfig.buildAbilityBoard(dice, oracleState as THState)
             : heroId === 'sm'
               ? smConfig.buildAbilityBoard(dice, oracleState as SMState)
-              : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
+              : heroId === 'py'
+                ? pyConfig.buildAbilityBoard(dice, oracleState as PYState)
+                : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
 
   return board
     .filter(e => e.matched && e.name !== 'Whiff')
