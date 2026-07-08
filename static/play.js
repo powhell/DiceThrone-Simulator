@@ -484,13 +484,28 @@
           rawLine = `<div class="lead" style="margin-top:4px">🎲 dés seuls : garder [${raw.kept.join(',')||'rien'}] → EV ${raw.ev.toFixed(1)} · tes cartes ajoutent +${Math.max(0, adv.ev - raw.ev).toFixed(1)}</div>`;
         }
       }
+      // POURQUOI ce keep (user-caught : « je ne comprends jamais les raisons ») : où la garde
+      // atterrit (probabilités), et les gardes quasi égales — un écart < 0,3 EV = même valeur.
+      let whyLine = '';
+      const top0 = adv.topOptions && adv.topOptions[0];
+      if (!stop && top0 && top0.probDist) {
+        const lands = Object.entries(top0.probDist).filter(([n])=>n!=='Whiff').sort((x,y)=>y[1]-x[1]).slice(0,3)
+          .map(([n,pr])=>`${formatAbility(humanHero,n).name} ${Math.round(pr)}%`);
+        const whiff = top0.probDist['Whiff']||0;
+        if (lands.length) whyLine = `<div class="lead" style="margin-top:4px">pourquoi : ça atterrit sur ${lands.join(' · ')}${whiff>=8?` · raté ${Math.round(whiff)}%`:''}</div>`;
+      }
+      let tieLine = '';
+      const top1 = adv.topOptions && adv.topOptions[1];
+      if (!stop && top1 && (adv.ev - top1.ev) < 0.3 && top1.kept.join(',') !== adv.kept.join(',')) {
+        tieLine = `<div class="lead" style="margin-top:2px">≈ égal : garder [${top1.kept.join(',')||'rien'}] (EV ${top1.ev.toFixed(1)}) — les deux sont corrects</div>`;
+      }
       // « s'arrêter » (valeur terminale) ≠ la ligne « garder tout » du tableau (qui conserve
       // l'option de changer d'avis à la relance suivante) — les deux chiffres diffèrent
       // légitimement, le libellé « tout garder » les confondait (user-caught).
       $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
         stop ? `S'ARRÊTER — finir sur ces dés vaut ${adv.keepAllEv.toFixed(1)}`
              : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · s'arrêter ici = ${adv.keepAllEv.toFixed(1)}`}</div>${
-        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}${rawLine}`;
+        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}${whyLine}${tieLine}${rawLine}`;
       return;
     }
     const show = (phase==='roll' && attempts>0) || phase==='alter';
@@ -2016,6 +2031,42 @@
       return `🛡️ <b>Hallowed Reckoning</b> : ${m[1]} dégât(s) prévenu(s) · ${m[2]} contre-dégât(s) · +${m[3]} Dreadful · +${m[4]} Grim Pursuit`;
     if ((m = msg.match(/^Sabotage: prevented (\d+), (\d+) dmg back, (\d+) TB inflicted/)))
       return `🛡️ <b>Sabotage</b> : ${m[1]} dégât(s) prévenu(s) · ${m[2]} contre-dégât(s)${+m[3]?` · ${m[3]} Time Bomb posée(s)`:''}`;
+    // --- Duelist ---
+    if ((m = msg.match(/^Retreat( II)?: (\d+) dmg back, (\d+) forced step\(s\) backward \(position (-?\d+)\)(?:, Defensive Bonus: (prevented (\d+)|drew (\d+)))?/))) {
+      const POS={'-2':'🛡️+3 Défensif','-1':'🂠 pige','0':'Neutral','1':'+1 Off.','2':'+3 Off.'};
+      let out = `🛡️ <b>Retreat${m[1]||''}</b> : ${m[2]} contre-dégât(s) · recule de ${m[3]} (→ ${POS[m[4]]||m[4]})`;
+      if (m[6]) out += ` · <b style="color:#5fbd8a">BONUS : ${m[6]} dégâts PRÉVENUS</b>`;
+      else if (m[7]) out += ` · <b>BONUS : pige ${m[7]} carte</b>`;
+      else out += ` · pas de bonus défensif (position ${POS[m[4]]||m[4]}${+m[4]>=0?'' : ' — bonus déjà consommé ce tour'})`;
+      return out;
+    }
+    if ((m = msg.match(/^Reposition: (\d+) step\(s\) (forward|backward) \(position (-?\d+)\)(, \+1 Guard Break)?/)))
+      return `👣 <b>Reposition</b> : ${m[1]} step ${m[2]==='forward'?'AVANT':'ARRIÈRE'} (position ${m[3]})${m[4]?' · <b>+1 Guard Break</b>':''}`;
+    if ((m = msg.match(/^Offensive Bonus: \+(\d+) dmg/)))
+      return `⚔️ <b>Bonus offensif Footwork : +${m[1]} dégâts</b> sur cette attaque`;
+    if ((m = msg.match(/^Disarm: discarded (.+), token removed/)))
+      return `🪝 <b>Disarm</b> : défausse <b>${m[1]}</b> (jeton retiré)`;
+    if (/^Income Phase skipped \(Disarm\)/.test(msg)) return `🪝 <b>Disarm</b> : saute la phase de revenu (pas de CP, pas de pioche)`;
+    // --- Sun Elf ---
+    if ((m = msg.match(/^Sun Dial \(DUSK\): \+1 \(now (\d+)\)( — FLIPS to DAWN)?/)))
+      return `🌆 <b>Sun Dial</b> +1 → ${m[1]}/5${m[2]?' · <b style="color:#e8a03a">FLIP CÔTÉ DAWN 🌅</b>':''}`;
+    if ((m = msg.match(/^Sun Dial \(DAWN\): \+(\d+) dmg, dial -(\d+)( — FLIPS to DUSK)?/)))
+      return `🌅 <b>DAWN déchargé : +${m[1]} dégâts</b> · cadran −${m[2]}${m[3]?' · flip côté DUSK 🌆':''}`;
+    if ((m = msg.match(/^(.+?): Sun Dial \+(\d+)(.*?)\(now (\d+)\)/)))
+      return `☀️ <b>${m[1]}</b> : cadran +${m[2]} → ${m[4]}/5${/FLIPS to DAWN/.test(m[3])?' · <b style="color:#e8a03a">FLIP CÔTÉ DAWN 🌅</b>':''}`;
+    if ((m = msg.match(/^Harness the Light( II)?: prevented 0, healed (\d+)(.*)$/))) {
+      let out = `🛡️ <b>Harness the Light${m[1]||''}</b> : soigne ${m[2]}`;
+      const dial = (m[3]||'').match(/Sun Dial \+(\d+)/); if (dial) out += ` · cadran +${dial[1]}`;
+      if (/FLIPS to DAWN/.test(m[3]||'')) out += ' · <b style="color:#e8a03a">FLIP CÔTÉ DAWN 🌅</b>';
+      if (/\+Charged Gem/.test(m[3]||'')) out += ' · +💎 Charged Gem';
+      return out;
+    }
+    if ((m = msg.match(/^Sun Marked: attacker heals (\d+)/)))
+      return `☀️ <b>Sun Marked</b> : l'attaquant se soigne de ${m[1]}`;
+    if ((m = msg.match(/^Charged Gem: rolled (\d+) -> (.+)$/)))
+      return `💎 <b>Charged Gem</b> : d6 = ${m[1]} → ${m[2].replace('+1 CP','+1 CP').replace(/(\d+) isolated undefendable dmg/,'$1 dégâts indéfendables')}`;
+    if ((m = msg.match(/^Guard Break: spent (\d+), rolls \[([\d,]+)\] — (attack is UNDEFENDABLE|failed)/)))
+      return `🛡️⚡ <b>Guard Break</b> : dépense ${m[1]}, d6 [${m[2]}] — ${m[3]==='failed'?'raté (l\'attaque reste défendable)':'<b style="color:#e8a03a">attaque INDÉFENDABLE</b>'}`;
     if (/^Start Player skips/.test(msg)) return 'Le premier joueur saute sa première phase de revenu (règle officielle).';
     if ((m = msg.match(/^\+1 CP, drew (\d+) card/))) return `+1 CP · pioche ${m[1]} carte(s)`;
     if ((m = msg.match(/^Played (.+?) for (\d+) CP(?: \((.*)\))?/))) {
