@@ -499,6 +499,13 @@
       if (!stop && top1 && (adv.ev - top1.ev) < 0.3 && top1.kept.join(',') !== adv.kept.join(',')) {
         tieLine = `<div class="lead" style="margin-top:2px">≈ égal : garder [${top1.kept.join(',')||'rien'}] (EV ${top1.ev.toFixed(1)}) — les deux sont corrects</div>`;
       }
+      // Cas S'ARRÊTER quasi égal à une relance : dire que c'est un pile-ou-face, pas un ordre
+      // (user-caught : « il me reste un roll et je pourrais avoir la grande suite »).
+      if (stop && top0 && top0.kept.length < 5 && (adv.keepAllEv - top0.ev) < 0.3) {
+        const landsS = top0.probDist ? Object.entries(top0.probDist).filter(([n])=>n!=='Whiff').sort((x,y)=>y[1]-x[1]).slice(0,2)
+          .map(([n,pr])=>`${formatAbility(humanHero,n).name} ${Math.round(pr)}%`).join(' · ') : '';
+        tieLine = `<div class="lead" style="margin-top:2px">≈ égal : relancer en gardant [${top0.kept.join(',')}] (EV ${top0.ev.toFixed(1)}${landsS?` — ${landsS}`:''}) — pile ou face : sûr si t'es en avance, loterie si t'as besoin d'un gros coup</div>`;
+      }
       // « s'arrêter » (valeur terminale) ≠ la ligne « garder tout » du tableau (qui conserve
       // l'option de changer d'avis à la relance suivante) — les deux chiffres diffèrent
       // légitimement, le libellé « tout garder » les confondait (user-caught).
