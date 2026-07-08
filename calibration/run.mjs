@@ -7,10 +7,11 @@ import path from 'path'
 import os from 'os'
 import { fileURLToPath } from 'url'
 import { Worker } from 'worker_threads'
-import { ARMS } from './arms.mjs'
+import { ARMS, RESULTS_DIRNAME, CALIB_SET } from './arms.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const resultsDir = path.join(here, 'results')
+const resultsDir = path.join(here, RESULTS_DIRNAME)
+console.log(`set=${CALIB_SET} -> ${RESULTS_DIRNAME}/`)
 fs.mkdirSync(resultsDir, { recursive: true })
 
 const argv = process.argv.slice(2)

@@ -7,7 +7,7 @@
 // results_v4_final_netv2/ et NE DOIVENT PAS être mélangés. Cette vague mesure les jetons
 // des 5 nouveaux héros (rv/dr/th/sm/py) + ré-ancre les étalons hh/bw sous le nouveau réseau.
 // Les bras cartes (card_*) v4 ne sont pas re-mesurés ici (coût ; voir git history).
-export const ARMS = {
+const ARMS_V5 = {
   // ---- bases (une par matchup ; l'adversaire est toujours bw) ----
   base: null,      // hh vs bw
   base_rv: null,   // rv vs bw
@@ -66,12 +66,39 @@ export const ARMS = {
 
 function p(state, heroId) { return state.players.find(x => x.heroId === heroId) }
 
+// ---- Vague « EV par carte » (2026-07-08, CALIB_SET=cards) --------------------------------
+// Perturbation : la carte est AJOUTÉE à la main de départ (5e carte). Valeur = Δwin apparié
+// vs `base`, converti en PV via l'étalon hp4 du héros mesuré. Dossier results_cards/ SÉPARÉ :
+// les résultats v5 (constantes hh pré-v4) ne doivent pas se mélanger à cette vague.
+import fs from 'fs'
+const loadJson = rel => JSON.parse(fs.readFileSync(new URL(rel, import.meta.url), 'utf8'))
+function cardArms() {
+  const A = {
+    base: null, // hh vs bw
+    hh_hp4: s => { p(s, 'hh').hp += 4 },
+    bw_hp4: s => { p(s, 'bw').hp += 4 },
+  }
+  const hh = loadJson('../engine-ts/src/sim/data/characters/hh/hero.json')
+  const bw = loadJson('../engine-ts/src/sim/data/characters/bw/hero.json')
+  const common = loadJson('../engine-ts/src/sim/data/common-cards.json')
+  for (const c of hh.cards) A['card_hh_' + c.id] = s => { p(s, 'hh').hand.push(c.id) }
+  for (const c of bw.cards) A['card_bw_' + c.id] = s => { p(s, 'bw').hand.push(c.id) }
+  for (const c of common.cards) A['card_common_' + c.id] = s => { p(s, 'hh').hand.push(c.id) }
+  return A
+}
+
+export const CALIB_SET = process.env.CALIB_SET === 'cards' ? 'cards' : 'v5'
+export const RESULTS_DIRNAME = CALIB_SET === 'cards' ? 'results_cards' : 'results'
+export const ARMS = CALIB_SET === 'cards' ? cardArms() : ARMS_V5
+
 const HERO_PREFIXES = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py']
 
 // Le héros dont ce bras mesure la valeur (son win-rate est la métrique).
 export function armHero(arm) {
   if (arm === 'base') return 'hh'
   if (arm.startsWith('base_')) return arm.slice(5)
+  if (arm.startsWith('card_bw_')) return 'bw'
+  if (arm.startsWith('card_')) return 'hh'
   const pref = arm.split('_')[0]
   return HERO_PREFIXES.includes(pref) ? pref : 'hh'
 }

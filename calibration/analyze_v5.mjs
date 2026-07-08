@@ -4,10 +4,10 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { ARMS, armHero, armBase } from './arms.mjs'
+import { ARMS, armHero, armBase, RESULTS_DIRNAME } from './arms.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const resultsDir = path.join(here, 'results')
+const resultsDir = path.join(here, RESULTS_DIRNAME)
 
 function load(arm) {
   const f = path.join(resultsDir, arm + '.jsonl')
