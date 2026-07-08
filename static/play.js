@@ -1044,6 +1044,13 @@
       addThorBtns(c); // 🔨 navette Mjölnir possible à tout moment (défausse 1 carte)
       addSmDefBtns(c); // 🕷️ choix Spider-Sense/Counterpunch + dépenses Invisibility pré-armées
       addFmDefBtns(c); // ⚒️ Masterwork Forge : quelle armure doubler (pré-armé)
+      if (HUMAN==='du') { // 👣 où tu es AVANT le jet — les reculs de Retreat sont OBLIGATOIRES (règle)
+        const youDu=g.state.players[g.humanIdx], posDu=youDu.footwork||0;
+        const LBLD={'-2':'🛡️+3 Défensif (prévient 3)','-1':'🂠 Défensif (pige 1)','0':'⚖️ Neutral','1':'⚔️+1 Off.','2':'⚔️+3 Off.'};
+        const sD=document.createElement('span'); sD.className='rolls';
+        sD.innerHTML=`👣 Position : <b>${LBLD[String(posDu)]}</b>${youDu.footworkBonusUsedThisTurn?' (bonus du tour déjà consommé)':''} — chaque Boot/Pierce de Retreat te recule d'1 (obligatoire), le bonus se calcule sur la position FINALE`;
+        c.appendChild(sD);
+      }
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
     } else if (phase==='upkeep' && HUMAN==='fm') {
