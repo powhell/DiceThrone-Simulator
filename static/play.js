@@ -714,15 +714,41 @@
     try {
       const self=g.state.players[g.humanIdx], opp=g.state.players[g.aiIdx];
       const st = G.oracleStateFor(self, opp);
-      const entries=[];
+      const heroT = G.heroTemplateFor(HUMAN);
+      // Lignes à évaluer : le board de base (marqué II/III si l'upgrade est posé, exigence
+      // upgradée incluse) + TOUTES les sub-habiletés débloquées (altAbility des cartes en jeu
+      // et hero.altAbilities gated) — user-caught : elles manquaient, et sans le « II »
+      // impossible de savoir si les valeurs étaient upgradées (elles l'étaient : le solveur
+      // lit upgradesInPlay ; c'est l'étiquette qui mentait).
+      const rows = [];
       for (const a of REFERENCE[HUMAN]||[]) {
-        const d5 = synthDiceForReq(a.req);
+        const up = refUpgradeInfo(a.name, self.upgradesInPlay);
+        rows.push({ name: a.name + (up?up.suffix:''), base: a.name.replace(/\s*\(grande\)\s*$/,''), req: (up&&up.req)||a.req });
+      }
+      const altsSeen = new Set();
+      for (const card of heroT.cards) {
+        if (card.altAbility && self.upgradesInPlay.includes(card.id)) {
+          const alt = card.altAbility;
+          const short = alt.boardName.replace(/\s*\([^)]*\)$/,'');
+          const req = (alt.boardName.match(/\(([^)]+)\)/)||[])[1] || alt.dicePattern;
+          if (!altsSeen.has(short)) { altsSeen.add(short); rows.push({ name:'↳ '+short, base: short, req }); }
+        }
+      }
+      for (const alt of (heroT.altAbilities||[])) {
+        const need = alt.requiresUpgradeId || alt.requiresUpgrade;
+        if (!need || !self.upgradesInPlay.includes(need)) continue;
+        const short = alt.boardName.replace(/\s*\([^)]*\)$/,'');
+        const req = (alt.boardName.match(/\(([^)]+)\)/)||[])[1] || alt.dicePattern;
+        if (!altsSeen.has(short)) { altsSeen.add(short); rows.push({ name:'↳ '+short, base: short, req }); }
+      }
+      const entries=[];
+      for (const r of rows) {
+        const d5 = synthDiceForReq(r.req);
         if (!d5) continue;
-        const base = a.name.replace(/\s*\(grande\)\s*$/,'');
         const hits = G.fullAbilityBoard(HUMAN, d5, st)
-          .filter(x=>x.matched && (x.name===base || x.name.startsWith(base+' ') || x.name.startsWith(base+'!')))
+          .filter(x=>x.matched && (x.name===r.base || x.name.startsWith(r.base+' ') || x.name.startsWith(r.base+'!')))
           .sort((x,y)=>y.value-x.value);
-        if (hits.length) entries.push({ name:a.name, req:a.req, ev:hits[0].value });
+        if (hits.length) entries.push({ name:r.name, req:r.req, ev:hits[0].value });
       }
       if (!entries.length) { box.innerHTML = '<div class="empty">—</div>'; return; }
       entries.sort((x,y)=>y.ev-x.ev);
@@ -730,7 +756,7 @@
       box.innerHTML = entries.map(e=>`<div class="abil${e.ev===best?' on':''}">
         <div><div class="an">${e.ev===best?'⭐ ':''}${e.name}</div><div class="req">${renderReq(humanHero,e.req)}</div></div>
         <div class="dv">${e.ev.toFixed(1)}</div></div>`).join('')
-        + `<div class="defbox">EV nette si l'habileté part MAINTENANT : dégâts + valeur des jetons/effets gagnés − ce que la défense ${aiHero.name} va te bouffer. Recalculée avec TES jetons, upgrades et position à chaque changement.</div>`;
+        + `<div class="defbox">EV nette si l'habileté part MAINTENANT : dégâts + valeur des jetons/effets gagnés − ce que la défense ${aiHero.name} va te bouffer. « II » = tes upgrades posées SONT comptées. Recalculée à chaque changement.</div>`;
     } catch(err){ box.innerHTML = '<div class="empty">—</div>'; }
   }
 
@@ -1483,7 +1509,9 @@
     const out = [];
     const tokenFr = { dreadful:'Dreadful', grimPursuit:'Grim Pursuit', agility:'Agility', covertOps:'Covert Ops', timeBomb:'Time Bomb',
       feather:'Plume', hex:'Hex', nevermore:'Nevermore', shapeShift:'Shape Shift', regen2:'Regenerate ②', regen1:'Regenerate ①',
-      wound:'Wound', electrokinesis:'⚡EK', guardBreak:'Guard Break' };
+      wound:'Wound', electrokinesis:'⚡EK', guardBreak:'Guard Break',
+      combo:'Combo', webbed:'Webbed', invisibility:'Invisibility', fireMastery:'Fire Mastery', burn:'Burn', knockdown:'Knockdown', stun:'Stun',
+      disarm:'🪝 Disarm', chargedGem:'💎 Charged Gem', sunMarked:'☀️ Sun Marked' };
     if (a.defendable === false) out.push('indéfendable');
     for (const [k,n] of Object.entries(a.tokensGrantedToSelf||{})) if (n) out.push(`+${n} ${tokenFr[k]||k}`);
     for (const [k,n] of Object.entries(a.tokensInflictedOnOpponent||{})) if (n) out.push(`inflige ${n} ${tokenFr[k]||k}`);
@@ -1493,6 +1521,10 @@
     if (a.feathersToMax) out.push('Plumes au MAX');
     if (a.activateNevermore) out.push(`Activation Nevermore ×${a.activateNevermore}`);
     if (a.healSelf) out.push(`soigne ${a.healSelf}`);
+    if (a.heal) out.push(`soigne ${a.heal}`);
+    if (a.sunDialGain) out.push(`cadran +${a.sunDialGain}`);
+    if (a.chooseGemOrMark) out.push('CHOIX : Gem OU Sun Marked');
+    if (a.stepsBeforeDamage && a.stepsBeforeDamage.upTo) out.push(`≤${a.stepsBeforeDamage.upTo} Step(s) avant les dégâts`);
     // Head-conditional riders show the CURRENT status, not just the condition (user hit Reap
     // expecting the draw without holding the Head).
     const hasHead = p.tokens.head > 0;
@@ -1560,7 +1592,7 @@
   }
 
   // ---------- roller-only Roll Phase cards (human path) ----------
-  const ROLLER_CARDS = ['six-it','samesies','try-try-again','one-more-time'];
+  const ROLLER_CARDS = ['six-it','samesies','try-try-again','one-more-time','he-is-worthy','quick-footwork','radiant-exchange'];
   function humanRollCardChoices(){
     const you = g.state.players[g.humanIdx]; const hero = G.heroTemplateFor(HUMAN);
     const vals = dice.map(d=>d.v); const out = [];
@@ -1569,6 +1601,14 @@
       if (!card || !you.hand.includes(id) || you.cp < (card.cpCost||0)) continue;
       if (id==='one-more-time') out.push({cardId:id});
       else if (id==='six-it') vals.forEach((v,i)=>{ if(v!==6) out.push({cardId:id, dieIndices:[i], values:[6]}); });
+      else if (id==='he-is-worthy'||id==='quick-footwork'){ // 1 dé -> 4 ou 5 (th / du)
+        // n'offre que le dé non gardé le plus bas, en 4 et en 5 (sinon 10 boutons)
+        const cand = vals.map((v,i)=>({v,i})).filter(x=>!dice[x.i].kept && x.v!==4 && x.v!==5).sort((x,y)=>x.v-y.v)[0];
+        if (cand){ out.push({cardId:id, dieIndices:[cand.i], values:[4]}); out.push({cardId:id, dieIndices:[cand.i], values:[5]}); }
+      }
+      else if (id==='radiant-exchange'){ // se : cadran -> 0 (min 1), 1 dé -> 6
+        if (HUMAN==='se' && (you.sunDial||0)>=1) vals.forEach((v,i)=>{ if(v!==6) out.push({cardId:id, dieIndices:[i], values:[6]}); });
+      }
       else if (id==='try-try-again'){
         // Only offer rerolling UNKEPT dice (rerolling a die you chose to keep makes no sense),
         // lowest values first — keeps the button row short.
@@ -1587,6 +1627,7 @@
     const i=(ch.dieIndices||[])[0];
     if (ch.cardId==='one-more-time') return `One More Time! : +1 tentative de jet${cost}`;
     if (ch.cardId==='try-try-again') return `Try Try Again! : relance le dé ${i+1} (${dice[i].v})${cost}`;
+    if (ch.cardId==='radiant-exchange') return `Radiant Exchange! : dé ${i+1} (${dice[i].v}→6) · cadran → 0${cost}`;
     return `${c.name} : dé ${i+1} (${dice[i].v}→${ch.values[0]})${cost}`;
   }
   function playRollCard(ch){
