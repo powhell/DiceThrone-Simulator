@@ -13,6 +13,7 @@ import { createInitialTHTokens } from './hero/th.rules.js'
 import { createInitialSMTokens } from './hero/sm.rules.js'
 import { createInitialPYTokens } from './hero/py.rules.js'
 import { createInitialDUTokens } from './hero/du.rules.js'
+import { createInitialSETokens } from './hero/se.rules.js'
 import { STARTING_HP, STARTING_CP, STARTING_HAND_SIZE } from './data/config.js'
 import { heroTemplateFor, commonCards } from './data/load.js'
 
@@ -49,6 +50,7 @@ export function createInitialPlayer(heroId: HeroId, rng?: RNG, isFirstPlayer = t
     : heroId === 'sm' ? createInitialSMTokens()
     : heroId === 'py' ? createInitialPYTokens()
     : heroId === 'du' ? createInitialDUTokens()
+    : heroId === 'se' ? createInitialSETokens()
     : createInitialBWTokens()
   // Verified leaflet setup rule (HH "Hero Setup"): "Begin the game with the Haunted Head on
   // your Hero Board. If you are NOT the first player to begin the game, gain 1 Dreadful." No

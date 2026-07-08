@@ -11,14 +11,15 @@ import { thConfig, type THState } from '../characters/thor/config.js'
 import { smConfig, type SMState } from '../characters/spiderman/config.js'
 import { pyConfig, type PYState } from '../characters/pyromancer/config.js'
 import { duConfig, type DUState } from '../characters/duelist/config.js'
+import { seConfig, type SEState } from '../characters/sunelf/config.js'
 import type { HeroId } from './types.js'
 import type { RNG } from './rng.js'
 import { rollDice } from './rng.js'
 
-export type OracleState = HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState
+export type OracleState = HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState
 
 function cfgFor(heroId: HeroId): any {
-  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : heroId === 'rv' ? rvConfig : heroId === 'dr' ? drConfig : heroId === 'th' ? thConfig : heroId === 'sm' ? smConfig : heroId === 'py' ? pyConfig : heroId === 'du' ? duConfig : bwConfig
+  return heroId === 'hh' ? hhConfig : heroId === 'fm' ? fmConfig : heroId === 'rv' ? rvConfig : heroId === 'dr' ? drConfig : heroId === 'th' ? thConfig : heroId === 'sm' ? smConfig : heroId === 'py' ? pyConfig : heroId === 'du' ? duConfig : heroId === 'se' ? seConfig : bwConfig
 }
 
 export interface RollStep {

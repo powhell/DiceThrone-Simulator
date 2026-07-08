@@ -12,6 +12,7 @@ import type { THState } from '../characters/thor/config.js'
 import type { SMState } from '../characters/spiderman/config.js'
 import type { PYState } from '../characters/pyromancer/config.js'
 import type { DUState } from '../characters/duelist/config.js'
+import type { SEState } from '../characters/sunelf/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -30,6 +31,7 @@ import * as th from './hero/th.rules.js'
 import * as sm from './hero/sm.rules.js'
 import * as py from './hero/py.rules.js'
 import * as du from './hero/du.rules.js'
+import * as se from './hero/se.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -44,6 +46,11 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 // verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
 // indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
 export function defenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'se') {
+    // Harness the Light : AUCUNE prévention, aucun contre — il soigne (E[Staves]=1.5) et
+    // charge son cadran. Taxe = son soin attendu (II : pareil + gem parfois).
+    return 1.5
+  }
   if (opponent.heroId === 'du') {
     // Retreat 4 dés : contre E[floor(Blades/2)] = 0.75 (II : E[Blades] = 2). Les Steps forcés
     // (E[non-Blades] = 2) poussent vers les positions défensives : depuis <= 0 il finit
@@ -110,7 +117,17 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState {
+  if (player.heroId === 'se') {
+    return {
+      sunDial: se.dialOf(player),
+      dawn: se.isDawn(player),
+      gemHeld: (player.tokens.chargedGem ?? 0) > 0,
+      oppMarked: (opponent.tokens.sunMarked ?? 0) > 0,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'du') {
     return {
       footwork: du.footworkPos(player),
@@ -297,6 +314,12 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
     if (!legal.includes(dir)) dir = legal[0] // au bout de la piste : direction forcée
     const r = du.applyReposition(self, dir, steps)
     log(state, playerIdx, 'upkeep', `Reposition: ${Math.abs(r.moved)} step(s) ${dir} (position ${du.footworkPos(self)})${r.gbGained > 0 ? ', +1 Guard Break' : ''}`)
+  }
+
+  // Sun Dial (se, leaflet vérifié) : côté DUSK, +1 à SON upkeep ; à 5 -> flip DAWN immédiat.
+  if (self.heroId === 'se' && !se.isDawn(self)) {
+    const r = se.increaseDial(self, 1)
+    log(state, playerIdx, 'upkeep', `Sun Dial (DUSK): +1 (now ${se.dialOf(self)})${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''}`)
   }
 
   // Burn (Pyromancer, jeton vérifié) : 2 dmg à l'upkeep du porteur, PERSISTANT (ne se
@@ -787,6 +810,54 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     }
     return
   }
+  if (card.id === 'clouds-parting') {
+    const cp6 = rollDie(rng)
+    const inc = Math.ceil(cp6 / 2)
+    const r = se.increaseDial(self, inc)
+    log(state, playerIdx, phase, `Clouds Parting!: rolled ${cp6} -> Sun Dial +${r.gained}${r.healed ? ` (+${r.healed} heal)` : ''}${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''}`)
+    return
+  }
+  if (card.id === 'solstice') {
+    // CHOIX : 2 dmg à tous les adversaires OU Heal 2 (1v1). IA : dmg sauf si PV bas.
+    const heal = self.humanControlled ? self.hp < 40 : self.hp <= 35 // TODO prompt humain si demandé
+    if (heal) { self.hp = Math.min(60, self.hp + 2); log(state, playerIdx, phase, 'Solstice!: healed 2') }
+    else { opp.hp -= 2; log(state, playerIdx, phase, 'Solstice!: 2 dmg to opponent'); checkGameOver(state) }
+    return
+  }
+  if (card.id === 'here-comes-the-sun') {
+    if (se.isDawn(self)) { log(state, playerIdx, phase, 'Here Comes the Sun!: no effect (DAWN side)'); return }
+    const r = se.increaseDial(self, 2)
+    log(state, playerIdx, phase, `Here Comes the Sun!: Sun Dial +${r.gained}${r.healed ? ` (+${r.healed} heal)` : ''}${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''}`)
+    return
+  }
+  if (card.id === 'it-gives-life') {
+    const before = se.dialOf(self)
+    if (before < 1) { log(state, playerIdx, phase, 'It Gives Life!: no effect (Sun Dial at 0)'); return }
+    const r = se.reduceDial(self, before)
+    const healed = Math.min(5, r.reduced)
+    self.hp = Math.min(60, self.hp + healed)
+    log(state, playerIdx, phase, `It Gives Life!: Sun Dial -${r.reduced} -> healed ${healed}${r.flipped === 'dusk' ? ' — FLIPS to DUSK' : ''}`)
+    return
+  }
+  if (card.id === 'the-suns-blessing') {
+    const sb = rollDie(rng)
+    if (sb <= 3) { const g = se.gainChargedGem(self); log(state, playerIdx, phase, `The Sun's Blessing!: rolled ${sb} (Stave) -> ${g ? 'gained Charged Gem' : 'Charged Gem already held'}`) }
+    else if (sb <= 5) { drawCards(self, 2, rng); log(state, playerIdx, phase, `The Sun's Blessing!: rolled ${sb} (Charge) -> drew 2`) }
+    else { const r = se.setDialTo5(self); log(state, playerIdx, phase, `The Sun's Blessing!: rolled 6 (Sun Power) -> Sun Dial set to 5${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''}`) }
+    return
+  }
+  if (card.id === 'first-light') {
+    if (se.dialOf(self) !== 0) { log(state, playerIdx, phase, 'First Light!: no effect (Sun Dial not at 0)'); return }
+    const r = se.increaseDial(self, 2)
+    const g = se.inflictSunMarked(opp)
+    log(state, playerIdx, phase, `First Light!: Sun Dial +${r.gained}, ${g ? 'Sun Marked inflicted' : 'opponent already Sun Marked'}`)
+    return
+  }
+  if (card.id === 'the-glorious-sun') {
+    se.flipDial(self)
+    log(state, playerIdx, phase, `The Glorious Sun!: Sun Dial flipped -> ${se.isDawn(self) ? 'DAWN' : 'DUSK'} (${se.dialOf(self)})`)
+    return
+  }
   if (card.id === 'warm-up') {
     // « Spend CP as desired » : humain = son choix pré-armé (warmUpCpChoice) ; IA = remplit
     // jusqu'au cap (le FM se dépense via Combustion/Red Hot, 1 CP -> 1 FM est bon taux).
@@ -897,11 +968,16 @@ export function resolveOffensiveAlterWindow(state: GameState, rollerIdx: 0 | 1, 
 // "instant" cards per isCardPlayableNow's TODO; Better D! needs a "Defensive Roll Phase" with
 // its own keep/reroll decision, but defense here is a single deterministic dice roll with no
 // reroll step at all — see resolveDefense/hh.resolveHallowedReckoning/bw.resolveSabotage).
-const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy', 'quick-footwork']
+const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy', 'quick-footwork', 'radiant-exchange']
 
 function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
-  return ROLL_MANIPULATION_CARD_IDS.filter(id => self.hand.includes(id) && self.cp >= (cardById(hero, id)?.cpCost ?? 0))
+  return ROLL_MANIPULATION_CARD_IDS.filter(id => {
+    if (!self.hand.includes(id) || self.cp < (cardById(hero, id)?.cpCost ?? 0)) return false
+    // Radiant Exchange! (se) : « must reduce by at least 1 » — exige un cadran >= 1.
+    if (id === 'radiant-exchange') return self.heroId === 'se' && (self.sunDial ?? 0) >= 1
+    return true
+  })
 }
 
 // Exported for the RL policy's roll-manipulation scorer (valueGreedyPolicy), which replays a
@@ -930,6 +1006,13 @@ export function applyRollManipulationCard(
     return { dice: newDice, extraRollsGranted: 0 }
   }
 
+  // Radiant Exchange! (se) : réduit le cadran à 0 PUIS pose le 6 (le set passe par le chemin
+  // générique ci-dessous, cardId gardé pour le coût déjà débité).
+  if (choice.cardId === 'radiant-exchange') {
+    const r = se.reduceDial(self, se.dialOf(self))
+    log(state, playerIdx, 'roll', `Radiant Exchange!: Sun Dial -${r.reduced}${r.flipped === 'dusk' ? ' — FLIPS to DUSK' : ''}`)
+  }
+
   // six-it / so-wild / twice-as-wild / samesies: direct value sets (Policy already resolved
   // Samesies!'s "match another die" into a concrete value in `values`).
   const values = choice.values ?? []
@@ -954,6 +1037,15 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
       self.ekDrawUsedThisTurn = true
       drawCards(self, 1, rng)
       log(state, playerIdx, phase, 'Electrokinesis x4 spent: drew 1')
+    }
+    // Charged Gem (se, IA) : dépense Main Phase jamais négative (CP et/ou 2 dmg indéf.) —
+    // auto pour l'IA, bouton pré-armé pour l'humain (UI).
+    if (self.heroId === 'se' && !self.humanControlled && (self.tokens.chargedGem ?? 0) > 0 && phase === 'main1') {
+      const opp2 = state.players[(1 - playerIdx) as 0 | 1]
+      const r = se.spendChargedGem(self, rng)
+      if (r.cp > 0) grantCp(self, r.cp)
+      if (r.damage > 0) { opp2.hp -= r.damage; checkGameOver(state) }
+      log(state, playerIdx, phase, `Charged Gem: rolled ${r.face} -> ${[r.cp ? '+1 CP' : '', r.damage ? `${r.damage} isolated undefendable dmg` : ''].filter(Boolean).join(' + ')}`)
     }
   }
   // Two participants now: the active player (upgrades/Main-Phase Actions/cross-player cards) and the
@@ -983,7 +1075,7 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak', 'yikes', 'radioactive-blood']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak', 'yikes', 'radioactive-blood', 'here-comes-the-sun']
 
 // Conditions d'eligibilite propres aux instants Thor/Spider-Man (textes verifies).
 function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolean {
@@ -993,12 +1085,14 @@ function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolea
   // Stack 1 : gagner un jeton déjà détenu = carte gaspillée
   if (id === 'yikes') return (self.tokens.invisibility ?? 0) < 1
   if (id === 'radioactive-blood') return (self.tokens.combo ?? 0) < 1
+  // « Play only if Sun Dial is on the DUSK side » (carte vérifiée)
+  if (id === 'here-comes-the-sun') return self.sunDialDawn !== true
   return true
 }
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up', 'sashay', 'courageous-advance', 'all-in-the-wrists', 'confident-footing']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up', 'sashay', 'courageous-advance', 'all-in-the-wrists', 'confident-footing', 'clouds-parting', 'solstice', 'it-gives-life', 'the-suns-blessing', 'first-light', 'the-glorious-sun']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1174,6 +1268,9 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
         if (canAfford('six-it')) {
           pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'six-it', sets: [{ dieIndex: i, value: 6 }] }) })
         }
+        if (canAfford('radiant-exchange') && player.heroId === 'se' && (player.sunDial ?? 0) >= 1) {
+          pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'radiant-exchange', sets: [{ dieIndex: i, value: 6 }] }) })
+        }
         if (canAfford('samesies')) {
           const seen = new Set<string>()
           for (let i = 0; i < pr.dice.length; i++) {
@@ -1276,6 +1373,12 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   const pr = state.pendingRoll
   if (!pr || !spendActionCard(state, playerIdx, action.cardId)) return
   if (action.kind === 'setDie') {
+    // Radiant Exchange! (se) : le set-à-6 coûte AUSSI la remise du cadran à 0 (carte vérifiée).
+    if (action.cardId === 'radiant-exchange') {
+      const p2 = state.players[playerIdx]
+      const r = se.reduceDial(p2, se.dialOf(p2))
+      log(state, playerIdx, 'roll', `Radiant Exchange!: Sun Dial -${r.reduced}${r.flipped === 'dusk' ? ' — FLIPS to DUSK' : ''}`)
+    }
     const before = pr.dice.join(',')
     for (const s of action.sets) pr.dice[s.dieIndex] = s.value
     const setDieName = cardById(heroTemplateFor(state.players[playerIdx].heroId), action.cardId)?.name ?? action.cardId
@@ -1449,6 +1552,8 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     }
   } else if (defender.heroId === 'du') {
     defenseDice = rollDice(4, rng) // Retreat : 4 dés
+  } else if (defender.heroId === 'se') {
+    defenseDice = rollDice(3, rng) // Harness the Light : 3 dés
   } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
   } else if (defender.heroId === 'fm') {
@@ -1569,6 +1674,21 @@ export function finalizeDefenseRoll(
       }
     }
     log(state, defenderIdx, 'defense', `Retreat${up ? ' II' : ''}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${du.footworkPos(defender)})${bonusMsg}`)
+  } else if (defender.heroId === 'se') {
+    // Harness the Light (board vérifié) : Heal 1/Stave ; I : On BB (une fois) Dial +1, On C
+    // (une fois) Dial +1 ; II : On B Dial +1, Dial +1 PAR C, On A+B+C -> Charged Gem.
+    // Aucune prévention, aucun contre.
+    const up = defender.upgradesInPlay.includes('harness-the-light-ii')
+    const eff = se.harnessEffects(finalDefenseDice, up)
+    if (eff.heal > 0) defender.hp = Math.min(60, defender.hp + eff.heal)
+    let dialMsg = ''
+    if (eff.dialGain > 0) {
+      const r = se.increaseDial(defender, eff.dialGain)
+      dialMsg = `, Sun Dial +${r.gained}${r.healed ? ` (+${r.healed} heal excès)` : ''}${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''}`
+    }
+    let gemMsg = ''
+    if (eff.gem) gemMsg = se.gainChargedGem(defender) > 0 ? ', +Charged Gem' : ', Charged Gem déjà détenu'
+    log(state, defenderIdx, 'defense', `Harness the Light${up ? ' II' : ''}: prevented 0, healed ${eff.heal}${dialMsg}${gemMsg}`)
   } else if (defender.heroId === 'nx') {
     damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
     log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
@@ -1637,12 +1757,18 @@ export function finalizeDefenseRoll(
     state, [attackerIdx, defenderIdx], { windowType: 'defense', eludeEligible },
     rng, policies, enumerateWindowActions, applyWindowAction,
   )
+  // Sun Marked (se) : si des dégâts passent encore après la fenêtre DRP5, l'attaquant Heal 2
+  // (« en autant qu'il y ait du damage » — ruling user 2026-07-08).
+  if (state.pendingAttack && state.pendingAttack.remaining > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
+    attacker.hp = Math.min(60, attacker.hp + se.SUN_MARKED_HEAL)
+    log(state, attackerIdx, 'defense', `Sun Marked: attacker heals ${se.SUN_MARKED_HEAL}`)
+  }
   // DRP6: the defender's surviving damage and the attacker's counter-damage land simultaneously.
   finalizePendingAttackDamage(state)
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch', 'i-hate-waiting']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch', 'i-hate-waiting', 'sun-shield']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
@@ -1652,6 +1778,7 @@ function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean)
     if (id === 'invisible-punch') return defender.spiderSensePrevented === true // "si tu as prévenu via Spider-Sense"
     // du : reculer doit être possible ET utile (le Bonus défensif du tour pas encore consommé)
     if (id === 'i-hate-waiting') return defender.heroId === 'du' && (defender.footwork ?? 0) > -2
+    if (id === 'sun-shield') return (defender.tokens.chargedGem ?? 0) > 0 // retire le jeton
     return true
   })
   if (eludeEligible && defender.hand.includes('elude')) ids.push('elude')
@@ -1675,6 +1802,13 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
   if (cardId === 'not-this-time') {
     const prevented = Math.min(remaining, 6)
     log(state, defenderIdx, 'defense', `Not This Time!: prevented ${prevented} dmg`)
+    return remaining - prevented
+  }
+  if (cardId === 'sun-shield') {
+    if ((defender.tokens.chargedGem ?? 0) < 1) { log(state, defenderIdx, 'defense', 'Sun Shield!: no Charged Gem — no effect'); return remaining }
+    defender.tokens.chargedGem = 0
+    const prevented = Math.min(remaining, 3)
+    log(state, defenderIdx, 'defense', `Sun Shield!: Charged Gem removed, prevented ${prevented} dmg`)
     return remaining - prevented
   }
   if (cardId === 'i-hate-waiting') {
@@ -2235,6 +2369,13 @@ function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: num
       dmg = Math.max(0, dmg - eff.prevented)
     }
   }
+  // Sun Marked (se, jeton vérifié + ruling) : l'attaquant du porteur Heal 2 sur toute attaque
+  // qui inflige des dégâts — indéfendable incluse. Persistant (le jeton reste).
+  if (dmg > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
+    const att = state.players[attackerIdx]
+    att.hp = Math.min(60, att.hp + se.SUN_MARKED_HEAL)
+    log(state, attackerIdx, 'defense', `Sun Marked: attacker heals ${se.SUN_MARKED_HEAL}`)
+  }
   queueDamage(state, defenderIdx, dmg)
   flushDamage(state)
 }
@@ -2274,6 +2415,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'sm') applySMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'py') applyPYAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'du') applyDUAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'se') applySEAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -2899,6 +3041,135 @@ function applyDUAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     return
   }
   log(state, playerIdx, 'resolveAttack', `Whiff — no Duelist ability matched (${name})`)
+}
+
+// --- Sun Elf ------------------------------------------------------------------------------
+// Board vérifié (characters/Sun_Elf/SPEC.md + rulings 2026-07-08). DAWN : l'attaque peut
+// dumper la valeur du cadran en dégâts (Attack Modifier, aussi sur l'Ultimate) puis cadran -4.
+// IA : dépense dès que cadran >= 3 ; humain : toggle pré-armé seDawnSpendArmed.
+function applySEAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+
+  const dial = (n: number, label: string) => {
+    const r = se.increaseDial(self, n)
+    log(state, playerIdx, 'resolveAttack', `${label}: Sun Dial +${r.gained}${r.healed ? ` (+${r.healed} heal excès)` : ''}${r.flipped === 'dawn' ? ' — FLIPS to DAWN' : ''} (now ${se.dialOf(self)})`)
+  }
+  const gem = (label: string) => {
+    const g = se.gainChargedGem(self)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g > 0 ? 'gained Charged Gem' : 'Charged Gem already held (stack 1)'}`)
+  }
+  const mark = (label: string) => {
+    const g = se.inflictSunMarked(opp)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g > 0 ? 'Sun Marked inflicted' : 'opponent already Sun Marked (stack 1)'}`)
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    // DAWN (leaflet + ruling « aussi sur l'Ultimate ») : ajouter la valeur du cadran, puis -4
+    // à la fin de la Roll Phase. Décision : IA >= 3 ; humain pré-armé, jamais automatique.
+    if (se.isDawn(self) && se.dialOf(self) > 0) {
+      const wants = self.humanControlled ? self.seDawnSpendArmed === true : se.dialOf(self) >= 3
+      if (wants) {
+        const bonus = se.dialOf(self)
+        result = { ...result, dmg: result.dmg + bonus }
+        const r = se.reduceDial(self, se.DAWN_SPEND_COST)
+        self.seDawnSpendArmed = false
+        log(state, playerIdx, 'resolveAttack', `Sun Dial (DAWN): +${bonus} dmg, dial -${r.reduced}${r.flipped === 'dusk' ? ' — FLIPS to DUSK' : ''} (now ${se.dialOf(self)})`)
+      }
+    }
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Light Staff')) {
+    const a = dice.filter(d => d <= 3).length
+    const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0
+    const table = has('light-staff-ii') ? [5, 6, 7] : [4, 5, 7]
+    const kindNeed = has('light-staff-ii') ? 3 : 4
+    const counts = new Map<number, number>()
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+    if (Math.max(...counts.values()) >= kindNeed) dial(1, `Light Staff (${kindNeed}-of-a-kind)`)
+    attack(table[tier], true)
+    return
+  }
+  if (name.startsWith('Ray Absorption')) {
+    dial(3, 'Ray Absorption')
+    self.hp = Math.min(60, self.hp + 2)
+    gem('Ray Absorption')
+    log(state, playerIdx, 'resolveAttack', 'Ray Absorption: healed 2')
+    return
+  }
+  if (name.startsWith('Radiant Energy')) {
+    mark('Radiant Energy')
+    attack(6, true)
+    return
+  }
+  if (name.startsWith('Praise the Sun')) {
+    gem('Praise the Sun')
+    attack(5, true)
+    return
+  }
+  if (name.startsWith('Scorching Staff')) {
+    const up = has('scorching-staff-ii')
+    const r = se.scorchingBonus(rng, up)
+    log(state, playerIdx, 'resolveAttack', `Scorching Staff${up ? ' II' : ''}: bonus roll [${r.dice.join(',')}]`)
+    if (r.dialFromB > 0) dial(r.dialFromB, 'Scorching Staff (Charge)')
+    if (r.gemOnC) { gem('Scorching Staff (Sun Power)'); dial(2, 'Scorching Staff (Sun Power)') }
+    attack(5 + r.addDmg, true)
+    return
+  }
+  if (name.startsWith('Sunbeam')) {
+    dial(has('sunbeam-ii') ? 3 : 2, 'Sunbeam')
+    attack(9, true)
+    return
+  }
+  if (name.startsWith('Ray of Light')) {
+    dial(1, 'Ray of Light')
+    attack(7, true)
+    return
+  }
+  if (name.startsWith('Soaking Up the Sun')) {
+    gem('Soaking Up the Sun')
+    attack(9, true)
+    return
+  }
+  if (name.startsWith('Bestow Your Light')) {
+    dial(4, 'Bestow Your Light')
+    mark('Bestow Your Light')
+    return
+  }
+  if (name.startsWith('Solar Burst')) {
+    dial(2, 'Solar Burst')
+    if (has('solar-burst-ii')) {
+      gem('Solar Burst II')
+      mark('Solar Burst II')
+      attack(7, false) // 7 dmg INDÉFENDABLES (carte vérifiée)
+    } else {
+      // CHOIX gem OU mark : prend celui qui manque (gem si les deux libres — auto-résolu IA ;
+      // pour l'humain le choix passe par le même heuristique v1, TODO prompt si demandé).
+      if ((opp.tokens.sunMarked ?? 0) === 0 && (self.tokens.chargedGem ?? 0) > 0) mark('Solar Burst')
+      else if ((self.tokens.chargedGem ?? 0) === 0) gem('Solar Burst')
+      else mark('Solar Burst')
+      attack(8, true)
+    }
+    return
+  }
+  if (name.startsWith('Solar Flare!')) {
+    dial(3, 'Solar Flare!')
+    gem('Solar Flare!')
+    mark('Solar Flare!')
+    attack(10, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Sun Elf ability matched (${name})`)
 }
 
 // --- Spider-Man ------------------------------------------------------------------------------

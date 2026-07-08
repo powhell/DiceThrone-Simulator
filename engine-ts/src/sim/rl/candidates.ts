@@ -93,7 +93,8 @@ export function enumerateSmallCardSubsets(eligibleCardIds: string[]): string[][]
 function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoice[] {
   const n = dice.length
   const out: RollManipulationChoice[] = []
-  if (cardId === 'six-it') {
+  if (cardId === 'six-it' || cardId === 'radiant-exchange') {
+    // radiant-exchange (se) : même géométrie que Six-It! (1 dé -> 6), coût cadran géré au apply
     for (let i = 0; i < n; i++) out.push({ cardId, dieIndices: [i], values: [6] })
   } else if (cardId === 'so-wild') {
     // Pruned from the full 1-6 value search to {6} ∪ current die values (same rationale as

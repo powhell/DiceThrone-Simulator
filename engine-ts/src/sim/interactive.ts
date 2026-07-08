@@ -44,6 +44,7 @@ import { thConfig } from '../characters/thor/config.js'
 import { smConfig } from '../characters/spiderman/config.js'
 import { pyConfig } from '../characters/pyromancer/config.js'
 import { duConfig } from '../characters/duelist/config.js'
+import { seConfig } from '../characters/sunelf/config.js'
 import * as core from '../core/evaluator.js'
 
 export interface HumanGame {
@@ -316,7 +317,7 @@ export function humanKeepAdvice(
 ): { kept: number[]; ev: number; keepAllEv: number; topOptions: core.KeepOption[] } {
   const self = g.state.players[g.humanIdx]
   const opp = g.state.players[g.aiIdx]
-  const cfg: any = self.heroId === 'hh' ? hhConfig : self.heroId === 'fm' ? fmConfig : self.heroId === 'rv' ? rvConfig : self.heroId === 'dr' ? drConfig : self.heroId === 'th' ? thConfig : self.heroId === 'sm' ? smConfig : self.heroId === 'py' ? pyConfig : self.heroId === 'du' ? duConfig : bwConfig
+  const cfg: any = self.heroId === 'hh' ? hhConfig : self.heroId === 'fm' ? fmConfig : self.heroId === 'rv' ? rvConfig : self.heroId === 'dr' ? drConfig : self.heroId === 'th' ? thConfig : self.heroId === 'sm' ? smConfig : self.heroId === 'py' ? pyConfig : self.heroId === 'du' ? duConfig : self.heroId === 'se' ? seConfig : bwConfig
   const state: any = oracleStateFor(self, opp)
   // Cartes de conversion payables en main -> filet de securite du jet final (coach humain).
   // useWildcards=false : solveur « dés seuls » (demande user : comparer l'EV avec/sans cartes).

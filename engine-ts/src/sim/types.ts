@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; du = Duelist ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'se' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; du = Duelist ; se = Sun Elf ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun' | 'disarm'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun' | 'disarm' | 'chargedGem' | 'sunMarked'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -109,6 +109,13 @@ export interface PlayerState {
   // Choix humain pré-armé pour la résolution du Disarm à l'upkeep : 'skip' = sauter l'Income,
   // sinon l'id de la carte à défausser. Consommé (remis à undefined) à la résolution.
   duDisarmChoice?: string
+  // Sun Elf : cadran Sun Dial 0-5 (undefined = 0) + face (false/undefined = DUSK, true = DAWN).
+  // seDawnSpendArmed = toggle humain pré-armé « ajouter la valeur du cadran à l'attaque »
+  // (côté DAWN seulement ; l'IA a son heuristique). seGemArmed = dépenser Charged Gem à la
+  // prochaine Main Phase (humain ; l'IA auto-dépense — jamais négatif).
+  sunDial?: number
+  sunDialDawn?: boolean
+  seDawnSpendArmed?: boolean
   // Disarm résolu à l'upkeep : si le porteur n'a pas défaussé, il saute son Income Phase
   // (le flag est posé à l'upkeep, consommé par playIncomePhase).
   skipIncomeThisTurn?: boolean

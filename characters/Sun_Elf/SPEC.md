@@ -1,7 +1,7 @@
-# SUN ELF — Spec (scans user 2026-07-07, lecture 2026-07-08) — QUESTIONS OUVERTES EN BAS
+# SUN ELF — Spec vérifiée (scans user 2026-07-07/08, rulings user 2026-07-08)
 
-Source : `characters/Sun_Elf/board/*.jpg` (3), `leaflet/Screenshot_{31..34}.png` (4), `cards/*.jpg` (16 scans, 15 cartes uniques — 221109 = DOUBLON de Scorching Staff II).
-50 PV / 2 CP (norme). Dé (⚠ à confirmer, pas de capture leaflet des faces) : **1-3 Bâton (A)**, **4-5 Œil/triangle (B)**, **6 Soleil (C)**.
+Source : `characters/Sun_Elf/board/*.jpg` (3), `leaflet/Screenshot_{31..34}.png + dice.png` (5), `cards/*.jpg` (16 scans = 15 cartes, 221109 doublon — kit complet confirmé user, RIEN ne manque).
+50 PV / 2 CP (norme). Dé (dice.png vérifié) : **1-3 STAVE (A)**, **4-5 CHARGE (B)**, **6 SUN POWER (C)**.
 
 ## Sun Dial (mécanique centrale — leaflet vérifié)
 Cadran 0-5, deux faces. **Setup : cadran à 0, face DUSK.**
@@ -52,10 +52,11 @@ Cadran 0-5, deux faces. **Setup : cadran à 0, face DUSK.**
 - Sun Marked : le heal se déclenche à CHAQUE attaque (persistant) → gros swing vs heros à multi-attaques.
 - Charged Gem : Main Phase, 1d6 — auto-résolu IA, bouton humain.
 
-## Questions user (2026-07-08)
-1. **Scan doublon** : 221100 = 221109 (Scorching Staff II ×2). Il manque donc probablement UNE carte (Ray of Light II ? Ray Absorption II ? autre action ?) — rescanne-la.
-2. **Faces du dé** : 1-3 Bâton / 4-5 Œil / 6 Soleil ? Les noms officiels (photo leaflet des faces si tu l'as) ?
-3. **Radiant Energy (base, board)** : pattern exact ? Je lis AAACC (3 bâtons + 2 soleils, 5 dés) et le II passe à AACC (4 dés) — confirme.
-4. **Harness the Light (base)** : « On BB » = il faut 2 Œils (une fois) pour Dial +1 ? Et « On C » une fois même avec plusieurs Soleils ?
-5. **DAWN** : le + cadran en dégâts s'applique aussi à l'ULTIMATE ? (je présume oui, comme le +2 Cat du Druide)
-6. **Sun Marked** : l'attaquant Heal 2 sur TOUTE attaque (indéfendable incluse) tant que le jeton reste ?
+## Rulings user (2026-07-08) — TOUS RÉPONDUS
+1. ✅ Aucune carte manquante : le kit fait 15 cartes, 221109 était juste un double scan.
+2. ✅ Faces (dice.png) : 1-3 **Stave**, 4-5 **Charge**, 6 **Sun Power**.
+3. ✅ Radiant Energy base = **AAACC** (3 Staves + 2 Sun Power) ; le II passe le pattern à AACC.
+4. ✅ **« On X » = UNE fois, toujours** (règle générale), sauf mention « for each ». Harness base : On BB (2 Charges) → Dial +1 une fois ; On C → Dial +1 une fois.
+5. ✅ DAWN : le bonus cadran s'applique aussi à l'ULTIMATE.
+6. ✅ Sun Marked : l'attaquant Heal 2 sur toute attaque **qui inflige des dégâts** (indéfendable incluse).
+7. Tournoi : 1v1 (le format « n'est pas important »).
