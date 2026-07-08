@@ -34,7 +34,7 @@ describe('du.rules: Footwork Track', () => {
 })
 
 describe('du.rules: Reposition (passif upkeep, obligatoire)', () => {
-  it("GB gagné SEULEMENT sur un recul d'exactement 1 step (dos du leaflet, ruling user)", () => {
+  it('GB gagné sur TOUT recul (1 ou 2 steps) — ruling corrigé user 2026-07-08', () => {
     const p1 = createInitialPlayer('du')
     const r1 = du.applyReposition(p1, 'backward', 1)
     expect(r1.moved).toBe(-1)
@@ -43,7 +43,7 @@ describe('du.rules: Reposition (passif upkeep, obligatoire)', () => {
     const p2 = createInitialPlayer('du')
     const r2 = du.applyReposition(p2, 'backward', 2)
     expect(r2.moved).toBe(-2)
-    expect(r2.gbGained).toBe(0) // 2 steps back = PAS de GB
+    expect(r2.gbGained).toBe(1) // 2 steps back = GB quand même
 
     const p3 = createInitialPlayer('du')
     const r3 = du.applyReposition(p3, 'forward', 2)

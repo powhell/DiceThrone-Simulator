@@ -53,11 +53,13 @@ export function repositionLegalDirections(p: PlayerState): Array<'forward' | 'ba
   return dirs
 }
 
-export function applyReposition(p: PlayerState, direction: 'forward' | 'backward', steps: 1 | 2): { moved: number; gbGained: number } {
+export function applyReposition(p: PlayerState, direction: 'backward' | 'forward', steps: 1 | 2): { moved: number; gbGained: number } {
   const delta = direction === 'forward' ? steps : -steps
   const moved = takeSteps(p, delta)
-  // Ruling (dos du leaflet, user 2026-07-07) : GB seulement sur un recul d'EXACTEMENT 1 step.
-  const gbGained = direction === 'backward' && Math.abs(moved) === 1 ? gainGb(p, 1) : 0
+  // Ruling CORRIGÉ (user 2026-07-08, à la table) : « If you move backwards with this Ability,
+  // gain Guard Break » — TOUT recul (1 OU 2 steps) donne le jeton. (L'ancienne lecture
+  // « exactement 1 » était fausse.)
+  const gbGained = direction === 'backward' && moved < 0 ? gainGb(p, 1) : 0
   return { moved, gbGained }
 }
 

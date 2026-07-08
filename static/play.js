@@ -1090,7 +1090,7 @@
       if (pos<2) c.appendChild(btn('⬆ 1 step forward','primary', ()=>{ you.duRepositionDir='forward'; doBeginTurn(undefined); }));
       if (pos<1) c.appendChild(btn('⬆⬆ 2 steps forward','', ()=>{ you.duRepositionDir='forward2'; doBeginTurn(undefined); }));
       if (pos>-2) c.appendChild(btn('⬇ 1 step backward (+1 Guard Break)','', ()=>{ you.duRepositionDir='backward1'; doBeginTurn(undefined); }));
-      if (pos>-1) c.appendChild(btn('⬇⬇ 2 steps backward (PAS de GB)','', ()=>{ you.duRepositionDir='backward2'; doBeginTurn(undefined); }));
+      if (pos>-1) c.appendChild(btn('⬇⬇ 2 steps backward (+1 Guard Break)','', ()=>{ you.duRepositionDir='backward2'; doBeginTurn(undefined); }));
     } else if (phase==='upkeep') {
       const canTz = G.humanCanTerrorize(g);
       const s=document.createElement('span'); s.className='rolls';

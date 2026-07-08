@@ -3960,7 +3960,7 @@ var Game = (() => {
         id: "reposition",
         name: "Reposition",
         trigger: "upkeep",
-        text: "During your Upkeep Phase, choose forward (up) or backward (down). You MUST take 1 or 2 Steps in this direction. If you move backwards with this Ability, gain Guard Break. RULING (dos du leaflet, lu par user 2026-07-07, non scann\xE9) : 2 steps back = PAS de Guard Break \u2014 GB seulement sur un recul d'exactement 1 step.",
+        text: "During your Upkeep Phase, choose forward (up) or backward (down). You MUST take 1 or 2 Steps in this direction. If you move backwards with this Ability, gain Guard Break. RULING corrig\xE9 (user 2026-07-08) : TOUT recul (1 ou 2 steps) donne le Guard Break.",
         verified: true
       }
     ],
@@ -5231,7 +5231,7 @@ var Game = (() => {
   function applyReposition(p, direction, steps) {
     const delta = direction === "forward" ? steps : -steps;
     const moved = takeSteps(p, delta);
-    const gbGained = direction === "backward" && Math.abs(moved) === 1 ? gainGb(p, 1) : 0;
+    const gbGained = direction === "backward" && moved < 0 ? gainGb(p, 1) : 0;
     return { moved, gbGained };
   }
   function enGardeRoll(rng) {
