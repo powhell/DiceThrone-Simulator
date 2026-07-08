@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><title>Dice Throne — Rapport de partie</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#17131f;--panel:#221b30;--line:#3a2f52;--ink:#e8e2f4;--muted:#9b8fb8;--gold:#e0ac4e;--win:#4caf7d;--loss:#e5534b;--you:#d8465a;--ai:#9c6bff}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px}
+  h1{font-family:Georgia,serif;margin-bottom:4px}
+  h3{margin:0 0 8px}
+  a{color:var(--gold)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .big{font-size:1.6rem;font-weight:700}
+  .muted{color:var(--muted);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:5px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .w{color:var(--win);font-weight:700}.l{color:var(--loss);font-weight:700}
+  .btn{background:#2c2440;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 14px;cursor:pointer;text-decoration:none;display:inline-block;font-weight:600}
+  .btn.gold{background:linear-gradient(180deg,var(--gold),#b8862f);border-color:var(--gold);color:#160f06}
+  .btn.primary{background:linear-gradient(180deg,var(--you),#a43442);border-color:var(--you);color:#fff}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line)}
+  .badge.net{border-color:var(--win);color:var(--win)}
+  .badge.warn{border-color:var(--gold);color:var(--gold)}
+  .delta{font-family:ui-monospace,Consolas,monospace;font-weight:700;color:var(--loss)}
+  .tour{color:var(--muted);font-family:ui-monospace,Consolas,monospace;white-space:nowrap}
+  .fil td:first-child{white-space:nowrap}
+  canvas{width:100%;height:220px;background:#1a1428;border-radius:8px}
+  .lesson{border-left:3px solid var(--gold);padding:6px 12px;background:#2a2038;border-radius:0 8px 8px 0;margin:8px 0}
+</style></head><body><div class="wrap">
+<h1>📋 Rapport de partie</h1>
+<div id="head" class="muted" style="margin-bottom:10px"></div>
+<div id="notfound" class="card" style="display:none">Partie introuvable dans ce navigateur. <a href="stats.html">← retour aux stats</a></div>
+<div id="content"></div>
+<script src="game-engine.js"></script>
+<script src="ai-weights.js"></script>
+<script>
+const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', nx:'Naraxus'};
+const games = (()=>{ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } })();
+const key = new URLSearchParams(location.search).get('g');
+const gr = games.find(x=>x.date===key) || (key==='last' ? games[games.length-1] : null);
+
+if (!gr) { document.getElementById('notfound').style.display=''; }
+else render(gr);
+
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function render(gr){
+  const meIdx = gr.humanFirst ? 0 : 1, aiIdx = 1 - meIdx;
+  const meName = HERO_NAME[gr.humanHero]||gr.humanHero, aiName = HERO_NAME[gr.aiHero]||gr.aiHero;
+  const evaluated = gr.usingNet === true; // vieux enregistrements (champ absent) = partiel
+  const win = /🏆|Victoire/.test(gr.result||'');
+
+  // ---- en-tête ----
+  document.getElementById('head').innerHTML =
+    `<span class="big ${win?'w':'l'}">${esc(gr.result)}</span> — <b>${meName}</b> (toi) contre <b>${aiName}</b> (IA) · ${gr.turns} tours · ${new Date(gr.date).toLocaleString('fr-CA')}<br>` +
+    (evaluated
+      ? `<span class="badge net">✓ Décisions évaluées par le réseau ${esc(gr.aiVersion||'')}</span>`
+      : `<span class="badge warn">⚠ Rapport partiel — le réseau n'était pas disponible pendant cette partie (adversaire/coach scripté) : timeline et stats seulement, pas d'évaluation des décisions de cartes/habiletés.</span>`);
+
+  const L = gr.engineLog||[];
+
+  // ---- timeline PV (lignes 'HP: self=X, opp=Y' à chaque fin de tour) ----
+  const hp = [[50],[50]]; const hpTurns=[0];
+  for (const e of L) {
+    const m = (e.message||'').match(/^HP: self=(-?\d+), opp=(-?\d+)/);
+    if (!m) continue;
+    const self = +m[1], opp = +m[2];
+    const a = e.playerIdx, b = 1-a;
+    hp[a].push(self); hp[b].push(opp); hpTurns.push(e.turn);
+  }
+
+  // ---- fil du match + stats ----
+  const fil = []; const atk = [[],[]]; const whiffs=[0,0]; const cards=[[],[]]; const sold=[0,0];
+  let curTurn=0, curOwner=null, curAbility=null, curTotal=null, curEvents=[];
+  const flush = ()=>{ if(curTurn>0) fil.push({t:curTurn, who:curOwner, ability:curAbility, total:curTotal, events:curEvents}); };
+  for (const e of L) {
+    const msg = e.message||'';
+    if (e.turn!==curTurn) { flush(); curTurn=e.turn; curOwner=e.playerIdx; curAbility=null; curTotal=null; curEvents=[]; }
+    let m;
+    if ((m=msg.match(/^Chose ability: (.+)$/)) && e.phase==='resolveAttack') { curAbility=m[1]; atk[e.playerIdx].push(m[1]); }
+    else if (/^No ability matched/.test(msg)) { curAbility='— raté (whiff)'; whiffs[e.playerIdx]++; }
+    else if ((m=msg.match(/attack total (\d+) dmg( \(undefendable\))?/))) curTotal = m[1] + (m[2]?' indéf.':'');
+    else if ((m=msg.match(/^Played (?:upgrade )?(.+?) for (\d+) CP/))) { cards[e.playerIdx].push(m[1]); curEvents.push(`${e.playerIdx===meIdx?'tu joues':'IA joue'} ${m[1]}`); }
+    else if ((m=msg.match(/^Sold (.+?) \(/))) { sold[e.playerIdx]++; }
+    else if (/^Terrorize/.test(msg)) curEvents.push('Terrorize');
+    else if ((m=msg.match(/^Final total: subtotal (\d+).*-> (\d+)/))) curEvents.push(`total final ${m[2]} (÷2 appliqué)`);
+    else if ((m=msg.match(/Defensive Bonus: prevented (\d+)/))) curEvents.push(`bonus défensif ${m[1]} prévenus`);
+  }
+  flush();
+
+  const filRows = fil.map(r=>{
+    const who = r.who===meIdx ? `<b style="color:var(--you)">Toi</b>` : `<b style="color:var(--ai)">IA</b>`;
+    const ab = r.ability ? esc(r.ability.replace(/\s*\([^)]*\)$/,'')) : '<span class="muted">—</span>';
+    return `<tr><td class="tour">T${r.t}</td><td>${who}</td><td>${ab}${r.total?` · <b>${r.total}</b>`:''}</td><td class="muted">${esc(r.events.join(' · '))}</td></tr>`;
+  }).join('');
+
+  // ---- erreurs classées par impact (ΔEV structuré x = {evYou, evBest}) ----
+  const dec = gr.decisions||[];
+  const diceMistakes = dec.filter(r=>!r.agree && (r.kind==='relance'))
+    .map(r=>({ ...r, delta: r.x && r.x.evYou!=null ? +(r.x.evBest - r.x.evYou).toFixed(2)
+      : (()=>{ // vieux format : parse des EV en texte
+          const a=(r.you||'').match(/EV (\d+\.?\d*)/), b=(r.coach||'').match(/EV (\d+\.?\d*)/);
+          return a&&b ? +((+b[1])-(+a[1])).toFixed(2) : null; })() }))
+    .sort((a,b)=>(b.delta??-1)-(a.delta??-1));
+  const winMistakes = evaluated ? dec.filter(r=>!r.agree && !['relance','roll-data'].includes(r.kind)) : [];
+
+  const mistakeRows = diceMistakes.map(r=>
+    `<tr><td class="tour">T${r.t}</td><td>${r.delta!=null?`<span class="delta">−${r.delta}</span>`:'<span class="muted">?</span>'}</td><td>toi : ${esc(r.you)}<br><span class="muted">réseau/solveur : ${esc(r.coach)}</span></td></tr>`).join('');
+  const winRows = winMistakes.map(r=>
+    `<tr><td class="tour">T${r.t}</td><td class="muted">${esc(r.kind)}</td><td>toi : ${esc(r.you)}<br><span class="muted">le réseau aurait joué : ${esc(r.coach)}</span></td></tr>`).join('');
+
+  // ---- stats des deux joueurs ----
+  const atkCount = idx => { const c={}; for(const a of atk[idx]) { const k=a.replace(/\s*\([^)]*\)$/,''); c[k]=(c[k]||0)+1; } return Object.entries(c).sort((x,y)=>y[1]-x[1]); };
+  const statRow = (label, me, ia) => `<tr><td>${label}</td><td>${me}</td><td>${ia}</td></tr>`;
+  const statsRows =
+    statRow('Attaques lancées', atk[meIdx].length, atk[aiIdx].length) +
+    statRow('Tours ratés (whiff)', whiffs[meIdx], whiffs[aiIdx]) +
+    statRow('Cartes jouées', cards[meIdx].length, cards[aiIdx].length) +
+    statRow('Cartes vendues', sold[meIdx], sold[aiIdx]) +
+    statRow('Lignes favorites',
+      atkCount(meIdx).slice(0,3).map(([k,n])=>`${esc(k)} ×${n}`).join('<br>')||'—',
+      atkCount(aiIdx).slice(0,3).map(([k,n])=>`${esc(k)} ×${n}`).join('<br>')||'—');
+
+  // ---- conseils générés ----
+  const lessons = [];
+  const totalDelta = diceMistakes.reduce((s,r)=>s+(r.delta||0),0);
+  if (totalDelta >= 2) lessons.push(`Tes écarts de dés ont coûté <b>~${totalDelta.toFixed(1)} points d'espérance</b> sur la partie (≈ ${Math.round(totalDelta/6)} attaque(s) moyenne(s)). La 1ʳᵉ erreur du tableau est celle à retravailler.`);
+  const stops = dec.filter(r=>!r.agree && r.kind==='relance' && /s'arrêter/.test(r.you||''));
+  if (stops.length >= 2) lessons.push(`Tu t'es arrêté trop tôt ${stops.length} fois — quand « s'arrêter » est le plus petit chiffre à l'écran, ta main faite est un lot de consolation, pas un trésor.`);
+  if (whiffs[meIdx] >= 2) lessons.push(`${whiffs[meIdx]} whiffs de ton côté : sur ta DERNIÈRE relance, sécurise une ligne faite plutôt que de continuer la chasse.`);
+  const kindCount = {};
+  for (const r of winMistakes) kindCount[r.kind]=(kindCount[r.kind]||0)+1;
+  for (const [k,n] of Object.entries(kindCount)) if (n>=2) lessons.push(`${n} désaccords répétés en <b>${esc(k)}</b> — relis ces lignes du tableau : c'est un pattern, pas un accident.`);
+  if (!lessons.length) lessons.push(win ? 'Partie propre — aucune erreur récurrente détectée. Rejoue ce matchup pour confirmer que c’est un style, pas de la chance.' : 'Peu d’erreurs détectées — cette défaite ressemble plus à la variance (dés) qu’à des fautes. Revanche mêmes dés pour vérifier.');
+
+  // ---- boutons ----
+  const hard = gr.bossHard ? '&hard=1' : '';
+  const btns = `<p style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn primary" href="play.html?me=${gr.humanHero}&ai=${gr.aiHero}${hard}">🔁 Nouvelle partie (même matchup)</a>
+    ${gr.seed ? `<a class="btn gold" href="play.html?me=${gr.humanHero}&ai=${gr.aiHero}${hard}&seed=${gr.seed}">🎲 Revanche — mêmes dés</a>` : ''}
+    <a class="btn" href="stats.html">📈 Stats</a>
+    <a class="btn" href="play.html">⬅ Jeu</a></p>`;
+
+  document.getElementById('content').innerHTML = btns + `
+  <div class="card"><h3>Courbe des PV</h3><canvas id="hpc" width="1040" height="220"></canvas>
+    <div class="muted"><span style="color:var(--you)">■</span> ${meName} (toi) · <span style="color:var(--ai)">■</span> ${aiName} (IA)</div></div>
+  <div class="grid">
+    <div class="card"><h3>⚠ Tes écarts, classés par impact${evaluated?'':' (dés seulement — rapport partiel)'}</h3>
+      ${diceMistakes.length?`<table><tr><th>Tour</th><th>ΔEV</th><th>Décision</th></tr>${mistakeRows}</table>`:'<div class="muted">Aucun écart de dés — gardes optimales toute la partie. 👌</div>'}
+      ${winRows?`<h3 style="margin-top:12px">Cartes / habiletés / défenses (réseau)</h3><table>${winRows}</table>`:''}</div>
+    <div class="card"><h3>📊 Stats de la partie</h3><table><tr><th></th><th>Toi</th><th>IA</th></tr>${statsRows}</table></div>
+  </div>
+  <div class="card"><h3>🎓 Comment t'améliorer</h3>${lessons.map(l=>`<div class="lesson">${l}</div>`).join('')}</div>
+  <div class="card"><h3>Fil du match</h3><table class="fil"><tr><th>Tour</th><th>Joueur</th><th>Attaque</th><th>Événements</th></tr>${filRows}</table></div>
+  ${btns}`;
+
+  // ---- dessin de la courbe PV ----
+  const cv = document.getElementById('hpc'), ctx = cv.getContext('2d');
+  const n = hp[0].length;
+  const maxHp = Math.max(60, ...hp[0], ...hp[1]);
+  const X = i => 30 + (cv.width-45) * (n<=1 ? 0 : i/(n-1));
+  const Y = v => 10 + (cv.height-30) * (1 - Math.max(0,v)/maxHp);
+  ctx.strokeStyle = '#3a2f52'; ctx.fillStyle = '#9b8fb8'; ctx.font = '10px monospace';
+  for (const v of [0, 25, 50]) { ctx.beginPath(); ctx.moveTo(30, Y(v)); ctx.lineTo(cv.width-15, Y(v)); ctx.stroke(); ctx.fillText(String(v), 6, Y(v)+3); }
+  const COL = []; COL[meIdx]='#d8465a'; COL[aiIdx]='#9c6bff';
+  for (const p of [0,1]) {
+    ctx.strokeStyle = COL[p]; ctx.lineWidth = 2; ctx.beginPath();
+    hp[p].forEach((v,i)=>{ i? ctx.lineTo(X(i),Y(v)) : ctx.moveTo(X(i),Y(v)); });
+    ctx.stroke();
+    ctx.fillStyle = COL[p];
+    hp[p].forEach((v,i)=>{ ctx.beginPath(); ctx.arc(X(i),Y(v),2.5,0,7); ctx.fill(); });
+  }
+  ctx.fillStyle = '#9b8fb8';
+  hpTurns.forEach((t,i)=>{ if(i===0||i===n-1||i%Math.ceil(n/12)===0) ctx.fillText('T'+t, X(i)-6, cv.height-4); });
+}
+</script>
+</div></body></html>

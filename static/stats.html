@@ -29,7 +29,7 @@
 <button class="btn" id="exp">💾 Exporter tout</button></p>
 <input type="file" id="imp" accept=".json" style="display:none">
 <script>
-const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', nx:'Naraxus'};
+const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', nx:'Naraxus'};
 function isWin(g){ return /Victoire|🏆/.test(g.result||''); }
 function isDraw(g){ return /nul|Nul|🤝/.test(g.result||''); }
 function load(){ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } }
@@ -99,7 +99,14 @@ function render(){
     <div class="card"><h3 style="margin-top:0">Par version de l'IA</h3><table>${verRows}</table>
       <div class="muted" style="margin-top:6px">Si ton % baisse avec les versions récentes, l'entraînement paie.</div></div>
     <div class="card"><h3 style="margin-top:0">Tes attaques favorites</h3><table>${atkRows||'<tr><td class="muted">Rejoue des parties récentes (le log détaillé est requis)</td></tr>'}</table></div>
-  </div>`;
+  </div>
+  <div class="card"><h3 style="margin-top:0">Dernières parties — clique pour le 📋 rapport complet</h3>
+    <table><tr><th>Date</th><th>Matchup</th><th>Résultat</th><th>Tours</th><th></th></tr>${games.slice(-20).reverse().map(g=>{
+      const d=(g.date||'').slice(0,16).replace('T',' ');
+      const res=isWin(g)?'<span class="w">Victoire</span>':isDraw(g)?'Nul':'<span class="l">Défaite</span>';
+      const opp=g.aiHero==='nx'?(g.bossHard?'Naraxus (HARD)':'Naraxus'):(HERO_NAME[g.aiHero]||g.aiHero);
+      return `<tr><td class="muted">${d}</td><td>${HERO_NAME[g.humanHero]||g.humanHero} vs ${opp}</td><td>${res}</td><td>${g.turns||'?'}</td><td><a href="report.html?g=${encodeURIComponent(g.date)}">📋 rapport</a></td></tr>`;
+    }).join('')}</table></div>`;
 }
 
 document.getElementById('imp').addEventListener('change', ev=>{

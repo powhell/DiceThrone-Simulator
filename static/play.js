@@ -123,7 +123,13 @@
   } else ai = G.greedyHighestDamagePolicy;
 
   // Stateful (snapshotable) rng so interactive defense can clone+replay the AI's attack deterministically.
-  const rng = G.mulberry32Stateful((Date.now() % 2147483647) || 1);
+  // ?seed=N = « revanche mêmes dés » depuis un rapport post-partie ; le seed est sauvegardé
+  // dans chaque gameRecord pour rendre ça possible.
+  const SEED = (+_q.get('seed') > 0 ? +_q.get('seed') : (Date.now() % 2147483647)) || 1;
+  const rng = G.mulberry32Stateful(SEED);
+  // « uniquement le réseau » (règle rapport) : vrai quand le coach est le réseau entraîné,
+  // faux quand on est retombés sur le bot scripté (poids absents/incompatibles).
+  const USING_NET = !!(window.AI_WEIGHTS && ai !== G.greedyHighestDamagePolicy);
   // First player is decided at random (like the opening roll). Going SECOND carries the rules'
   // compensation automatically (HH gains 1 Dreadful — handled in createInitialGameState).
   const humanFirst = rng() < 0.5;
@@ -219,8 +225,16 @@
       .some(([id,cp]) => you.hand.includes(id) && you.cp >= cp);
   }
   const replayLog = [];        // {t, kind, you, coach, agree}
-  function coachNote(kind, you, coachPick){
-    replayLog.push({ t: g.state.turnNumber, kind, you, coach: coachPick, agree: you === coachPick });
+  // `extra` (optionnel, rapport post-partie) : données STRUCTURÉES — pour les décisions de
+  // dés {evYou, evBest, keptYou, keptBest} (ΔEV exact du solveur), rien pour les fenêtres v1.
+  // Règle « uniquement le réseau » : les notes de FENÊTRES (main/habileté/défense/upkeep)
+  // ne sont enregistrées que si le coach est le réseau (USING_NET) — jamais le bot scripté.
+  const DICE_KINDS = new Set(['roll-data', 'relance']);
+  function coachNote(kind, you, coachPick, extra){
+    if (!USING_NET && !DICE_KINDS.has(kind)) return;
+    const note = { t: g.state.turnNumber, kind, you, coach: coachPick, agree: you === coachPick };
+    if (extra) note.x = extra;
+    replayLog.push(note);
   }
 
   const $ = id => document.getElementById(id);
@@ -1706,7 +1720,8 @@
         const adv = G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
         if (adv.kept.length < 5 && adv.ev > adv.keepAllEv + 0.3)
           coachNote('relance', `s'arrêter (EV ${adv.keepAllEv.toFixed(1)})`,
-            `relancer en gardant [${adv.kept.join(',')}] (EV ${adv.ev.toFixed(1)})`);
+            `relancer en gardant [${adv.kept.join(',')}] (EV ${adv.ev.toFixed(1)})`,
+            { evYou: +adv.keepAllEv.toFixed(2), evBest: +adv.ev.toFixed(2), keptYou: 'stop', keptBest: adv.kept.join(',') });
       }
     } catch (e) {}
     G.beginOffensiveAlter(g, dice.map(d=>d.v));
@@ -1773,9 +1788,14 @@
         const adv = liveAdvice() || G.humanKeepAdvice(g, dice.map(d=>d.v), rollsLeft);
         const mine = dice.filter(d=>d.kept).map(d=>d.v).sort().join(',');
         const dp = adv.kept.slice().sort().join(',');
-        if (mine !== dp) coachNote('relance', `gardé [${mine||'rien'}]`, `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)})`);
+        // ΔEV structuré pour le rapport : EV de TA garde si elle figure au tableau du DP
+        // (sinon null = « hors du top », delta inconnu).
+        const mineOpt = (adv.topOptions||[]).find(o=>o.kept.slice().sort().join(',')===mine);
+        const x = { evYou: mineOpt ? +mineOpt.ev.toFixed(2) : null, evBest: +adv.ev.toFixed(2),
+          keptYou: mine, keptBest: dp, stopEv: +adv.keepAllEv.toFixed(2) };
+        if (mine !== dp) coachNote('relance', `gardé [${mine||'rien'}]`, `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)})`, x);
         // full-hand record (agree or not) so post-game docs can replay every keep decision
-        replayLog.push({ t: g.state.turnNumber, kind: 'roll-data', agree: mine===dp,
+        replayLog.push({ t: g.state.turnNumber, kind: 'roll-data', agree: mine===dp, x,
           you: `main [${dice.map(d=>d.v).join(',')}] gardé [${mine||'rien'}]`,
           coach: `garder [${dp||'rien'}] (EV ${adv.ev.toFixed(1)}, tout-garder ${adv.keepAllEv.toFixed(1)}, relances ${rollsLeft})` });
       } catch (e) {}
@@ -2106,18 +2126,36 @@
       date: new Date().toISOString(), result: msg, turns: g.state.turnNumber,
       humanHero: HUMAN, aiHero: AI_HERO, humanFirst: g.humanIdx === 0,
       bossHard: !!BOSS_HARD, aiVersion: (window.AI_WEIGHTS_VERSION||'inconnue'),
+      // seed = revanche « mêmes dés » possible depuis le rapport ; usingNet = les notes de
+      // fenêtres viennent du RÉSEAU (règle : jamais d'évaluation par le bot scripté).
+      seed: SEED, usingNet: USING_NET,
       decisions: replayLog, engineLog: g.state.log,
       finalHp: [g.state.players[0].hp, g.state.players[1].hp],
     };
+    let saved = false;
     try {
       const all = JSON.parse(localStorage.getItem('dt_games') || '[]');
       all.push(gameRecord);
       localStorage.setItem('dt_games', JSON.stringify(all.slice(-200))); // 200 pour la page stats
+      saved = true;
       log(`💾 Partie sauvegardée (${Math.min(all.length,200)} en mémoire locale — <a href='stats.html' style='color:var(--gold)'>📈 voir tes stats</a>).`);
     } catch (e) {}
+    // Rapport complet + rejouer (demande user 2026-07-09) — le rapport lit dt_games?g=<date>.
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px';
+    if (saved) {
+      const rp = document.createElement('a');
+      rp.className = 'btn primary'; rp.textContent = '📋 Rapport complet de la partie';
+      rp.style.textDecoration = 'none';
+      rp.href = `report.html?g=${encodeURIComponent(gameRecord.date)}`;
+      row.appendChild(rp);
+    }
+    const again = document.createElement('button');
+    again.className = 'btn gold'; again.textContent = '🔁 Rejouer (même matchup)';
+    again.onclick = () => { location.href = `play.html?me=${HUMAN}&ai=${AI_HERO}${BOSS_HARD?'&hard=1':''}`; };
+    row.appendChild(again);
     const dl = document.createElement('button');
-    dl.className = 'btn gold'; dl.textContent = '💾 Télécharger cette partie (JSON)';
-    dl.style.marginTop = '8px';
+    dl.className = 'btn'; dl.textContent = '💾 JSON';
     dl.onclick = () => {
       const blob = new Blob([JSON.stringify(gameRecord, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -2125,7 +2163,8 @@
       a.download = `dicethrone_${gameRecord.date.replace(/[:.]/g,'-')}.json`;
       a.click();
     };
-    b.after(dl);
+    row.appendChild(dl);
+    b.after(row);
   }
 
   // ---------- log ----------
