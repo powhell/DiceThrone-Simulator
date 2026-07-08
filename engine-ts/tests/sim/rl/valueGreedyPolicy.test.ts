@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createValueGreedyPolicy } from '../../../src/sim/rl/valueGreedyPolicy.js'
 import { createNetwork } from '../../../src/sim/rl/network.js'
-import { FEATURE_COUNT, UPGRADE_ONEHOT_SIZE, HAND_ONEHOT_SIZE } from '../../../src/sim/rl/features.js'
+import { FEATURE_COUNT, PLAYER_BLOCK_SIZE, HAND_ONEHOT_SIZE } from '../../../src/sim/rl/features.js'
 import type { Network } from '../../../src/sim/rl/network.js'
 import { createInitialGameState } from '../../../src/sim/match.js'
 import { playTurn, enumerateWindowActions } from '../../../src/sim/turn.js'
@@ -9,9 +9,11 @@ import { mulberry32 } from '../../../src/sim/rng.js'
 import { MAX_HAND_SIZE } from '../../../src/sim/data/config.js'
 import { heroTemplateFor, cardById } from '../../../src/sim/data/load.js'
 
-// Opponent HP is the first field of the "opponent" block. v3 layout (2026-07-05, 21 champs) :
-// [turn, self(21 base + upgrade one-hot), selfHand(one-hot), opp(21 base + upgrade one-hot)].
-const OPP_HP_FEATURE_INDEX = 1 + (21 + UPGRADE_ONEHOT_SIZE) + HAND_ONEHOT_SIZE
+// Opponent HP is the first field of the "opponent" block:
+// [turn, self(PLAYER_BLOCK_SIZE), selfHand(one-hot), opp(PLAYER_BLOCK_SIZE)].
+// Dérivé de features.ts (plus de constante locale : le passage v2->v3 du layout avait
+// laissé un 21 codé en dur ici, et le réseau du test pointait DANS le bloc self).
+const OPP_HP_FEATURE_INDEX = 1 + PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE
 
 function preferLowerOpponentHpNetwork(): Network {
   const row = new Array(FEATURE_COUNT).fill(0)

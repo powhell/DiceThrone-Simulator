@@ -844,6 +844,12 @@
   function addMorphBtns(c){
     if (HUMAN!=='dr') return;
     const you=g.state.players[g.humanIdx];
+    // Toggle pré-armé : les SS gagnés PENDANT la résolution (ex. l'Ult donne 2 SS) sont
+    // dépensables AVANT la conclusion — armé, le moteur passe Chat dès que possible (+2, Wound).
+    if ((you.form||'druid')!=='cat'){
+      c.appendChild(btn(`${you.drCatOnAttack?'✅ ':''}🐆 Passer Chat pendant l'attaque dès qu'un SS est dispo (+2, Wound)`, you.drCatOnAttack?'primary':'', ()=>{
+        you.drCatOnAttack=!you.drCatOnAttack; renderControls(); }));
+    }
     if (!(you.tokens.shapeShift>0)) return;
     const F={druid:'🧙 Druide',cat:'🐆 Chat',bear:'🐻 Ours'};
     for (const f of ['bear','cat','druid']){
@@ -854,6 +860,18 @@
         renderAll();
       }));
     }
+  }
+  function addFmDefBtns(c){
+    // Masterwork face Forge (4-5) : QUELLE armure doubler = ton choix, pré-armé (user-caught :
+    // le moteur prenait le bouclier tout seul). Auto = heuristique du gain réel.
+    if (HUMAN!=='fm') return;
+    const you=g.state.players[g.humanIdx];
+    if (!(you.armor && (you.armor.helmet>0 || you.armor.shield>0))) return;
+    const lbl = you.fmForgePref==='helmet' ? '🪖 Casque (contre x2)' : you.fmForgePref==='shield' ? '🛡️ Bouclier (prévention x2)' : '🤖 Auto (meilleur gain)';
+    c.appendChild(btn(`⚒️ Forge (4-5) double : ${lbl}`,'', ()=>{
+      you.fmForgePref = you.fmForgePref===undefined ? 'helmet' : you.fmForgePref==='helmet' ? 'shield' : undefined;
+      renderControls();
+    }));
   }
   function addSmDefBtns(c){
     // Choix de défense + dépenses d'Invisibility pré-armés AVANT le jet (leçon Guard Break :
@@ -903,6 +921,7 @@
       addMorphBtns(c); // 🐻 passer Ours AVANT de lancer ta défense (Shape Shift à tout moment)
       addThorBtns(c); // 🔨 navette Mjölnir possible à tout moment (défausse 1 carte)
       addSmDefBtns(c); // 🕷️ choix Spider-Sense/Counterpunch + dépenses Invisibility pré-armées
+      addFmDefBtns(c); // ⚒️ Masterwork Forge : quelle armure doubler (pré-armé)
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
     } else if (phase==='upkeep' && HUMAN==='fm') {

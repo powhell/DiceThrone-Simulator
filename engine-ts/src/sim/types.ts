@@ -60,6 +60,14 @@ export interface PlayerState {
   // auto-morphs heuristiques de l'IA)
   form?: string
   humanControlled?: boolean
+  // Druid humain : toggle pré-armé « passer Cat dès qu'un Shape Shift est disponible pendant
+  // la résolution de l'attaque » (le jeton se dépense À TOUT MOMENT — user-caught : les SS
+  // gagnés par l'habileté elle-même, ex. l'Ult, doivent être dépensables avant la conclusion
+  // pour le +2 Cat). Jamais automatique pour l'humain.
+  drCatOnAttack?: boolean
+  // Forgemaster humain : préférence pré-armée pour la face Forge (4-5) de Masterwork —
+  // quelle armure doubler (undefined = heuristique du gain réel).
+  fmForgePref?: 'helmet' | 'shield'
   // Thor : Mjolnir est-il chez l'adversaire ? (absent/false = sur son board) + compteurs de tour
   mjolnirAway?: boolean
   thrownThisTurn?: number
@@ -95,6 +103,12 @@ export interface PlayerState {
   footwork?: number
   footworkBonusUsedThisTurn?: boolean
   duRepositionDir?: 'forward' | 'forward2' | 'backward1' | 'backward2'
+  // Direction pré-armée du joueur humain pour les Steps gratuits des habiletés ('forward'
+  // par défaut : le Bonus offensif de la position finale paie sur l'attaque en cours).
+  duStepsMode?: 'forward' | 'backward' | 'none'
+  // Disarm résolu à l'upkeep : si le porteur n'a pas défaussé, il saute son Income Phase
+  // (le flag est posé à l'upkeep, consommé par playIncomePhase).
+  skipIncomeThisTurn?: boolean
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be

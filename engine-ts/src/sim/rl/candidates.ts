@@ -105,8 +105,8 @@ function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoic
         if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
       }
     }
-  } else if (cardId === 'he-is-worthy') {
-    // Thor : change 1 de tes des en 4 ou 5 (carte verifiee)
+  } else if (cardId === 'he-is-worthy' || cardId === 'quick-footwork') {
+    // Thor / Duelist : change 1 de tes des en 4 ou 5 (cartes verifiees, meme effet)
     for (let i = 0; i < n; i++) {
       for (const v of [4, 5]) if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
     }

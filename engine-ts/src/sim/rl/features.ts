@@ -156,5 +156,5 @@ export function encodeState(state: GameState, forPlayerIdx: 0 | 1): number[] {
 
 // v3 : 8 scalaires + 8 identité + 5 forge/armures + 5 jetons v2 + 17 jetons v3 + fmCapBonus
 // + 3 formes + mjolnir = 48, + upgrades one-hot. (Vérifié par printFeatureCount.ts.)
-const PLAYER_BLOCK_SIZE = 48 + UPGRADE_ONEHOT_SIZE
+export const PLAYER_BLOCK_SIZE = 48 + UPGRADE_ONEHOT_SIZE
 export const FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE

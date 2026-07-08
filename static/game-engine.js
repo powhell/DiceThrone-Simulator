@@ -153,7 +153,7 @@ var Game = (() => {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
   function emptyBag() {
-    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0, combo: 0, webbed: 0, invisibility: 0, fireMastery: 0, burn: 0, knockdown: 0, stun: 0 };
+    return { dreadful: 0, grimPursuit: 0, agility: 0, covertOps: 0, head: 0, feather: 0, hex: 0, nevermore: 0, shapeShift: 0, regen2: 0, regen1: 0, wound: 0, electrokinesis: 0, guardBreak: 0, combo: 0, webbed: 0, invisibility: 0, fireMastery: 0, burn: 0, knockdown: 0, stun: 0, disarm: 0 };
   }
   function hasHead(p) {
     return p.tokens.head > 0;
@@ -397,8 +397,8 @@ var Game = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 0.9;
-  var CARD_DRAW_VALUE = 0.5;
+  var GRIM_PURSUIT_AVG_DMG = 1.3;
+  var CARD_DRAW_VALUE = 1.4;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -438,7 +438,7 @@ var Game = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [1.5, 0.8, 0.8, 0.4, 1];
+  var MARGINAL_VALUE = [1, 1.4, 0.8, 0.45, 1];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -1947,9 +1947,199 @@ var Game = (() => {
     }
   };
 
+  // src/characters/duelist/constants.ts
+  var GB_VALUE2 = 0.9;
+  var DISARM_VALUE = 1;
+  var STEP_VALUE = 0.3;
+  var CP_TO_DMG_EQUIV6 = 1;
+  function offensiveBonusDmg(pos) {
+    return pos >= 2 ? 3 : pos >= 1 ? 1 : 0;
+  }
+  var BLADE_FLURRY_DMG = [4, 5, 6];
+  var BLADE_FLURRY_DMG_II = [5, 6, 7];
+  var BALESTRA_DMG = 6;
+  var BALESTRA_DMG_II = 8;
+  var BALESTRA_STEPS = 2;
+  var FANCY_FEET_STEPS = 3;
+  var FEINT_ATTACK_DMG = 2;
+  var FEINT_ATTACK_DMG_II = 3;
+  var EN_GARDE_DMG = 8;
+  var EN_GARDE_P_DISARM = 1 - Math.pow(5 / 6, 4);
+  var STRIKE_SMALL_DMG = 7;
+  var STRIKE_LARGE_DMG = 10;
+  var BLADESTORM_DMG = 8;
+  var BLADESTORM_DMG_II = 9;
+  var BLADESTORM_STEPS = 2;
+  var BLADEWIND_COLLATERAL = 3;
+  var ULT_DMG2 = 11;
+  var ULT_STEPS = 4;
+  function gbValueOfGaining(current, gained) {
+    return Math.max(0, Math.min(2, current + gained) - Math.min(2, current)) * GB_VALUE2;
+  }
+
+  // src/characters/duelist/abilities.ts
+  function duFaceToSymbol(face) {
+    return face <= 3 ? "A" : face <= 5 ? "B" : "C";
+  }
+  function classify9(dice) {
+    let A = 0, B = 0, C = 0;
+    for (const d of dice) {
+      if (d <= 3) A += 1;
+      else if (d <= 5) B += 1;
+      else C += 1;
+    }
+    return { A, B, C };
+  }
+  function hasStraight9(dice, len) {
+    const uniq = [...new Set(dice)].sort((a, b) => a - b);
+    let run = 1;
+    for (let i = 1; i < uniq.length; i++) {
+      run = uniq[i] === uniq[i - 1] + 1 ? run + 1 : 1;
+      if (run >= len) return true;
+    }
+    return false;
+  }
+  function maxOfAKind5(dice) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+    return Math.max(...counts.values());
+  }
+  function getCandidates9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds = [], defenseTax = 0) {
+    const { A: a, B: b, C: c } = classify9(dice);
+    const has = (id) => upgradeIds.includes(id);
+    const out = [];
+    const tax = (defendable) => defendable ? defenseTax : 0;
+    const stepPack = (steps) => {
+      const posAfter = Math.min(2, footwork + steps);
+      const moved = posAfter - footwork;
+      return { offBonus: bonusAvailable ? offensiveBonusDmg(posAfter) : 0, residual: STEP_VALUE * moved };
+    };
+    const baselineOff = bonusAvailable ? offensiveBonusDmg(footwork) : 0;
+    if (a >= 3) {
+      const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
+      const table = has("blade-flurry-ii") ? BLADE_FLURRY_DMG_II : BLADE_FLURRY_DMG;
+      const kindNeed = has("blade-flurry-ii") ? 3 : 4;
+      const steps = maxOfAKind5(dice) >= kindNeed ? 1 : 0;
+      const p = stepPack(steps);
+      const label = a >= 5 ? "Blade Flurry 5A (AAAAA)" : a >= 4 ? "Blade Flurry 4A (AAAA)" : "Blade Flurry 3A (AAA)";
+      out.push([label, table[tier] + p.offBonus + p.residual - tax(true), table[tier]]);
+    }
+    if (a >= 2 && b >= 2) {
+      const dmg = has("balestra-ii") ? BALESTRA_DMG_II : BALESTRA_DMG;
+      const p = stepPack(BALESTRA_STEPS);
+      out.push(["Balestra (AABB)", dmg + p.offBonus + p.residual - tax(true), dmg]);
+    }
+    if (b >= 3 && has("balestra-ii")) {
+      const p = stepPack(FANCY_FEET_STEPS);
+      out.push(["Fancy Feet (BBB)", gbValueOfGaining(guardBreak, 1) + p.residual + STEP_VALUE, 0]);
+    }
+    if (a >= 2 && c >= 2) {
+      const up = has("feint-attack-ii");
+      const dmg = up ? FEINT_ATTACK_DMG_II : FEINT_ATTACK_DMG;
+      const p = stepPack(1);
+      out.push(["Feint Attack (AACC)", dmg + p.offBonus + p.residual + gbValueOfGaining(guardBreak, up ? 2 : 1), dmg]);
+    }
+    if (c >= 1 && b >= 3) {
+      const disarmV = oppDisarmed ? 0 : EN_GARDE_P_DISARM * DISARM_VALUE;
+      out.push(["En Garde (CBBB)", EN_GARDE_DMG + baselineOff + disarmV - tax(true), EN_GARDE_DMG]);
+    }
+    if (hasStraight9(dice, 5)) {
+      const p = stepPack(1);
+      out.push(["Strike (5-straight)", STRIKE_LARGE_DMG + p.offBonus + p.residual - tax(true), STRIKE_LARGE_DMG]);
+    } else if (hasStraight9(dice, 4)) {
+      out.push(["Strike (4-straight)", STRIKE_SMALL_DMG + baselineOff - tax(true), STRIKE_SMALL_DMG]);
+    }
+    if (c >= 4) {
+      const up = has("bladestorm-ii");
+      const dmg = up ? BLADESTORM_DMG_II : BLADESTORM_DMG;
+      const p = stepPack(BLADESTORM_STEPS);
+      const v = dmg + p.offBonus + p.residual + gbValueOfGaining(guardBreak, up ? 2 : 1) + (oppDisarmed ? 0 : DISARM_VALUE) - tax(true);
+      out.push(["Bladestorm (CCCC)", v, dmg]);
+    }
+    if (c >= 3 && has("bladestorm-ii")) {
+      out.push(["Bladewind (CCC)", BLADEWIND_COLLATERAL, BLADEWIND_COLLATERAL]);
+    }
+    if (c >= 5) {
+      const p = stepPack(ULT_STEPS);
+      const v = ULT_DMG2 + p.offBonus + p.residual + gbValueOfGaining(guardBreak, 2) + (oppDisarmed ? 0 : DISARM_VALUE);
+      out.push(["Master of the Blade! (CCCCC)", v, ULT_DMG2]);
+    }
+    out.push(["Whiff", 0, 0]);
+    return out;
+  }
+  function bestAbilityValue9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds = [], defenseTax = 0) {
+    return Math.max(...getCandidates9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds, defenseTax).map(([, v]) => v));
+  }
+  function bestAbilityName9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds = [], defenseTax = 0) {
+    const cands = getCandidates9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds, defenseTax);
+    let best = cands[0];
+    for (const cand of cands) if (cand[1] > best[1]) best = cand;
+    return best[0];
+  }
+  function buildAbilityBoard9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds = [], defenseTax = 0) {
+    const matched = new Map(getCandidates9(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds, defenseTax).map(([n, v, d]) => [n, [v, d]]));
+    const all = [
+      "Blade Flurry 3A (AAA)",
+      "Blade Flurry 4A (AAAA)",
+      "Blade Flurry 5A (AAAAA)",
+      "Balestra (AABB)",
+      "Feint Attack (AACC)",
+      "En Garde (CBBB)",
+      "Strike (4-straight)",
+      "Strike (5-straight)",
+      "Bladestorm (CCCC)",
+      "Master of the Blade! (CCCCC)"
+    ];
+    if (upgradeIds.includes("balestra-ii")) all.push("Fancy Feet (BBB)");
+    if (upgradeIds.includes("bladestorm-ii")) all.push("Bladewind (CCC)");
+    return all.map((name) => {
+      const hit = matched.get(name);
+      return { name, matched: !!hit, value: hit ? hit[0] : 0, baseDamage: hit ? hit[1] : 0 };
+    });
+  }
+
+  // src/characters/duelist/config.ts
+  var duConfig = {
+    id: "du",
+    faceToSymbol(face) {
+      return duFaceToSymbol(face);
+    },
+    bestAbilityValue(dice, state) {
+      const evalFn = (d) => bestAbilityValue9(d, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+      let v = augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
+      if (state.quickFootwork) {
+        for (let i = 0; i < dice.length; i++) {
+          for (const f of [4, 5]) {
+            if (dice[i] === f) continue;
+            const alt = dice.slice();
+            alt[i] = f;
+            v = Math.max(v, evalFn(alt) - CP_TO_DMG_EQUIV6);
+          }
+        }
+      }
+      return v;
+    },
+    bestAbilityName(dice, state) {
+      return bestAbilityName9(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    buildAbilityBoard(dice, state) {
+      return buildAbilityBoard9(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+    },
+    hasMatchedAbility(dice, state) {
+      const cands = getCandidates9(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+      return cands.some(([name]) => name !== "Whiff");
+    },
+    stateKey(state) {
+      const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
+      const w = state.wildcards || {};
+      const wc = (w.sixIt ? 1 : 0) + (w.soWild ? 2 : 0) + (w.twiceAsWild ? 4 : 0) + (w.samesies ? 8 : 0) + (w.tipIt ? 16 : 0) + (state.quickFootwork ? 32 : 0);
+      return `${state.footwork}|${Math.min(state.guardBreak, 2)}|${state.oppDisarmed ? 1 : 0}|${state.bonusAvailable ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgrades}`;
+    }
+  };
+
   // src/sim/oracle.ts
   function cfgFor(heroId) {
-    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : heroId === "sm" ? smConfig : heroId === "py" ? pyConfig : bwConfig;
+    return heroId === "hh" ? hhConfig : heroId === "fm" ? fmConfig : heroId === "rv" ? rvConfig : heroId === "dr" ? drConfig : heroId === "th" ? thConfig : heroId === "sm" ? smConfig : heroId === "py" ? pyConfig : heroId === "du" ? duConfig : bwConfig;
   }
   function runOffensiveRoll(heroId, initialOracleState, rng, beforeReroll) {
     const dice = rollDice(5, rng).sort((a, b) => a - b);
@@ -3432,6 +3622,300 @@ var Game = (() => {
     ]
   };
 
+  // src/sim/data/characters/du/hero.json
+  var hero_default9 = {
+    id: "du",
+    name: "Duelist",
+    diceAnatomy: "1-3 = Blade (A), 4-5 = Boot (B), 6 = Pierce (C). V\xE9rifi\xE9 leaflet (scan user 2026-07-07).",
+    startingHp: 50,
+    cpIncomePerTurn: 1,
+    source: "Board (3 photos) + leaflet (5 captures) + 14 cartes scann\xE9s user 2026-07-07. Spec compl\xE8te : characters/Duelist/SPEC.md. Rulings user : D\xE9f. +1 = pige 1 carte, +3 = pr\xE9vient 3 ; 1 Bonus/tour ; direction libre des Steps hors Reposition. D\xE9fauts (user pas s\xFBr) : Steps hors piste perdus, Retreat bouge toujours le jeton.",
+    tokens: [
+      { id: "guardBreak", name: "Guard Break", startingCount: 0, stackCap: 2, description: "Positive Status Effect. If a player concludes their Offensive Roll Phase with an Attack, they may spend this token and roll 1 die. If the outcome is 4-5, the Attack becomes undefendable. (Identique au Guard Break de Thor.)" },
+      { id: "disarm", name: "Disarm", startingCount: 0, stackCap: 1, description: "Negative Status Effect. During their Upkeep Phase, a player afflicted with this token may choose to discard 1. If they do not (or cannot), they must skip their Income Phase instead. Then remove this token." },
+      { id: "footwork", name: "Footwork Track", startingCount: 0, stackCap: 0, description: "Pseudo-jeton : position -2..+2 g\xE9r\xE9e dans du.rules.ts (comme le cadran Nevermore). 5 positions : +3 dmg Offensive (+2) / +1 dmg Offensive (+1) / NEUTRAL (0) / Defensive pige-1-carte (-1) / Defensive pr\xE9vient-3-dmg (-2) \u2014 ic\xF4nes v\xE9rifi\xE9es + ruling user 2026-07-07. D\xE9part : Neutral. Take a Step = bouger d'une case up/down. En attaquant : Offensive Bonus de la position FINALE (Attack Modifier). Attaqu\xE9 avec d\xE9g\xE2ts normaux : Defensive Bonus de la position FINALE. R\xE9solus avant le total final de dmg pendant la Defensive Roll Phase. UN seul Bonus r\xE9solu par tour." }
+    ],
+    flags: [],
+    abilities: [
+      {
+        id: "blade_flurry_3a",
+        boardName: "Blade Flurry 3A (AAA)",
+        dicePattern: "AAA",
+        baseDamage: 4,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, steps: 1 },
+        upgradedBy: { upgradeId: "blade-flurry-ii", baseDamage: 5, numberMatchOfAKind: 3 },
+        notes: "On 4-of-a-kind (#'s), you may take 1 Step. II : 5/6/7 et le Step passe au 3-of-a-kind.",
+        verified: true
+      },
+      {
+        id: "blade_flurry_4a",
+        boardName: "Blade Flurry 4A (AAAA)",
+        dicePattern: "AAAA",
+        baseDamage: 5,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, steps: 1 },
+        upgradedBy: { upgradeId: "blade-flurry-ii", baseDamage: 6, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "blade_flurry_5a",
+        boardName: "Blade Flurry 5A (AAAAA)",
+        dicePattern: "AAAAA",
+        baseDamage: 6,
+        defendable: true,
+        numberMatchBonus: { ofAKind: 4, steps: 1 },
+        upgradedBy: { upgradeId: "blade-flurry-ii", baseDamage: 7, numberMatchOfAKind: 3 },
+        verified: true
+      },
+      {
+        id: "balestra",
+        boardName: "Balestra (AABB)",
+        dicePattern: "AABB",
+        baseDamage: 6,
+        defendable: true,
+        stepsBeforeDamage: { upTo: 2 },
+        upgradedBy: { upgradeId: "balestra-ii", baseDamage: 8 },
+        notes: "You may take up to 2 Steps. Then deal 6 dmg (II : 8).",
+        verified: true
+      },
+      {
+        id: "feint_attack",
+        boardName: "Feint Attack (AACC)",
+        dicePattern: "AACC",
+        baseDamage: 2,
+        defendable: false,
+        tokensGrantedToSelf: { guardBreak: 1 },
+        stepsBeforeDamage: { upTo: 1 },
+        upgradedBy: { upgradeId: "feint-attack-ii", baseDamage: 3, tokensGrantedToSelf: { guardBreak: 2 } },
+        notes: "Gain Guard Break. You may take 1 Step. Then deal 2 UNDEFENDABLE dmg (II : 2 GB, 3 undef).",
+        verified: true
+      },
+      {
+        id: "en_garde",
+        boardName: "En Garde (CBBB)",
+        dicePattern: "CBBB",
+        baseDamage: 8,
+        defendable: true,
+        bonusRoll: { dice: 4, onC: "inflictDisarm" },
+        notes: "Deal 8 dmg and roll 4 dice: On Pierce, inflict Disarm (stack 1 \u2014 un seul suffit).",
+        verified: true
+      },
+      {
+        id: "strike_small",
+        boardName: "Strike (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 7,
+        defendable: true,
+        verified: true
+      },
+      {
+        id: "strike_large",
+        boardName: "Strike (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 10,
+        defendable: true,
+        stepsBeforeDamage: { upTo: 1 },
+        notes: "You may take 1 Step. Then deal 10 dmg.",
+        verified: true
+      },
+      {
+        id: "bladestorm",
+        boardName: "Bladestorm (CCCC)",
+        dicePattern: "CCCC",
+        baseDamage: 8,
+        defendable: true,
+        tokensGrantedToSelf: { guardBreak: 1 },
+        tokensInflictedOnOpponent: { disarm: 1 },
+        stepsBeforeDamage: { upTo: 2 },
+        upgradedBy: { upgradeId: "bladestorm-ii", baseDamage: 9, tokensGrantedToSelf: { guardBreak: 2 } },
+        notes: "Gain Guard Break. Inflict Disarm. You may take up to 2 Steps. Then deal 8 dmg (II : 2 GB, 9 dmg).",
+        verified: true
+      },
+      {
+        id: "master_of_the_blade",
+        boardName: "Master of the Blade! (CCCCC)",
+        dicePattern: "CCCCC",
+        baseDamage: 11,
+        defendable: false,
+        ultimate: true,
+        tokensGrantedToSelf: { guardBreak: 2 },
+        tokensInflictedOnOpponent: { disarm: 1 },
+        stepsBeforeDamage: { upTo: 4 },
+        notes: "Gain 2 Guard Break. Inflict Disarm. You may take up to 4 Steps. Then deal 11 dmg.",
+        verified: true
+      }
+    ],
+    altAbilities: [
+      {
+        id: "fancy_feet",
+        boardName: "Fancy Feet (BBB)",
+        dicePattern: "BBB",
+        baseDamage: 0,
+        defendable: true,
+        requiresUpgradeId: "balestra-ii",
+        tokensGrantedToSelf: { guardBreak: 1 },
+        stepsBeforeDamage: { upTo: 3 },
+        notes: "Gain Guard Break. You may take up to 3 Steps. (Pas de d\xE9g\xE2ts.)",
+        verified: true
+      },
+      {
+        id: "bladewind",
+        boardName: "Bladewind (CCC)",
+        dicePattern: "CCC",
+        baseDamage: 3,
+        defendable: false,
+        collateral: true,
+        requiresUpgradeId: "bladestorm-ii",
+        notes: "Deal 3 collateral dmg (1v1 : \xE0 l'adversaire, ind\xE9fendable non modifiable).",
+        verified: true
+      }
+    ],
+    passives: [
+      {
+        id: "reposition",
+        name: "Reposition",
+        trigger: "upkeep",
+        text: "During your Upkeep Phase, choose forward (up) or backward (down). You MUST take 1 or 2 Steps in this direction. If you move backwards with this Ability, gain Guard Break. RULING (dos du leaflet, lu par user 2026-07-07, non scann\xE9) : 2 steps back = PAS de Guard Break \u2014 GB seulement sur un recul d'exactement 1 step.",
+        verified: true
+      }
+    ],
+    defense: {
+      name: "Retreat",
+      diceCount: "4",
+      text: "Defense Roll 4. For every 2 Blades, deal 1 dmg. For each Boot or Pierce rolled, you MUST take 1 Step backward. (II : 1 dmg PAR Blade.) La position finale apr\xE8s ces Steps forc\xE9s d\xE9termine le Defensive Bonus du Footwork Track.",
+      verified: true
+    },
+    cards: [
+      {
+        id: "blade-flurry-ii",
+        name: "Blade Flurry II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "blade_flurry",
+        text: "AAA: 5. AAAA: 6. AAAAA: 7. On 3-of-a-kind (#'s), you may take 1 Step.",
+        verified: true
+      },
+      {
+        id: "balestra-ii",
+        name: "Balestra II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "balestra",
+        text: "AABB: You may take up to 2 Steps. Then deal 8 dmg. Adds alt FANCY FEET (BBB): Gain Guard Break. You may take up to 3 Steps.",
+        verified: true
+      },
+      {
+        id: "feint-attack-ii",
+        name: "Feint Attack II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "feint_attack",
+        text: "AACC: Gain 2 Guard Break. You may take 1 Step. Then deal 3 undefendable dmg.",
+        verified: true
+      },
+      {
+        id: "bladestorm-ii",
+        name: "Bladestorm II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "bladestorm",
+        text: "CCCC: Gain 2 Guard Break. Inflict Disarm. You may take up to 2 Steps. Then deal 9 dmg. Adds alt BLADEWIND (CCC): Deal 3 collateral dmg.",
+        verified: true
+      },
+      {
+        id: "retreat-ii",
+        name: "Retreat II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "retreat",
+        text: "Defense Roll 4. For every Blade, deal 1 dmg. For each Boot or Pierce rolled, you must take 1 Step backward.",
+        verified: true
+      },
+      {
+        id: "pick-it-up",
+        name: "Pick It Up",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. If the opponent is afflicted with Disarm, remove it and add 3 dmg to your Attack.",
+        verified: true
+      },
+      {
+        id: "sashay",
+        name: "Sashay",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Take 1 Step forward and deal 2 dmg, OR take 1 Step backward and Heal 2.",
+        verified: true
+      },
+      {
+        id: "courageous-advance",
+        name: "Courageous Advance!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Take up to 2 Steps forward.",
+        verified: true
+      },
+      {
+        id: "i-hate-waiting",
+        name: "I Hate Waiting",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. Take up to 2 Steps backward.",
+        verified: true
+      },
+      {
+        id: "burst-forward",
+        name: "Burst Forward",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Take 1 Step forward.",
+        verified: true
+      },
+      {
+        id: "quick-footwork",
+        name: "Quick Footwork",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Change 1 of your dice to a 4 or a 5.",
+        verified: true
+      },
+      {
+        id: "all-in-the-wrists",
+        name: "All in the Wrists",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Inflict Disarm on up to 2 opponents. (1v1 : l'adversaire.)",
+        verified: true
+      },
+      {
+        id: "confident-footing",
+        name: "Confident Footing",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. If your Footwork token is on Neutral, gain 2 Guard Break.",
+        verified: true
+      },
+      {
+        id: "blade-barrage",
+        name: "Blade Barrage",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Roll 5 dice: Add 1 x Blade dmg. On 2 Boots, you may take 1 Step.",
+        verified: true
+      }
+    ]
+  };
+
   // src/sim/data/common-cards.json
   var common_cards_default = {
     source: "VERIFIED against photos in characters/common/ (deposited 2026-07-01, read directly by Claude). 17 cards found \u2014 close to the ~18 figure estimated via web search (BGG thread 'Analyzing the core cards of Dice Throne'), likely complete or missing at most 1. Shared identically across all heroes (each hero's box prints its own physical copies, card-back ID differs but text/effect is the same). actionTiming added 2026-07-01 from the same text already transcribed below (Roll Phase Action / Main Phase Action / Instant Action prefix).",
@@ -3465,6 +3949,7 @@ var Game = (() => {
   var thHero = hero_default6;
   var smHero = hero_default7;
   var pyHero = hero_default8;
+  var duHero = hero_default9;
   var commonCards = common_cards_default;
   var nxHero = {
     id: "nx",
@@ -3481,7 +3966,7 @@ var Game = (() => {
     cards: []
   };
   function heroTemplateFor(heroId) {
-    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "sm" ? smHero : heroId === "py" ? pyHero : heroId === "nx" ? nxHero : bwHero;
+    return heroId === "hh" ? hhHero : heroId === "fm" ? fmHero : heroId === "rv" ? rvHero : heroId === "dr" ? drHero : heroId === "th" ? thHero : heroId === "sm" ? smHero : heroId === "py" ? pyHero : heroId === "du" ? duHero : heroId === "nx" ? nxHero : bwHero;
   }
   function abilityByBoardName(hero, boardName) {
     const pools = [
@@ -3514,7 +3999,7 @@ var Game = (() => {
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : heroId === "py" ? pyConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : heroId === "py" ? pyConfig.buildAbilityBoard(dice, oracleState) : heroId === "du" ? duConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -3841,10 +4326,12 @@ var Game = (() => {
   function rollMasterworkDie(rng) {
     return rollDie(rng);
   }
-  function masterworkOutcome(face, self, incomingDamage) {
+  function masterworkOutcome(face, self, incomingDamage, forgePref) {
     if (face <= 3) return { mines: true, doubling: {} };
     const hasHelm = self.armor.helmet > 0, hasShield = self.armor.shield > 0;
     if (face >= 6) return { mines: false, doubling: { helmet: hasHelm, shield: hasShield } };
+    if (forgePref === "helmet" && hasHelm) return { mines: false, doubling: { helmet: true } };
+    if (forgePref === "shield" && hasShield) return { mines: false, doubling: { shield: true } };
     const base = armorEffects(self, "normal");
     const helmGain = hasHelm ? HELMET_COUNTER[self.armor.helmet] : 0;
     const shieldGain = hasShield ? Math.min(SHIELD_PREVENT[self.armor.shield], Math.max(0, incomingDamage - base.prevented)) : 0;
@@ -4217,11 +4704,70 @@ var Game = (() => {
     };
   }
 
+  // src/sim/hero/du.rules.ts
+  var FOOTWORK_MIN = -2;
+  var FOOTWORK_MAX = 2;
+  function createInitialDUTokens() {
+    return emptyBag();
+  }
+  function footworkPos(p) {
+    return p.footwork ?? 0;
+  }
+  function takeSteps(p, delta) {
+    const before = footworkPos(p);
+    const after = Math.max(FOOTWORK_MIN, Math.min(FOOTWORK_MAX, before + delta));
+    p.footwork = after;
+    return after - before;
+  }
+  function offensiveBonusDmg2(pos) {
+    return pos === 2 ? 3 : pos === 1 ? 1 : 0;
+  }
+  function defensiveBonus(pos) {
+    return pos === -2 ? { prevent: 3, draw: 0 } : pos === -1 ? { prevent: 0, draw: 1 } : { prevent: 0, draw: 0 };
+  }
+  function repositionLegalDirections(p) {
+    const pos = footworkPos(p);
+    const dirs = [];
+    if (pos < FOOTWORK_MAX) dirs.push("forward");
+    if (pos > FOOTWORK_MIN) dirs.push("backward");
+    return dirs;
+  }
+  function applyReposition(p, direction, steps) {
+    const delta = direction === "forward" ? steps : -steps;
+    const moved = takeSteps(p, delta);
+    const gbGained = direction === "backward" && Math.abs(moved) === 1 ? gainGb(p, 1) : 0;
+    return { moved, gbGained };
+  }
+  function enGardeRoll(rng) {
+    const dice = [];
+    for (let i = 0; i < 4; i++) dice.push(Math.floor(rng() * 6) + 1);
+    return { dice, disarm: dice.some((d) => d === 6) };
+  }
+  function retreatEffects(dice, upgraded) {
+    const blades = dice.filter((d) => d <= 3).length;
+    const nonBlades = dice.length - blades;
+    return {
+      counterDamage: upgraded ? blades : Math.floor(blades / 2),
+      forcedBackSteps: nonBlades
+    };
+  }
+  function inflictDisarm(target) {
+    const before = target.tokens.disarm ?? 0;
+    target.tokens.disarm = Math.min(1, before + 1);
+    return target.tokens.disarm - before;
+  }
+
   // src/sim/turn.ts
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
   }
   function defenseTaxFor(opponent) {
+    if (opponent.heroId === "du") {
+      const counter = opponent.upgradesInPlay.includes("retreat-ii") ? 2 : 0.75;
+      const pos = footworkPos(opponent);
+      const posGain = opponent.footworkBonusUsedThisTurn ? 0 : pos <= 0 ? 3 : pos === 1 ? 1 : 0.5;
+      return counter + posGain;
+    }
     if (opponent.heroId === "py") {
       return opponent.upgradesInPlay.includes("molten-armor-iii") ? 2.5 + 5 / 6 : 2.5;
     }
@@ -4262,6 +4808,18 @@ var Game = (() => {
     };
   }
   function oracleStateFor(player, opponent) {
+    if (player.heroId === "du") {
+      return {
+        footwork: footworkPos(player),
+        guardBreak: player.tokens.guardBreak ?? 0,
+        oppDisarmed: (opponent.tokens.disarm ?? 0) > 0,
+        bonusAvailable: player.footworkBonusUsedThisTurn !== true,
+        upgradeIds: player.upgradesInPlay,
+        defenseTax: defenseTaxFor(opponent),
+        wildcards: wildcardFlagsFor(player),
+        quickFootwork: player.hand.includes("quick-footwork") && player.cp >= 1
+      };
+    }
     if (player.heroId === "py") {
       return {
         fireMastery: player.tokens.fireMastery ?? 0,
@@ -4386,6 +4944,44 @@ var Game = (() => {
     self.swingEscapeArmed = false;
     self.smInvisDefendArmed = false;
     self.smInvisRerollArmed = false;
+    state.players[0].footworkBonusUsedThisTurn = false;
+    state.players[1].footworkBonusUsedThisTurn = false;
+    if ((self.tokens.disarm ?? 0) > 0) {
+      self.tokens.disarm = 0;
+      const heroTD = heroTemplateFor(self.heroId);
+      const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice());
+      const pick = self.hand.length === 0 ? void 0 : chosen && self.hand.includes(chosen) ? chosen : self.hand.slice().sort((x, y) => (cardById(heroTD, x)?.cpCost ?? 0) - (cardById(heroTD, y)?.cpCost ?? 0))[0];
+      if (pick !== void 0) {
+        self.hand.splice(self.hand.indexOf(pick), 1);
+        self.discard.push(pick);
+        log(state, playerIdx, "upkeep", `Disarm: discarded ${pick}, token removed`);
+      } else {
+        self.skipIncomeThisTurn = true;
+        log(state, playerIdx, "upkeep", "Disarm: no card to discard \u2014 Income Phase will be skipped, token removed");
+      }
+    }
+    if (self.heroId === "du") {
+      const legal = repositionLegalDirections(self);
+      let dir = "forward";
+      let steps = 1;
+      const pref = self.humanControlled ? self.duRepositionDir : void 0;
+      if (pref) {
+        dir = pref.startsWith("forward") ? "forward" : "backward";
+        steps = pref === "forward2" || pref === "backward2" ? 2 : 1;
+      } else if ((self.tokens.guardBreak ?? 0) < GB_CAP && legal.includes("backward")) {
+        dir = "backward";
+        steps = 1;
+      } else if (legal.includes("forward")) {
+        dir = "forward";
+        steps = Math.min(2, FOOTWORK_MAX - footworkPos(self));
+      } else {
+        dir = "backward";
+        steps = 1;
+      }
+      if (!legal.includes(dir)) dir = legal[0];
+      const r = applyReposition(self, dir, steps);
+      log(state, playerIdx, "upkeep", `Reposition: ${Math.abs(r.moved)} step(s) ${dir} (position ${footworkPos(self)})${r.gbGained > 0 ? ", +1 Guard Break" : ""}`);
+    }
     if ((self.tokens.burn ?? 0) > 0) {
       self.hp -= BURN_UPKEEP_DMG;
       log(state, playerIdx, "upkeep", `Burn: received ${BURN_UPKEEP_DMG} dmg (persistent)`);
@@ -4463,6 +5059,11 @@ var Game = (() => {
       return;
     }
     const self = state.players[playerIdx];
+    if (self.skipIncomeThisTurn) {
+      self.skipIncomeThisTurn = false;
+      log(state, playerIdx, "income", "Income Phase skipped (Disarm)");
+      return;
+    }
     grantCp(self, CP_INCOME_PER_TURN);
     drawCards(self, 1, rng);
     log(state, playerIdx, "income", `+${CP_INCOME_PER_TURN} CP, drew 1 card (hand=${self.hand.length})`);
@@ -4786,6 +5387,39 @@ var Game = (() => {
       log(state, playerIdx, phase, "Cha-Ching!: +2 CP");
       return;
     }
+    if (card.id === "sashay") {
+      const back = self.humanControlled ? self.duStepsMode === "backward" : self.hp <= 35;
+      if (back) {
+        const moved = takeSteps(self, -1);
+        self.hp = Math.min(self.hp + 2, 60);
+        log(state, playerIdx, phase, `Sashay: ${Math.abs(moved)} step backward (position ${footworkPos(self)}), healed 2`);
+      } else {
+        const moved = takeSteps(self, 1);
+        opp.hp -= 2;
+        log(state, playerIdx, phase, `Sashay: ${moved} step forward (position ${footworkPos(self)}), 2 dmg`);
+        checkGameOver(state);
+      }
+      return;
+    }
+    if (card.id === "courageous-advance") {
+      const moved = takeSteps(self, 2);
+      log(state, playerIdx, phase, `Courageous Advance!: ${moved} step(s) forward (position ${footworkPos(self)})`);
+      return;
+    }
+    if (card.id === "all-in-the-wrists") {
+      const g = inflictDisarm(opp);
+      log(state, playerIdx, phase, `All in the Wrists: ${g > 0 ? "Disarm inflicted" : "opponent already Disarmed (stack 1)"}`);
+      return;
+    }
+    if (card.id === "confident-footing") {
+      if (footworkPos(self) === 0) {
+        const g = gainGb(self, 2);
+        log(state, playerIdx, phase, `Confident Footing: +${g} Guard Break (Neutral)`);
+      } else {
+        log(state, playerIdx, phase, "Confident Footing: no effect (not on Neutral)");
+      }
+      return;
+    }
     if (card.id === "warm-up") {
       const g1 = gainFm(self, 1);
       const room = fmCap(self) - (self.tokens.fireMastery ?? 0);
@@ -4875,7 +5509,7 @@ var Game = (() => {
     if (finalDice.join(",") !== dice.join(",")) log(state, rollerIdx, "roll", `Dice after alteration: ${finalDice.join(",")}`);
     return finalDice;
   }
-  var ROLL_MANIPULATION_CARD_IDS = ["one-more-time", "try-try-again", "six-it", "so-wild", "twice-as-wild", "samesies", "he-is-worthy"];
+  var ROLL_MANIPULATION_CARD_IDS = ["one-more-time", "try-try-again", "six-it", "so-wild", "twice-as-wild", "samesies", "he-is-worthy", "quick-footwork"];
   function eligibleRollManipulationCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ROLL_MANIPULATION_CARD_IDS.filter((id) => self.hand.includes(id) && self.cp >= (cardById(hero, id)?.cpCost ?? 0));
@@ -4940,7 +5574,7 @@ var Game = (() => {
     if (id === "radioactive-blood") return (self.tokens.combo ?? 0) < 1;
     return true;
   }
-  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods", "web-shooters", "booyah", "milkshake-me", "cha-ching", "warm-up", "fire-up"];
+  var MAIN_PHASE_ACTION_IDS = ["dancing-pumpkin", "vegas-baby", "undercover-mission", "cunning", "nevermore-attack", "midnight-dreary", "hibernate", "ready-to-pounce", "natures-rest", "natures-cycle", "fey-lure", "strength-of-the-woods", "web-shooters", "booyah", "milkshake-me", "cha-ching", "warm-up", "fire-up", "sashay", "courageous-advance", "all-in-the-wrists", "confident-footing"];
   function anyoneHasHead(state) {
     return state.players[0].tokens.head > 0 || state.players[1].tokens.head > 0;
   }
@@ -5063,6 +5697,11 @@ var Game = (() => {
           if (canAfford("he-is-worthy")) {
             pr.dice.forEach((v, i) => {
               for (const val of [4, 5]) if (v !== val) options.push({ kind: "setDie", cardId: "he-is-worthy", sets: [{ dieIndex: i, value: val }] });
+            });
+          }
+          if (canAfford("quick-footwork")) {
+            pr.dice.forEach((v, i) => {
+              for (const val of [4, 5]) if (v !== val) options.push({ kind: "setDie", cardId: "quick-footwork", sets: [{ dieIndex: i, value: val }] });
             });
           }
           if (canAfford("six-it")) {
@@ -5309,6 +5948,8 @@ var Game = (() => {
           log(state, defenderIdx, "defense", "Swing Escape!: Spider-Sense succeeds on Web instead of Spider");
         }
       }
+    } else if (defender.heroId === "du") {
+      defenseDice = rollDice(4, rng);
     } else if (defender.heroId === "nx") {
       defenseDice = [rollDie(rng)];
     } else if (defender.heroId === "fm") {
@@ -5386,12 +6027,36 @@ var Game = (() => {
         defender.spiderSensePrevented = success && damagePrevented > 0;
         log(state, defenderIdx, "defense", `Spider-Sense${mode === "sense-swing" ? " (Swing Escape)" : ""}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : "prevented 0 (no success face)"}, 0 dmg back`);
       }
+    } else if (defender.heroId === "du") {
+      const up = defender.upgradesInPlay.includes("retreat-ii");
+      const eff = retreatEffects(finalDefenseDice, up);
+      if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage);
+      const moved = eff.forcedBackSteps > 0 ? takeSteps(defender, -eff.forcedBackSteps) : 0;
+      let bonusMsg = "";
+      if (defender.footworkBonusUsedThisTurn !== true) {
+        const b = defensiveBonus(footworkPos(defender));
+        if (b.prevent > 0) {
+          damagePrevented = b.prevent;
+          defender.footworkBonusUsedThisTurn = true;
+          bonusMsg = `, Defensive Bonus: prevented ${b.prevent}`;
+        } else if (b.draw > 0) {
+          drawCards(defender, b.draw, rng);
+          defender.footworkBonusUsedThisTurn = true;
+          bonusMsg = `, Defensive Bonus: drew ${b.draw}`;
+        }
+      }
+      log(state, defenderIdx, "defense", `Retreat${up ? " II" : ""}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${footworkPos(defender)})${bonusMsg}`);
     } else if (defender.heroId === "nx") {
       damagePrevented = dragonScalesPrevent(finalDefenseDice[0]);
       log(state, defenderIdx, "defense", `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`);
     } else if (defender.heroId === "fm") {
       const face = finalDefenseDice[0];
-      const out = masterworkOutcome(face, defender, incomingDamage);
+      const out = masterworkOutcome(
+        face,
+        defender,
+        incomingDamage,
+        defender.humanControlled ? defender.fmForgePref : void 0
+      );
       if (out.mines) {
         const seen = minePeek(defender);
         const r = mine(defender);
@@ -5443,13 +6108,14 @@ var Game = (() => {
     );
     finalizePendingAttackDamage(state);
   }
-  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil", "shrug-off", "dont-poke-the-bear", "indomitable-will", "invulnerability", "nice-try", "invisible-punch"];
+  var DEFENSIVE_CARD_IDS = ["not-this-time", "spirited-reprisal", "recoil", "shrug-off", "dont-poke-the-bear", "indomitable-will", "invulnerability", "nice-try", "invisible-punch", "i-hate-waiting"];
   function eligibleDefensiveCardIds(defender, eludeEligible) {
     const hero = heroTemplateFor(defender.heroId);
     const ids = DEFENSIVE_CARD_IDS.filter((id) => {
       if (!defender.hand.includes(id)) return false;
       if (id === "nice-try") return (defender.tokens.invisibility ?? 0) > 0;
       if (id === "invisible-punch") return defender.spiderSensePrevented === true;
+      if (id === "i-hate-waiting") return defender.heroId === "du" && (defender.footwork ?? 0) > -2;
       return true;
     });
     if (eludeEligible && defender.hand.includes("elude")) ids.push("elude");
@@ -5467,6 +6133,26 @@ var Game = (() => {
       const prevented = Math.min(remaining, 6);
       log(state, defenderIdx, "defense", `Not This Time!: prevented ${prevented} dmg`);
       return remaining - prevented;
+    }
+    if (cardId === "i-hate-waiting") {
+      const moved = takeSteps(defender, -2);
+      let msg = `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${footworkPos(defender)})`;
+      if (defender.footworkBonusUsedThisTurn !== true) {
+        const b = defensiveBonus(footworkPos(defender));
+        if (b.prevent > 0) {
+          defender.footworkBonusUsedThisTurn = true;
+          const prevented = Math.min(remaining, b.prevent);
+          log(state, defenderIdx, "defense", `${msg}, Defensive Bonus: prevented ${prevented}`);
+          return remaining - prevented;
+        }
+        if (b.draw > 0) {
+          defender.footworkBonusUsedThisTurn = true;
+          drawCards(defender, b.draw, rng);
+          msg += `, Defensive Bonus: drew ${b.draw}`;
+        }
+      }
+      log(state, defenderIdx, "defense", msg);
+      return remaining;
     }
     if (cardId === "invulnerability") {
       if ((defender.tokens.electrokinesis ?? 0) < 2) {
@@ -5548,7 +6234,7 @@ var Game = (() => {
     }
     return remaining;
   }
-  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite", "ambush", "huzzah", "red-hot"];
+  var ATTACK_MODIFIER_CARD_IDS = ["unescapable", "cranial-assist", "subversion", "thundering-hooves", "stone-beak", "talon-strike", "lethal-swipe", "surprise-bite", "ambush", "huzzah", "red-hot", "pick-it-up", "burst-forward", "blade-barrage"];
   function eligibleAttackModifierCardIds(self) {
     const hero = heroTemplateFor(self.heroId);
     return ATTACK_MODIFIER_CARD_IDS.filter((id) => {
@@ -5565,6 +6251,11 @@ var Game = (() => {
         return self.heroId === "py" && (self.tokens.fireMastery ?? 0) > 0;
       }
       if (id === "huzzah") return self.heroId === "py";
+      if (id === "pick-it-up" || id === "burst-forward" || id === "blade-barrage") {
+        if (self.heroId !== "du") return false;
+        if (id === "burst-forward") return footworkPos(self) < FOOTWORK_MAX;
+        return true;
+      }
       if (id === "stone-beak" || id === "talon-strike") {
         if (self.heroId !== "rv") return false;
         if (id === "stone-beak" && (self.tokens.nevermore ?? 0) > 0) return false;
@@ -5646,6 +6337,39 @@ var Game = (() => {
       if (eff.fm > 0) gainFm(self, eff.fm);
       log(state, playerIdx, "resolveAttack", `Huzzah!: rolled ${hz} -> ${eff.addDmg > 0 ? `+${eff.addDmg} dmg` : eff.burn ? "Burn inflicted" : eff.fm > 0 ? "+2 Fire Mastery" : "Knockdown inflicted"}`);
       return { ...current, dmg: current.dmg + eff.addDmg };
+    }
+    if (cardId === "pick-it-up") {
+      if ((opp.tokens.disarm ?? 0) < 1) {
+        log(state, playerIdx, "resolveAttack", "Pick It Up: no effect (opponent not Disarmed)");
+        return current;
+      }
+      opp.tokens.disarm = 0;
+      log(state, playerIdx, "resolveAttack", "Pick It Up: Disarm removed, +3 dmg");
+      return { ...current, dmg: current.dmg + 3 };
+    }
+    if (cardId === "burst-forward") {
+      const self2 = state.players[playerIdx];
+      const moved = takeSteps(self2, 1);
+      log(state, playerIdx, "resolveAttack", `Burst Forward: ${moved} step forward (position ${footworkPos(self2)})`);
+      return current;
+    }
+    if (cardId === "blade-barrage") {
+      if (!rng) {
+        return { ...current, dmg: current.dmg + 2 };
+      }
+      const bbRoll = rollDice(5, rng);
+      const blades = bbRoll.filter((d) => d <= 3).length;
+      const boots = bbRoll.filter((d) => d >= 4 && d <= 5).length;
+      let stepMsg = "";
+      if (boots >= 2) {
+        const mode = self.humanControlled ? self.duStepsMode ?? "forward" : "forward";
+        if (mode !== "none") {
+          const moved = takeSteps(self, mode === "backward" ? -1 : 1);
+          if (moved !== 0) stepMsg = `, 1 step ${moved > 0 ? "forward" : "backward"} (position ${footworkPos(self)})`;
+        }
+      }
+      log(state, playerIdx, "resolveAttack", `Blade Barrage: rolled [${bbRoll.join(",")}], +${blades} dmg${stepMsg}`);
+      return { ...current, dmg: current.dmg + blades };
     }
     if (cardId === "cranial-assist") {
       const oppHasHead = hasHead(opp);
@@ -5942,6 +6666,7 @@ var Game = (() => {
     else if (self.heroId === "th") applyTHAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "sm") applySMAbility(state, playerIdx, chosenName, dice, rng, policies);
     else if (self.heroId === "py") applyPYAbility(state, playerIdx, chosenName, dice, rng, policies);
+    else if (self.heroId === "du") applyDUAbility(state, playerIdx, chosenName, dice, rng, policies);
     else applyBWAbility(state, playerIdx, chosenName, rng, policies);
   }
   function resolveNaraxusAbility(state, bossIdx, dice, rng, policies) {
@@ -6145,15 +6870,17 @@ var Game = (() => {
     const opp = state.players[1 - playerIdx];
     const policy = policies[playerIdx];
     const has = (id) => self.upgradesInPlay.includes(id);
-    const willDamage = !name.startsWith("Wild Realignment") && !name.startsWith("Rainfall") && name !== "Whiff";
-    if (!self.humanControlled && willDamage && formOf(self) !== "cat" && (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0)) {
-      spendShapeShift(self, "cat");
-      log(state, playerIdx, "resolveAttack", "Shape Shift -> Cat Form (attack)");
-    }
     const attack = (dmg, defendable, ultimate = false) => {
       let result = { dmg, undefendable: !defendable || ultimate };
       const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
       for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (result.dmg > 0 && formOf(self) !== "cat" && (self.tokens.shapeShift ?? 0) > 0) {
+        const wants = self.humanControlled ? self.drCatOnAttack === true : (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0);
+        if (wants) {
+          spendShapeShift(self, "cat");
+          log(state, playerIdx, "resolveAttack", "Shape Shift -> Cat Form (attack)");
+        }
+      }
       if (formOf(self) === "cat" && result.dmg > 0) {
         result = { ...result, dmg: result.dmg + 2 };
         opp.tokens.wound = Math.min(2, (opp.tokens.wound ?? 0) + 1);
@@ -6408,6 +7135,121 @@ var Game = (() => {
       return;
     }
     log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Thor ability matched (${name})`);
+  }
+  function applyDUAbility(state, playerIdx, name, dice, rng, policies) {
+    const self = state.players[playerIdx];
+    const oppIdx = 1 - playerIdx;
+    const opp = state.players[oppIdx];
+    const policy = policies[playerIdx];
+    const has = (id) => self.upgradesInPlay.includes(id);
+    const takeFreeSteps = (upTo, label) => {
+      if (upTo <= 0) return;
+      const mode = self.humanControlled ? self.duStepsMode ?? "forward" : "forward";
+      if (mode === "none") return;
+      const moved = takeSteps(self, (mode === "backward" ? -1 : 1) * upTo);
+      if (moved !== 0) log(state, playerIdx, "resolveAttack", `${label}: ${Math.abs(moved)} step(s) ${moved > 0 ? "forward" : "backward"} (position ${footworkPos(self)})`);
+    };
+    const gainGb2 = (n, label) => {
+      const g = gainGb(self, n);
+      log(state, playerIdx, "resolveAttack", `${label}: +${g} Guard Break`);
+    };
+    const inflictDisarm2 = (label) => {
+      const g = inflictDisarm(opp);
+      log(state, playerIdx, "resolveAttack", `${label}: ${g > 0 ? "Disarm inflicted" : "opponent already Disarmed (stack 1)"}`);
+    };
+    const attack = (dmg, defendable, ultimate = false) => {
+      let result = { dmg, undefendable: !defendable || ultimate };
+      const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? [];
+      for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng);
+      if (result.dmg <= 0) {
+        log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
+        return;
+      }
+      if (self.footworkBonusUsedThisTurn !== true) {
+        const ob = offensiveBonusDmg2(footworkPos(self));
+        if (ob > 0) {
+          self.footworkBonusUsedThisTurn = true;
+          result = { ...result, dmg: result.dmg + ob };
+          log(state, playerIdx, "resolveAttack", `Offensive Bonus: +${ob} dmg (Footwork position ${footworkPos(self)})`);
+        }
+      }
+      const gbWanted = policy.chooseGuardBreakSpend ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg) : result.dmg >= 5;
+      if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
+        const gb = tryGuardBreak(self, rng);
+        log(state, playerIdx, "resolveAttack", `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(",")}] \u2014 ${gb.success ? "attack is UNDEFENDABLE" : "failed"}`);
+        if (gb.success) result = { ...result, undefendable: true };
+      }
+      log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
+      if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
+      else resolveDefense(state, playerIdx, result.dmg, rng, policies);
+    };
+    if (name.startsWith("Blade Flurry")) {
+      const a = dice.filter((d) => d <= 3).length;
+      const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0;
+      const table = has("blade-flurry-ii") ? [5, 6, 7] : [4, 5, 6];
+      const kindNeed = has("blade-flurry-ii") ? 3 : 4;
+      const counts = /* @__PURE__ */ new Map();
+      for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1);
+      if (Math.max(...counts.values()) >= kindNeed) takeFreeSteps(1, `Blade Flurry (${kindNeed}-of-a-kind)`);
+      attack(table[tier], true);
+      return;
+    }
+    if (name.startsWith("Fancy Feet")) {
+      gainGb2(1, "Fancy Feet");
+      takeFreeSteps(3, "Fancy Feet");
+      return;
+    }
+    if (name.startsWith("Balestra")) {
+      takeFreeSteps(2, "Balestra");
+      attack(has("balestra-ii") ? 8 : 6, true);
+      return;
+    }
+    if (name.startsWith("Feint Attack")) {
+      const up = has("feint-attack-ii");
+      gainGb2(up ? 2 : 1, "Feint Attack");
+      takeFreeSteps(1, "Feint Attack");
+      attack(up ? 3 : 2, false);
+      return;
+    }
+    if (name.startsWith("En Garde")) {
+      const r = enGardeRoll(rng);
+      log(state, playerIdx, "resolveAttack", `En Garde: rolled [${r.dice.join(",")}]${r.disarm ? " \u2014 Pierce!" : ""}`);
+      if (r.disarm) inflictDisarm2("En Garde");
+      attack(8, true);
+      return;
+    }
+    if (name.startsWith("Strike (5-straight)")) {
+      takeFreeSteps(1, "Strike");
+      attack(10, true);
+      return;
+    }
+    if (name.startsWith("Strike")) {
+      attack(7, true);
+      return;
+    }
+    if (name.startsWith("Bladewind")) {
+      queueDamage(state, oppIdx, 3);
+      flushDamage(state);
+      log(state, playerIdx, "resolveAttack", "Bladewind: 3 collateral dmg");
+      checkGameOver(state);
+      return;
+    }
+    if (name.startsWith("Bladestorm")) {
+      const up = has("bladestorm-ii");
+      gainGb2(up ? 2 : 1, "Bladestorm");
+      inflictDisarm2("Bladestorm");
+      takeFreeSteps(2, "Bladestorm");
+      attack(up ? 9 : 8, true);
+      return;
+    }
+    if (name.startsWith("Master of the Blade!")) {
+      gainGb2(2, "Master of the Blade!");
+      inflictDisarm2("Master of the Blade!");
+      takeFreeSteps(4, "Master of the Blade!");
+      attack(11, false, true);
+      return;
+    }
+    log(state, playerIdx, "resolveAttack", `Whiff \u2014 no Duelist ability matched (${name})`);
   }
   function applySMAbility(state, playerIdx, name, dice, rng, policies) {
     const self = state.players[playerIdx];
@@ -6729,7 +7571,7 @@ var Game = (() => {
       deck = shuffle(buildFullDeck(heroId), rng);
       hand = deck.splice(0, STARTING_HAND_SIZE);
     }
-    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : heroId === "sm" ? createInitialSMTokens() : heroId === "py" ? createInitialPYTokens() : createInitialBWTokens();
+    const tokens = heroId === "hh" ? createInitialHHTokens(true) : heroId === "fm" ? createInitialFMTokens() : heroId === "nx" ? createInitialNXTokens() : heroId === "rv" ? createInitialRVTokens() : heroId === "dr" ? createInitialDRTokens() : heroId === "th" ? createInitialTHTokens() : heroId === "sm" ? createInitialSMTokens() : heroId === "py" ? createInitialPYTokens() : heroId === "du" ? createInitialDUTokens() : createInitialBWTokens();
     if (heroId === "hh" && !isFirstPlayer) {
       tokens.dreadful += 1;
     }
@@ -7016,7 +7858,7 @@ var Game = (() => {
   function humanKeepAdvice(g, dice, rollsRemaining, useWildcards = true) {
     const self = g.state.players[g.humanIdx];
     const opp = g.state.players[g.aiIdx];
-    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : self.heroId === "sm" ? smConfig : self.heroId === "py" ? pyConfig : bwConfig;
+    const cfg = self.heroId === "hh" ? hhConfig : self.heroId === "fm" ? fmConfig : self.heroId === "rv" ? rvConfig : self.heroId === "dr" ? drConfig : self.heroId === "th" ? thConfig : self.heroId === "sm" ? smConfig : self.heroId === "py" ? pyConfig : self.heroId === "du" ? duConfig : bwConfig;
     const state = oracleStateFor(self, opp);
     state.wildcards = useWildcards ? {
       sixIt: self.hand.includes("six-it") && self.cp >= 1,
@@ -7443,7 +8285,7 @@ var Game = (() => {
           if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] });
         }
       }
-    } else if (cardId === "he-is-worthy") {
+    } else if (cardId === "he-is-worthy" || cardId === "quick-footwork") {
       for (let i = 0; i < n; i++) {
         for (const v of [4, 5]) if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] });
       }

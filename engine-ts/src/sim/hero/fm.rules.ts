@@ -140,10 +140,15 @@ export function rollMasterworkDie(rng: RNG): number {
 }
 export function masterworkOutcome(
   face: number, self: PlayerState, incomingDamage: number,
+  // Choix pré-armé du joueur humain (user-caught 2026-07-07 : le 4-5 doublait le bouclier
+  // automatiquement alors qu'il voulait son casque) — l'heuristique ne sert que sans préférence.
+  forgePref?: 'helmet' | 'shield',
 ): { mines: boolean; doubling: { helmet?: boolean; shield?: boolean } } {
   if (face <= 3) return { mines: true, doubling: {} }
   const hasHelm = self.armor.helmet > 0, hasShield = self.armor.shield > 0
   if (face >= 6) return { mines: false, doubling: { helmet: hasHelm, shield: hasShield } }
+  if (forgePref === 'helmet' && hasHelm) return { mines: false, doubling: { helmet: true } }
+  if (forgePref === 'shield' && hasShield) return { mines: false, doubling: { shield: true } }
   const base = armorEffects(self, 'normal')
   const helmGain = hasHelm ? HELMET_COUNTER[self.armor.helmet] : 0
   const shieldGain = hasShield

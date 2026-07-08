@@ -11,6 +11,7 @@ import type { DRState } from '../characters/druid/config.js'
 import type { THState } from '../characters/thor/config.js'
 import type { SMState } from '../characters/spiderman/config.js'
 import type { PYState } from '../characters/pyromancer/config.js'
+import type { DUState } from '../characters/duelist/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -28,6 +29,7 @@ import * as dr from './hero/dr.rules.js'
 import * as th from './hero/th.rules.js'
 import * as sm from './hero/sm.rules.js'
 import * as py from './hero/py.rules.js'
+import * as du from './hero/du.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -42,6 +44,15 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 // verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
 // indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
 export function defenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'du') {
+    // Retreat 4 dés : contre E[floor(Blades/2)] = 0.75 (II : E[Blades] = 2). Les Steps forcés
+    // (E[non-Blades] = 2) poussent vers les positions défensives : depuis <= 0 il finit
+    // typiquement sur « prévient 3 » ; depuis +1 sur « pige 1 » (~1). Un Bonus/tour.
+    const counter = opponent.upgradesInPlay.includes('retreat-ii') ? 2.0 : 0.75
+    const pos = du.footworkPos(opponent)
+    const posGain = opponent.footworkBonusUsedThisTurn ? 0 : pos <= 0 ? 3 : pos === 1 ? 1 : 0.5
+    return counter + posGain
+  }
   if (opponent.heroId === 'py') {
     // Molten Armor : aucune prévention, contre 5 dés x P(Flame)=1/2 = 2.5 (III : +5/6 Meteor)
     return opponent.upgradesInPlay.includes('molten-armor-iii') ? 2.5 + 5 / 6 : 2.5
@@ -99,7 +110,18 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState {
+  if (player.heroId === 'du') {
+    return {
+      footwork: du.footworkPos(player),
+      guardBreak: player.tokens.guardBreak ?? 0,
+      oppDisarmed: (opponent.tokens.disarm ?? 0) > 0,
+      bonusAvailable: player.footworkBonusUsedThisTurn !== true,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+      quickFootwork: player.hand.includes('quick-footwork') && player.cp >= 1,
+    }
+  }
   if (player.heroId === 'py') {
     return {
       fireMastery: player.tokens.fireMastery ?? 0,
@@ -223,6 +245,54 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   self.swingEscapeArmed = false
   self.smInvisDefendArmed = false
   self.smInvisRerollArmed = false
+  // Footwork (du) : « one Bonus per turn » — remis à zéro pour les DEUX joueurs à chaque
+  // upkeep, car le bonus DÉFENSIF du Duelist se consomme pendant le tour de l'adversaire.
+  state.players[0].footworkBonusUsedThisTurn = false
+  state.players[1].footworkBonusUsedThisTurn = false
+
+  // Disarm (du, jeton vérifié) : le porteur peut défausser 1 carte, sinon il saute son
+  // Income Phase. IA/défaut : défausser la moins chère si la main le permet (l'income vaut
+  // 1 CP + 1 pioche > 1 carte faible) ; main vide = skip forcé.
+  if ((self.tokens.disarm ?? 0) > 0) {
+    self.tokens.disarm = 0
+    const heroTD = heroTemplateFor(self.heroId)
+    const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice())
+    const pick = self.hand.length === 0 ? undefined
+      : (chosen && self.hand.includes(chosen)) ? chosen
+      : self.hand.slice().sort((x, y) => (cardById(heroTD, x)?.cpCost ?? 0) - (cardById(heroTD, y)?.cpCost ?? 0))[0]
+    if (pick !== undefined) {
+      self.hand.splice(self.hand.indexOf(pick), 1)
+      self.discard.push(pick)
+      log(state, playerIdx, 'upkeep', `Disarm: discarded ${pick}, token removed`)
+    } else {
+      self.skipIncomeThisTurn = true
+      log(state, playerIdx, 'upkeep', 'Disarm: no card to discard — Income Phase will be skipped, token removed')
+    }
+  }
+
+  // Reposition (du, passif OBLIGATOIRE) : 1 ou 2 Steps dans une direction choisie ; recul
+  // d'EXACTEMENT 1 => +1 Guard Break. Humain : préférence pré-armée (duRepositionDir) ;
+  // IA : recul de 1 tant que le GB n'est pas au cap (jeton + position défensive), sinon
+  // avance vers le haut de la piste (le bonus offensif paie sur l'attaque du tour).
+  if (self.heroId === 'du') {
+    const legal = du.repositionLegalDirections(self)
+    let dir: 'forward' | 'backward' = 'forward'
+    let steps: 1 | 2 = 1
+    const pref = self.humanControlled ? self.duRepositionDir : undefined
+    if (pref) {
+      dir = pref.startsWith('forward') ? 'forward' : 'backward'
+      steps = pref === 'forward2' || pref === 'backward2' ? 2 : 1
+    } else if ((self.tokens.guardBreak ?? 0) < th.GB_CAP && legal.includes('backward')) {
+      dir = 'backward'; steps = 1
+    } else if (legal.includes('forward')) {
+      dir = 'forward'; steps = Math.min(2, du.FOOTWORK_MAX - du.footworkPos(self)) as 1 | 2
+    } else {
+      dir = 'backward'; steps = 1
+    }
+    if (!legal.includes(dir)) dir = legal[0] // au bout de la piste : direction forcée
+    const r = du.applyReposition(self, dir, steps)
+    log(state, playerIdx, 'upkeep', `Reposition: ${Math.abs(r.moved)} step(s) ${dir} (position ${du.footworkPos(self)})${r.gbGained > 0 ? ', +1 Guard Break' : ''}`)
+  }
 
   // Burn (Pyromancer, jeton vérifié) : 2 dmg à l'upkeep du porteur, PERSISTANT (ne se
   // retire pas). Fire Mastery « cool off » : le porteur retire 1 jeton (obligatoire).
@@ -349,6 +419,12 @@ export function playIncomePhase(state: GameState, playerIdx: 0 | 1, rng: RNG): v
     return
   }
   const self = state.players[playerIdx]
+  // Disarm non payé à l'upkeep (du) : l'Income Phase est sautée entièrement.
+  if (self.skipIncomeThisTurn) {
+    self.skipIncomeThisTurn = false
+    log(state, playerIdx, 'income', 'Income Phase skipped (Disarm)')
+    return
+  }
   grantCp(self, CP_INCOME_PER_TURN)
   drawCards(self, 1, rng)
   log(state, playerIdx, 'income', `+${CP_INCOME_PER_TURN} CP, drew 1 card (hand=${self.hand.length})`)
@@ -671,6 +747,41 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     log(state, playerIdx, phase, 'Cha-Ching!: +2 CP')
     return
   }
+  if (card.id === 'sashay') {
+    // « 1 Step forward + 2 dmg OU 1 Step backward + Heal 2 » — humain : duStepsMode pré-armé ;
+    // IA : soin quand la vie est basse, sinon pression.
+    const back = self.humanControlled ? self.duStepsMode === 'backward' : self.hp <= 35
+    if (back) {
+      const moved = du.takeSteps(self, -1)
+      self.hp = Math.min(self.hp + 2, 60)
+      log(state, playerIdx, phase, `Sashay: ${Math.abs(moved)} step backward (position ${du.footworkPos(self)}), healed 2`)
+    } else {
+      const moved = du.takeSteps(self, 1)
+      opp.hp -= 2
+      log(state, playerIdx, phase, `Sashay: ${moved} step forward (position ${du.footworkPos(self)}), 2 dmg`)
+      checkGameOver(state)
+    }
+    return
+  }
+  if (card.id === 'courageous-advance') {
+    const moved = du.takeSteps(self, 2)
+    log(state, playerIdx, phase, `Courageous Advance!: ${moved} step(s) forward (position ${du.footworkPos(self)})`)
+    return
+  }
+  if (card.id === 'all-in-the-wrists') {
+    const g = du.inflictDisarm(opp)
+    log(state, playerIdx, phase, `All in the Wrists: ${g > 0 ? 'Disarm inflicted' : 'opponent already Disarmed (stack 1)'}`)
+    return
+  }
+  if (card.id === 'confident-footing') {
+    if (du.footworkPos(self) === 0) {
+      const g = th.gainGb(self, 2)
+      log(state, playerIdx, phase, `Confident Footing: +${g} Guard Break (Neutral)`)
+    } else {
+      log(state, playerIdx, phase, 'Confident Footing: no effect (not on Neutral)')
+    }
+    return
+  }
   if (card.id === 'warm-up') {
     // « Spend CP as desired » : humain = son choix pré-armé (warmUpCpChoice) ; IA = remplit
     // jusqu'au cap (le FM se dépense via Combustion/Red Hot, 1 CP -> 1 FM est bon taux).
@@ -781,7 +892,7 @@ export function resolveOffensiveAlterWindow(state: GameState, rollerIdx: 0 | 1, 
 // "instant" cards per isCardPlayableNow's TODO; Better D! needs a "Defensive Roll Phase" with
 // its own keep/reroll decision, but defense here is a single deterministic dice roll with no
 // reroll step at all — see resolveDefense/hh.resolveHallowedReckoning/bw.resolveSabotage).
-const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy']
+const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy', 'quick-footwork']
 
 function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -882,7 +993,7 @@ function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolea
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up', 'sashay', 'courageous-advance', 'all-in-the-wrists', 'confident-footing']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1048,6 +1159,11 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
         if (canAfford('he-is-worthy')) {
           pr.dice.forEach((v, i) => {
             for (const val of [4, 5]) if (v !== val) options.push({ kind: 'setDie', cardId: 'he-is-worthy', sets: [{ dieIndex: i, value: val }] })
+          })
+        }
+        if (canAfford('quick-footwork')) { // du : même effet que He Is Worthy! (1 dé -> 4 ou 5)
+          pr.dice.forEach((v, i) => {
+            for (const val of [4, 5]) if (v !== val) options.push({ kind: 'setDie', cardId: 'quick-footwork', sets: [{ dieIndex: i, value: val }] })
           })
         }
         if (canAfford('six-it')) {
@@ -1326,6 +1442,8 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
         log(state, defenderIdx, 'defense', 'Swing Escape!: Spider-Sense succeeds on Web instead of Spider')
       }
     }
+  } else if (defender.heroId === 'du') {
+    defenseDice = rollDice(4, rng) // Retreat : 4 dés
   } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
   } else if (defender.heroId === 'fm') {
@@ -1424,12 +1542,35 @@ export function finalizeDefenseRoll(
       defender.spiderSensePrevented = success && damagePrevented > 0
       log(state, defenderIdx, 'defense', `Spider-Sense${mode === 'sense-swing' ? ' (Swing Escape)' : ''}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : 'prevented 0 (no success face)'}, 0 dmg back`)
     }
+  } else if (defender.heroId === 'du') {
+    // Retreat (board vérifié) : 1 dmg par 2 Blades (II : par Blade) ; pour CHAQUE Boot/Pierce,
+    // 1 Step backward OBLIGATOIRE. La position FINALE (après ces Steps) donne le Defensive
+    // Bonus (leaflet : « resolved before determining the final dmg total ») — un Bonus/tour.
+    const up = defender.upgradesInPlay.includes('retreat-ii')
+    const eff = du.retreatEffects(finalDefenseDice, up)
+    if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage)
+    const moved = eff.forcedBackSteps > 0 ? du.takeSteps(defender, -eff.forcedBackSteps) : 0
+    let bonusMsg = ''
+    if (defender.footworkBonusUsedThisTurn !== true) {
+      const b = du.defensiveBonus(du.footworkPos(defender))
+      if (b.prevent > 0) {
+        damagePrevented = b.prevent
+        defender.footworkBonusUsedThisTurn = true
+        bonusMsg = `, Defensive Bonus: prevented ${b.prevent}`
+      } else if (b.draw > 0) {
+        drawCards(defender, b.draw, rng)
+        defender.footworkBonusUsedThisTurn = true
+        bonusMsg = `, Defensive Bonus: drew ${b.draw}`
+      }
+    }
+    log(state, defenderIdx, 'defense', `Retreat${up ? ' II' : ''}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${du.footworkPos(defender)})${bonusMsg}`)
   } else if (defender.heroId === 'nx') {
     damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
     log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
   } else if (defender.heroId === 'fm') {
     const face = finalDefenseDice[0]
-    const out = fm.masterworkOutcome(face, defender, incomingDamage)
+    const out = fm.masterworkOutcome(face, defender, incomingDamage,
+      defender.humanControlled ? defender.fmForgePref : undefined)
     if (out.mines) {
       const seen = fm.minePeek(defender) // transparence (plan #3) : les 3 cartes regardées
       const r = fm.mine(defender)
@@ -1496,7 +1637,7 @@ export function finalizeDefenseRoll(
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch', 'i-hate-waiting']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
@@ -1504,6 +1645,8 @@ function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean)
     if (!defender.hand.includes(id)) return false
     if (id === 'nice-try') return (defender.tokens.invisibility ?? 0) > 0 // défausse le jeton
     if (id === 'invisible-punch') return defender.spiderSensePrevented === true // "si tu as prévenu via Spider-Sense"
+    // du : reculer doit être possible ET utile (le Bonus défensif du tour pas encore consommé)
+    if (id === 'i-hate-waiting') return defender.heroId === 'du' && (defender.footwork ?? 0) > -2
     return true
   })
   if (eludeEligible && defender.hand.includes('elude')) ids.push('elude')
@@ -1528,6 +1671,29 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     const prevented = Math.min(remaining, 6)
     log(state, defenderIdx, 'defense', `Not This Time!: prevented ${prevented} dmg`)
     return remaining - prevented
+  }
+  if (cardId === 'i-hate-waiting') {
+    // « Take up to 2 Steps backward » APRÈS avoir été attaqué : les Steps comptent encore pour
+    // le total final (leaflet : le Bonus se résout « before determining the final dmg total »),
+    // donc atteindre une position défensive ici déclenche le Bonus si pas déjà consommé.
+    const moved = du.takeSteps(defender, -2)
+    let msg = `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${du.footworkPos(defender)})`
+    if (defender.footworkBonusUsedThisTurn !== true) {
+      const b = du.defensiveBonus(du.footworkPos(defender))
+      if (b.prevent > 0) {
+        defender.footworkBonusUsedThisTurn = true
+        const prevented = Math.min(remaining, b.prevent)
+        log(state, defenderIdx, 'defense', `${msg}, Defensive Bonus: prevented ${prevented}`)
+        return remaining - prevented
+      }
+      if (b.draw > 0) {
+        defender.footworkBonusUsedThisTurn = true
+        drawCards(defender, b.draw, rng)
+        msg += `, Defensive Bonus: drew ${b.draw}`
+      }
+    }
+    log(state, defenderIdx, 'defense', msg)
+    return remaining
   }
   if (cardId === 'invulnerability') {
     if ((defender.tokens.electrokinesis ?? 0) < 2) { log(state, defenderIdx, 'defense', 'Invulnerability!: no effect (needs 2 EK)'); return remaining }
@@ -1596,7 +1762,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot', 'pick-it-up', 'burst-forward', 'blade-barrage']
 
 function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1614,6 +1780,12 @@ function eligibleAttackModifierCardIds(self: PlayerState): string[] {
       return self.heroId === 'py' && (self.tokens.fireMastery ?? 0) > 0 // +1 dmg par FM
     }
     if (id === 'huzzah') return self.heroId === 'py'
+    if (id === 'pick-it-up' || id === 'burst-forward' || id === 'blade-barrage') {
+      if (self.heroId !== 'du') return false
+      // Burst Forward n'a de sens que si un pas en avant est possible (piste bornée).
+      if (id === 'burst-forward') return du.footworkPos(self) < du.FOOTWORK_MAX
+      return true // pick-it-up : l'état Disarm de l'adversaire est re-vérifié à la résolution
+    }
     if (id === 'stone-beak' || id === 'talon-strike') {
       if (self.heroId !== 'rv') return false
       if (id === 'stone-beak' && (self.tokens.nevermore ?? 0) > 0) return false // doit etre sur la CIBLE
@@ -1706,6 +1878,35 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
     if (eff.fm > 0) py.gainFm(self, eff.fm)
     log(state, playerIdx, 'resolveAttack', `Huzzah!: rolled ${hz} -> ${eff.addDmg > 0 ? `+${eff.addDmg} dmg` : eff.burn ? 'Burn inflicted' : eff.fm > 0 ? '+2 Fire Mastery' : 'Knockdown inflicted'}`)
     return { ...current, dmg: current.dmg + eff.addDmg }
+  }
+  if (cardId === 'pick-it-up') {
+    // « If the opponent is afflicted with Disarm, remove it and add 3 dmg » (carte vérifiée).
+    if ((opp.tokens.disarm ?? 0) < 1) { log(state, playerIdx, 'resolveAttack', 'Pick It Up: no effect (opponent not Disarmed)'); return current }
+    opp.tokens.disarm = 0
+    log(state, playerIdx, 'resolveAttack', 'Pick It Up: Disarm removed, +3 dmg')
+    return { ...current, dmg: current.dmg + 3 }
+  }
+  if (cardId === 'burst-forward') {
+    const self2 = state.players[playerIdx]
+    const moved = du.takeSteps(self2, 1)
+    log(state, playerIdx, 'resolveAttack', `Burst Forward: ${moved} step forward (position ${du.footworkPos(self2)})`)
+    return current // le Bonus offensif de la position finale est appliqué par applyDUAbility
+  }
+  if (cardId === 'blade-barrage') {
+    if (!rng) { return { ...current, dmg: current.dmg + 2 } } // scoring : E[Blades] = 2.5
+    const bbRoll = rollDice(5, rng)
+    const blades = bbRoll.filter(d => d <= 3).length
+    const boots = bbRoll.filter(d => d >= 4 && d <= 5).length
+    let stepMsg = ''
+    if (boots >= 2) {
+      const mode = self.humanControlled ? (self.duStepsMode ?? 'forward') : 'forward'
+      if (mode !== 'none') {
+        const moved = du.takeSteps(self, mode === 'backward' ? -1 : 1)
+        if (moved !== 0) stepMsg = `, 1 step ${moved > 0 ? 'forward' : 'backward'} (position ${du.footworkPos(self)})`
+      }
+    }
+    log(state, playerIdx, 'resolveAttack', `Blade Barrage: rolled [${bbRoll.join(',')}], +${blades} dmg${stepMsg}`)
+    return { ...current, dmg: current.dmg + blades }
   }
   if (cardId === 'cranial-assist') {
     // Cranial Assist! rewards attacking whoever holds the Haunted Head. The head is a bag token now,
@@ -2067,6 +2268,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'th') applyTHAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'sm') applySMAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'py') applyPYAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'du') applyDUAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -2294,18 +2496,24 @@ function applyDRAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
   const policy = policies[playerIdx]
   const has = (id: string) => self.upgradesInPlay.includes(id)
 
-  // Auto-morph IA : passer Cat avant une attaque a degats si Shape Shift dispo (garde 1 pour Bear si PV bas).
-  const willDamage = !name.startsWith('Wild Realignment') && !name.startsWith('Rainfall') && name !== 'Whiff'
-  if (!self.humanControlled && willDamage && dr.formOf(self) !== 'cat'
-      && (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0)) {
-    dr.spendShapeShift(self, 'cat')
-    log(state, playerIdx, 'resolveAttack', 'Shape Shift -> Cat Form (attack)')
-  }
-
   const attack = (dmg: number, defendable: boolean, ultimate = false) => {
     let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
     const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    // Shape Shift se dépense « at ANY time » (user-caught 2026-07-07) : les jetons gagnés
+    // PENDANT la résolution (Wrath of Nature, Forest's Call/Answer, Protect, Savage Maul)
+    // sont dépensables AVANT la conclusion de l'attaque — le morph se décide donc ICI, après
+    // les gains, pas avant la résolution. IA : heuristique (garde 1 pour Bear si PV bas) ;
+    // humain : toggle pré-armé drCatOnAttack, jamais automatique.
+    if (result.dmg > 0 && dr.formOf(self) !== 'cat' && (self.tokens.shapeShift ?? 0) > 0) {
+      const wants = self.humanControlled
+        ? self.drCatOnAttack === true
+        : (self.tokens.shapeShift ?? 0) > (self.hp <= 20 ? 1 : 0)
+      if (wants) {
+        dr.spendShapeShift(self, 'cat')
+        log(state, playerIdx, 'resolveAttack', 'Shape Shift -> Cat Form (attack)')
+      }
+    }
     // Cat Form (overlay verifie) : l attaque conclue -> +2 dmg et inflige Wound.
     if (dr.formOf(self) === 'cat' && result.dmg > 0) {
       result = { ...result, dmg: result.dmg + 2 }
@@ -2556,6 +2764,136 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     return
   }
   log(state, playerIdx, 'resolveAttack', `Whiff — no Thor ability matched (${name})`)
+}
+
+// --- Duelist ----------------------------------------------------------------------------------
+// Board vérifié (characters/Duelist/SPEC.md, scans 2026-07-07). Footwork : les Steps gratuits
+// d'une habileté se prennent AVANT les dégâts ; le Bonus offensif (Attack Modifier, un Bonus/
+// tour) est celui de la position FINALE. Guard Break = le jeton de Thor, réutilisé tel quel.
+function applyDUAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+
+  // « You may take (up to) N Step(s) » : IA = avance au maximum (le Bonus offensif de la
+  // position finale paie sur cette attaque) ; humain = direction pré-armée duStepsMode.
+  const takeFreeSteps = (upTo: number, label: string) => {
+    if (upTo <= 0) return
+    const mode = self.humanControlled ? (self.duStepsMode ?? 'forward') : 'forward'
+    if (mode === 'none') return
+    const moved = du.takeSteps(self, (mode === 'backward' ? -1 : 1) * upTo)
+    if (moved !== 0) log(state, playerIdx, 'resolveAttack', `${label}: ${Math.abs(moved)} step(s) ${moved > 0 ? 'forward' : 'backward'} (position ${du.footworkPos(self)})`)
+  }
+
+  const gainGb = (n: number, label: string) => {
+    const g = th.gainGb(self, n)
+    log(state, playerIdx, 'resolveAttack', `${label}: +${g} Guard Break`)
+  }
+  const inflictDisarm = (label: string) => {
+    const g = du.inflictDisarm(opp)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g > 0 ? 'Disarm inflicted' : 'opponent already Disarmed (stack 1)'}`)
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    // Offensive Bonus (Footwork, Attack Modifier — leaflet vérifié) : position FINALE au
+    // moment de l'attaque, un seul Bonus résolu par tour.
+    if (self.footworkBonusUsedThisTurn !== true) {
+      const ob = du.offensiveBonusDmg(du.footworkPos(self))
+      if (ob > 0) {
+        self.footworkBonusUsedThisTurn = true
+        result = { ...result, dmg: result.dmg + ob }
+        log(state, playerIdx, 'resolveAttack', `Offensive Bonus: +${ob} dmg (Footwork position ${du.footworkPos(self)})`)
+      }
+    }
+    // Guard Break : à la conclusion d'une attaque défendable. IA : heuristique >= 5 dmg ;
+    // joueur humain : choix pré-armé (hook), jamais automatique — même règle que Thor.
+    const gbWanted = policy.chooseGuardBreakSpend
+      ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg)
+      : result.dmg >= 5
+    if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
+      const gb = th.tryGuardBreak(self, rng)
+      log(state, playerIdx, 'resolveAttack', `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(',')}] — ${gb.success ? 'attack is UNDEFENDABLE' : 'failed'}`)
+      if (gb.success) result = { ...result, undefendable: true }
+    }
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Blade Flurry')) {
+    const a = dice.filter(d => d <= 3).length
+    const tier = a >= 5 ? 2 : a >= 4 ? 1 : 0
+    const table = has('blade-flurry-ii') ? [5, 6, 7] : [4, 5, 6]
+    const kindNeed = has('blade-flurry-ii') ? 3 : 4
+    const counts = new Map<number, number>()
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+    if (Math.max(...counts.values()) >= kindNeed) takeFreeSteps(1, `Blade Flurry (${kindNeed}-of-a-kind)`)
+    attack(table[tier], true)
+    return
+  }
+  if (name.startsWith('Fancy Feet')) {
+    gainGb(1, 'Fancy Feet')
+    takeFreeSteps(3, 'Fancy Feet')
+    return
+  }
+  if (name.startsWith('Balestra')) {
+    takeFreeSteps(2, 'Balestra')
+    attack(has('balestra-ii') ? 8 : 6, true)
+    return
+  }
+  if (name.startsWith('Feint Attack')) {
+    const up = has('feint-attack-ii')
+    gainGb(up ? 2 : 1, 'Feint Attack')
+    takeFreeSteps(1, 'Feint Attack')
+    attack(up ? 3 : 2, false) // dégâts indéfendables (board vérifié)
+    return
+  }
+  if (name.startsWith('En Garde')) {
+    const r = du.enGardeRoll(rng)
+    log(state, playerIdx, 'resolveAttack', `En Garde: rolled [${r.dice.join(',')}]${r.disarm ? ' — Pierce!' : ''}`)
+    if (r.disarm) inflictDisarm('En Garde')
+    attack(8, true)
+    return
+  }
+  if (name.startsWith('Strike (5-straight)')) {
+    takeFreeSteps(1, 'Strike')
+    attack(10, true)
+    return
+  }
+  if (name.startsWith('Strike')) {
+    attack(7, true)
+    return
+  }
+  if (name.startsWith('Bladewind')) {
+    // 3 collatéraux : indéfendables, non modifiables (convention existante).
+    queueDamage(state, oppIdx, 3)
+    flushDamage(state)
+    log(state, playerIdx, 'resolveAttack', 'Bladewind: 3 collateral dmg')
+    checkGameOver(state)
+    return
+  }
+  if (name.startsWith('Bladestorm')) {
+    const up = has('bladestorm-ii')
+    gainGb(up ? 2 : 1, 'Bladestorm')
+    inflictDisarm('Bladestorm')
+    takeFreeSteps(2, 'Bladestorm')
+    attack(up ? 9 : 8, true)
+    return
+  }
+  if (name.startsWith('Master of the Blade!')) {
+    gainGb(2, 'Master of the Blade!')
+    inflictDisarm('Master of the Blade!')
+    takeFreeSteps(4, 'Master of the Blade!')
+    attack(11, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Duelist ability matched (${name})`)
 }
 
 // --- Spider-Man ------------------------------------------------------------------------------
