@@ -4,11 +4,11 @@
   "diceAnatomy": "1-3 = Blade (A), 4-5 = Boot (B), 6 = Pierce (C). Vérifié leaflet (scan user 2026-07-07).",
   "startingHp": 50,
   "cpIncomePerTurn": 1,
-  "source": "Board (3 photos) + leaflet (5 captures) + 14 cartes scannés user 2026-07-07. Spec complète : characters/Duelist/SPEC.md. Rulings en attente : bonus défensif = prévention plate, bornes de piste, direction des Steps 'up to X'.",
+  "source": "Board (3 photos) + leaflet (5 captures) + 14 cartes scannés user 2026-07-07. Spec complète : characters/Duelist/SPEC.md. Rulings user : Déf. +1 = pige 1 carte, +3 = prévient 3 ; 1 Bonus/tour ; direction libre des Steps hors Reposition. Défauts (user pas sûr) : Steps hors piste perdus, Retreat bouge toujours le jeton.",
   "tokens": [
     {"id": "guardBreak", "name": "Guard Break", "startingCount": 0, "stackCap": 2, "description": "Positive Status Effect. If a player concludes their Offensive Roll Phase with an Attack, they may spend this token and roll 1 die. If the outcome is 4-5, the Attack becomes undefendable. (Identique au Guard Break de Thor.)"},
     {"id": "disarm", "name": "Disarm", "startingCount": 0, "stackCap": 1, "description": "Negative Status Effect. During their Upkeep Phase, a player afflicted with this token may choose to discard 1. If they do not (or cannot), they must skip their Income Phase instead. Then remove this token."},
-    {"id": "footwork", "name": "Footwork Track", "startingCount": 0, "stackCap": 0, "description": "Pseudo-jeton : position -2..+2 gérée dans du.rules.ts (comme le cadran Nevermore). 5 positions : +3 Offensive (+2) / +1 Offensive (+1) / NEUTRAL (0) / +1 Defensive (-1) / +3 Defensive (-2). Départ : Neutral. Take a Step = bouger d'une case up/down. En attaquant : Offensive Bonus de la position FINALE (Attack Modifier). Attaqué avec dégâts normaux : Defensive Bonus de la position FINALE. Résolus avant le total final de dmg pendant la Defensive Roll Phase. UN seul Bonus résolu par tour."}
+    {"id": "footwork", "name": "Footwork Track", "startingCount": 0, "stackCap": 0, "description": "Pseudo-jeton : position -2..+2 gérée dans du.rules.ts (comme le cadran Nevermore). 5 positions : +3 dmg Offensive (+2) / +1 dmg Offensive (+1) / NEUTRAL (0) / Defensive pige-1-carte (-1) / Defensive prévient-3-dmg (-2) — icônes vérifiées + ruling user 2026-07-07. Départ : Neutral. Take a Step = bouger d'une case up/down. En attaquant : Offensive Bonus de la position FINALE (Attack Modifier). Attaqué avec dégâts normaux : Defensive Bonus de la position FINALE. Résolus avant le total final de dmg pendant la Defensive Roll Phase. UN seul Bonus résolu par tour."}
   ],
   "flags": [],
   "abilities": [

@@ -5,6 +5,7 @@ Source : `characters/Duelist/board/*.jpg` (3), `leaflet/Screenshot_{26..30}.png`
 
 ## Footwork Track (mécanique centrale — leaflet, texte vérifié)
 5 positions (haut → bas) : **+3 Offensive / +1 Offensive / NEUTRAL / +1 Defensive / +3 Defensive**.
+Effets (icônes vérifiées + ruling user 2026-07-07) : Offensive = **+1 / +3 dmg** (Attack Modifier) ; Defensive +1 = **pige 1 carte** (icône carte) ; Defensive +3 = **prévient 3 dmg** (icône bouclier).
 Le jeton Footwork **démarre en Neutral** (Hero Setup).
 - « Take a Step » = déplacer le jeton d'une case vers l'avant (up) ou l'arrière (down).
 - **En attaquant** : gagne l'**Offensive Bonus** de la position FINALE du jeton. *Attack Modifier*.
@@ -53,14 +54,14 @@ Le jeton Footwork **démarre en Neutral** (Hero Setup).
 
 ## Notes moteur
 - Footwork = état persistant à 5 valeurs (−2..+2) → entre dans la clé du solveur ET les features RL.
-- Offensive Bonus = +1/+3 dmg (Attack Modifier) ; Defensive Bonus = prévention +1/+3 (à confirmer, Q1).
+- Offensive Bonus = +1/+3 dmg (Attack Modifier) ; Defensive Bonus : position −1 = pige 1 carte, position −2 = prévient 3 dmg (✅ ruling user + icônes).
 - Retreat déplace le jeton PENDANT la Defensive Roll Phase → la position finale (après les Steps forcés) détermine le Defensive Bonus (le leaflet dit « final position » + « resolved before determining the final dmg total »).
 - Guard Break : réutiliser tel quel le code Thor (jeton, pré-armement UI, policy hook chooseGuardBreakSpend).
 - « Up to X Steps » = optionnel, 0 à X, direction au choix par Step (à confirmer, Q3).
 
-## Rulings à confirmer par l'user (voir questions)
-1. Defensive Bonus +1/+3 = dégâts PRÉVENUS (réduction plate) ?
-2. « One Bonus per turn » vs attaques multiples (Combo sm / phase Stun py) : la 2ᵉ attaque du même tour n'a droit à aucun bonus ?
-3. « Up to 2 Steps » : chaque Step libre en direction (ex. 1 up puis 1 down) ou tous dans la même direction ?
-4. Bord de piste : Steps au-delà de +3 Off./+3 Def. sont perdus ? Reposition à un bout de piste = forcé de choisir l'autre direction ?
-5. Retreat : les Steps backward forcés s'appliquent même si le Bonus du tour est déjà consommé ? (le déplacement lui-même n'est pas un « Bonus »)
+## Rulings user (2026-07-07)
+1. ✅ Bonus : Off. +1/+3 dmg ; Déf. +1 = **pige 1 carte**, +3 = **prévient 3 dmg** (confirmé icônes leaflet).
+2. ✅ (« je crois que oui ») Un seul Bonus par tour — la 2ᵉ attaque du même tour (Combo sm / phase Stun py) n'en a pas.
+3. ~ Direction des Steps « up to X » : libre par Step (la contrainte « une seule direction » n'existe que pour le passif Reposition à l'Upkeep). À re-vérifier si un ruling officiel contredit.
+4. (défaut, user pas sûr) Bord de piste : les Steps au-delà des extrémités sont perdus ; Reposition à un bout = forcé de partir dans l'autre direction.
+5. (défaut, user pas sûr) Retreat : les Steps backward forcés bougent toujours le jeton — le déplacement n'est pas un « Bonus », seul l'EFFET de position (pige/prévention) est limité à 1/tour.
