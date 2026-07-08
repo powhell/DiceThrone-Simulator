@@ -24,7 +24,7 @@ import {
   playUpkeepPhase, playIncomePhase, playDiscardPhase, playEndOfTurn, drawCards, naraxusUpToRoll,
   playMainPhase, playOffensiveRollPhase, resolveOffensiveAlterWindow, checkGameOver,
   enumerateWindowActions, applyWindowAction, resolveAbilityPhase, playTurn, oracleStateFor,
-  applyRollManipulationCard,
+  applyRollManipulationCard, eligibleAttackModifierCardIds,
 } from './turn.js'
 import type { RollManipulationChoice } from './policy.js'
 import { createInitialGameState } from './match.js'
@@ -267,17 +267,17 @@ export function humanAttack(g: HumanGame, dice: number[], abilityName: string, g
 export function humanAttackModifierOptions(g: HumanGame, grimPursuitIncoming = false): string[] {
   const self = g.state.players[g.humanIdx]
   const hero = heroTemplateFor(self.heroId)
-  return ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves'].filter(id => {
-    if (!self.hand.includes(id)) return false
-    const card = cardById(hero, id)
-    if (!card || self.cp < (card.cpCost ?? 0)) return false
-    // 0 Grim Pursuit : Unescapable reste proposable si des GP arrivent dans la même fenêtre —
-    // via Thundering Hooves (résolu en premier) ou via l'habileté choisie elle-même.
-    if (id === 'unescapable' && self.tokens.grimPursuit < 1
-      && !grimPursuitIncoming
-      && !(self.hand.includes('thundering-hooves') && self.cp >= 2)) return false
-    return true
-  })
+  // La VRAIE liste du moteur (user-caught : l'ancienne liste codée en dur n'avait que les 4
+  // cartes hh/bw — les modificateurs d'attaque de rv/dr/sm/py/du/se n'étaient JAMAIS offerts
+  // au joueur humain). eligibleAttackModifierCardIds porte tous les gates par héros.
+  const ids = eligibleAttackModifierCardIds(self)
+  // Cas spécial conservé : Unescapable! proposable à 0 Grim Pursuit si l'habileté choisie
+  // elle-même en fournit (le moteur ne connaît que la conversion Thundering Hooves).
+  if (grimPursuitIncoming && !ids.includes('unescapable') && self.hand.includes('unescapable')) {
+    const card = cardById(hero, 'unescapable')
+    if (card && self.cp >= (card.cpCost ?? 0)) ids.push('unescapable')
+  }
+  return ids
 }
 
 // Roll-manipulation card play for the HUMAN's manual roll (Six-It!/Samesies!/Try Try Again!/

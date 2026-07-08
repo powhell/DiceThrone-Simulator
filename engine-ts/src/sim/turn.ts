@@ -1926,7 +1926,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // separate one.
 const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot', 'pick-it-up', 'burst-forward', 'blade-barrage']
 
-function eligibleAttackModifierCardIds(self: PlayerState): string[] {
+export function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
   return ATTACK_MODIFIER_CARD_IDS.filter(id => {
     if (!self.hand.includes(id)) return false

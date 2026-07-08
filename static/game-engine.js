@@ -8702,13 +8702,12 @@ var Game = (() => {
   function humanAttackModifierOptions(g, grimPursuitIncoming = false) {
     const self = g.state.players[g.humanIdx];
     const hero = heroTemplateFor(self.heroId);
-    return ["unescapable", "cranial-assist", "subversion", "thundering-hooves"].filter((id) => {
-      if (!self.hand.includes(id)) return false;
-      const card = cardById(hero, id);
-      if (!card || self.cp < (card.cpCost ?? 0)) return false;
-      if (id === "unescapable" && self.tokens.grimPursuit < 1 && !grimPursuitIncoming && !(self.hand.includes("thundering-hooves") && self.cp >= 2)) return false;
-      return true;
-    });
+    const ids = eligibleAttackModifierCardIds(self);
+    if (grimPursuitIncoming && !ids.includes("unescapable") && self.hand.includes("unescapable")) {
+      const card = cardById(hero, "unescapable");
+      if (card && self.cp >= (card.cpCost ?? 0)) ids.push("unescapable");
+    }
+    return ids;
   }
   function humanFreeRerollDie(g, vals, dieIndex) {
     const out = vals.slice();

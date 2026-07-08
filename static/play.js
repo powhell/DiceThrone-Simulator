@@ -1391,6 +1391,13 @@
           'pick-it-up': `Pick It Up : retire le Disarm adverse, +3 dégâts${g.state.players[g.aiIdx].tokens.disarm>0?' (l\'IA est Disarmed ✔)':' (SANS effet : l\'IA n\'est pas Disarmed)'} · 0 CP`,
           'burst-forward': 'Burst Forward : 1 Step forward AVANT le calcul du bonus · 1 CP',
           'blade-barrage': 'Blade Barrage : lance 5 dés, +1 dégât par Blade (2 Boots → 1 Step) · 2 CP',
+          'stone-beak': 'Stone Beak! : +1 dégât, attaque INDÉFENDABLE (Nevermore sur la cible) · 1 CP',
+          'talon-strike': 'Talon Strike! : lance 5 dés, +1 dégât par Talon, +1 Feather · 2 CP',
+          'lethal-swipe': 'Lethal Swipe! : (Chat) lance 5 dés, +1 dégât par Griffe, 2 Pattes → Wound · 2 CP',
+          'surprise-bite': 'Surprise Bite! : (Chat) attaque INDÉFENDABLE · 2 CP',
+          'ambush': 'Ambush! : défausse Invisibility, +3 dégâts · 1 CP',
+          'huzzah': 'Huzzah! : lance 1d6 → +3 dmg / Burn / +2 FM / Knockdown · 1 CP',
+          'red-hot': 'Red Hot! : +1 dégât par Fire Mastery · 1 CP',
         };
         for (const id of G.humanAttackModifierOptions(g, gpFromCandidate)) {
           if (id==='thundering-hooves' && you.cp===0) continue; // rien à convertir
