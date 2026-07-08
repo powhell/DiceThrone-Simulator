@@ -470,6 +470,19 @@
     if (!cands.length) return null;
     return cands.reduce((a,b)=>((b.baseDamage||0)>(a.baseDamage||0)?b:a));
   }
+  // 🎯 Détecteur de létal (user-caught : le solveur est glouton, il ne sait pas FINIR — un
+  // 5,8 garanti qui tue vaut plus que n'importe quelle espérance). Défendable = létal
+  // seulement si les dégâts passent la pire défense (~5 de marge).
+  function lethalLine(vals){
+    const oppHp = g.state.players[g.aiIdx].hp;
+    let cands = [];
+    try { cands = G.matchedAbilities(g, vals) || []; } catch(e) {}
+    const sure = cands.find(cd => !cd.defendable && (cd.baseDamage||0) >= oppHp);
+    if (sure) return `<div class="lead" style="margin-top:4px;color:#e8a03a"><b>🎯 LÉTAL GARANTI : ${formatAbility(humanHero,sure.name).name} (${sure.baseDamage} indéf. ≥ ${oppHp} PV) — ARRÊTE-TOI ET TUE.</b></div>`;
+    const likely = cands.find(cd => cd.defendable && (cd.baseDamage||0) >= oppHp + 5);
+    if (likely) return `<div class="lead" style="margin-top:4px;color:#e8a03a"><b>🎯 LÉTAL PROBABLE : ${formatAbility(humanHero,likely.name).name} (${likely.baseDamage} ≥ ${oppHp} PV + marge défense) — fini-le, ignore les EV.</b></div>`;
+    return '';
+  }
   function renderMatch() {
     const adv = liveAdvice();
     if (adv) {
@@ -509,10 +522,11 @@
       // « s'arrêter » (valeur terminale) ≠ la ligne « garder tout » du tableau (qui conserve
       // l'option de changer d'avis à la relance suivante) — les deux chiffres diffèrent
       // légitimement, le libellé « tout garder » les confondait (user-caught).
+      const lethal = lethalLine(dice.map(d=>d.v));
       $('match').innerHTML = `<div class="lead">🎓 Coach (solveur exact)</div><div class="name">${
         stop ? `S'ARRÊTER — finir sur ces dés vaut ${adv.keepAllEv.toFixed(1)}`
              : `garder [${adv.kept.join(',')}] → EV ${adv.ev.toFixed(1)} · s'arrêter ici = ${adv.keepAllEv.toFixed(1)}`}</div>${
-        hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : ''}${whyLine}${tieLine}${rawLine}`;
+        lethal || ((hint ? `<div class="lead" style="margin-top:4px">${hint}</div>` : '')+whyLine+tieLine)}${rawLine}`;
       return;
     }
     const show = (phase==='roll' && attempts>0) || phase==='alter';
