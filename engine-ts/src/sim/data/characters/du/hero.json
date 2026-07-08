@@ -65,7 +65,7 @@
   ],
   "passives": [
     {"id": "reposition", "name": "Reposition", "trigger": "upkeep",
-     "text": "During your Upkeep Phase, choose forward (up) or backward (down). You MUST take 1 or 2 Steps in this direction. If you move backwards with this Ability, gain Guard Break.", "verified": true}
+     "text": "During your Upkeep Phase, choose forward (up) or backward (down). You MUST take 1 or 2 Steps in this direction. If you move backwards with this Ability, gain Guard Break. RULING (dos du leaflet, lu par user 2026-07-07, non scanné) : 2 steps back = PAS de Guard Break — GB seulement sur un recul d'exactement 1 step.", "verified": true}
   ],
   "defense": {
     "name": "Retreat", "diceCount": "4",

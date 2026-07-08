@@ -62,6 +62,7 @@ Le jeton Footwork **démarre en Neutral** (Hero Setup).
 ## Rulings user (2026-07-07)
 1. ✅ Bonus : Off. +1/+3 dmg ; Déf. +1 = **pige 1 carte**, +3 = **prévient 3 dmg** (confirmé icônes leaflet).
 2. ✅ (« je crois que oui ») Un seul Bonus par tour — la 2ᵉ attaque du même tour (Combo sm / phase Stun py) n'en a pas.
-3. ~ Direction des Steps « up to X » : libre par Step (la contrainte « une seule direction » n'existe que pour le passif Reposition à l'Upkeep). À re-vérifier si un ruling officiel contredit.
-4. (défaut, user pas sûr) Bord de piste : les Steps au-delà des extrémités sont perdus ; Reposition à un bout = forcé de partir dans l'autre direction.
-5. (défaut, user pas sûr) Retreat : les Steps backward forcés bougent toujours le jeton — le déplacement n'est pas un « Bonus », seul l'EFFET de position (pige/prévention) est limité à 1/tour.
+3. ✅ Direction des Steps « up to X » : libre par Step (« tu peux avancer ou reculer comme tu veux ») ; la contrainte « une seule direction » n'existe que pour le passif Reposition à l'Upkeep.
+4. ✅ Bord de piste : les Steps au-delà des extrémités sont perdus ; Reposition à un bout = forcé de partir dans l'autre direction.
+5. ✅ Retreat : les Steps backward forcés bougent toujours le jeton (« for each ») — la position finale donne le bonus défensif de l'attaque en cours.
+6. ✅ **Reposition : 2 steps back = PAS de Guard Break** — le GB n'est gagné que sur un recul d'exactement 1 step (dos du leaflet lu par l'user, NON scanné — à scanner si possible).
