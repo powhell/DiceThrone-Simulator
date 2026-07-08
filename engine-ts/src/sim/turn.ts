@@ -1660,20 +1660,10 @@ export function finalizeDefenseRoll(
     const eff = du.retreatEffects(finalDefenseDice, up)
     if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage)
     const moved = eff.forcedBackSteps > 0 ? du.takeSteps(defender, -eff.forcedBackSteps) : 0
-    let bonusMsg = ''
-    if (defender.footworkBonusUsedThisTurn !== true) {
-      const b = du.defensiveBonus(du.footworkPos(defender))
-      if (b.prevent > 0) {
-        damagePrevented = b.prevent
-        defender.footworkBonusUsedThisTurn = true
-        bonusMsg = `, Defensive Bonus: prevented ${b.prevent}`
-      } else if (b.draw > 0) {
-        drawCards(defender, b.draw, rng)
-        defender.footworkBonusUsedThisTurn = true
-        bonusMsg = `, Defensive Bonus: drew ${b.draw}`
-      }
-    }
-    log(state, defenderIdx, 'defense', `Retreat${up ? ' II' : ''}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${du.footworkPos(defender)})${bonusMsg}`)
+    // Le Bonus défensif ne se résout PAS ici : « resolved before determining the final dmg
+    // total » (leaflet) = APRÈS la fenêtre DRP5 — sinon I Hate Waiting (reculer 2 de plus)
+    // arrive trop tard, le bonus du tour déjà brûlé sur la mauvaise case (user-caught, 2x).
+    log(state, defenderIdx, 'defense', `Retreat${up ? ' II' : ''}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${du.footworkPos(defender)})`)
   } else if (defender.heroId === 'se') {
     // Harness the Light (board vérifié) : Heal 1/Stave ; I : On BB (une fois) Dial +1, On C
     // (une fois) Dial +1 ; II : On B Dial +1, Dial +1 PAR C, On A+B+C -> Charged Gem.
@@ -1757,6 +1747,22 @@ export function finalizeDefenseRoll(
     state, [attackerIdx, defenderIdx], { windowType: 'defense', eludeEligible },
     rng, policies, enumerateWindowActions, applyWindowAction,
   )
+  // Duelist : le Bonus défensif Footwork se résout ICI — après la fenêtre DRP5, sur la
+  // position FINALE (tes cartes comme I Hate Waiting ont pu te déplacer), juste avant le
+  // total final (leaflet : « resolved before determining the final dmg total »).
+  if (defender.heroId === 'du' && defender.footworkBonusUsedThisTurn !== true && state.pendingAttack) {
+    const b = du.defensiveBonus(du.footworkPos(defender))
+    if (b.prevent > 0) {
+      const prevented = Math.min(state.pendingAttack.remaining, b.prevent)
+      state.pendingAttack.remaining -= prevented
+      defender.footworkBonusUsedThisTurn = true
+      log(state, defenderIdx, 'defense', `Footwork Defensive Bonus: prevented ${prevented} (position ${du.footworkPos(defender)})`)
+    } else if (b.draw > 0) {
+      drawCards(defender, b.draw, rng)
+      defender.footworkBonusUsedThisTurn = true
+      log(state, defenderIdx, 'defense', `Footwork Defensive Bonus: drew ${b.draw} (position ${du.footworkPos(defender)})`)
+    }
+  }
   // Sun Marked (se) : si des dégâts passent encore après la fenêtre DRP5, l'attaquant Heal 2
   // (« en autant qu'il y ait du damage » — ruling user 2026-07-08).
   if (state.pendingAttack && state.pendingAttack.remaining > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
@@ -1812,26 +1818,12 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     return remaining - prevented
   }
   if (cardId === 'i-hate-waiting') {
-    // « Take up to 2 Steps backward » APRÈS avoir été attaqué : les Steps comptent encore pour
-    // le total final (leaflet : le Bonus se résout « before determining the final dmg total »),
-    // donc atteindre une position défensive ici déclenche le Bonus si pas déjà consommé.
+    // « Take up to 2 Steps backward » APRÈS avoir été attaqué. Le Bonus de la position finale
+    // se résout CENTRALEMENT après la fenêtre DRP5 (finalizeDefenseRoll) — cette carte ne fait
+    // que déplacer, pour que le bonus tombe sur la bonne case (user-caught : l'ordre inverse
+    // brûlait le bonus avant que la carte soit jouable).
     const moved = du.takeSteps(defender, -2)
-    let msg = `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${du.footworkPos(defender)})`
-    if (defender.footworkBonusUsedThisTurn !== true) {
-      const b = du.defensiveBonus(du.footworkPos(defender))
-      if (b.prevent > 0) {
-        defender.footworkBonusUsedThisTurn = true
-        const prevented = Math.min(remaining, b.prevent)
-        log(state, defenderIdx, 'defense', `${msg}, Defensive Bonus: prevented ${prevented}`)
-        return remaining - prevented
-      }
-      if (b.draw > 0) {
-        defender.footworkBonusUsedThisTurn = true
-        drawCards(defender, b.draw, rng)
-        msg += `, Defensive Bonus: drew ${b.draw}`
-      }
-    }
-    log(state, defenderIdx, 'defense', msg)
+    log(state, defenderIdx, 'defense', `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${du.footworkPos(defender)})`)
     return remaining
   }
   if (cardId === 'invulnerability') {

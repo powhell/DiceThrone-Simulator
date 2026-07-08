@@ -2046,14 +2046,16 @@
     if ((m = msg.match(/^Sabotage: prevented (\d+), (\d+) dmg back, (\d+) TB inflicted/)))
       return `🛡️ <b>Sabotage</b> : ${m[1]} dégât(s) prévenu(s) · ${m[2]} contre-dégât(s)${+m[3]?` · ${m[3]} Time Bomb posée(s)`:''}`;
     // --- Duelist ---
-    if ((m = msg.match(/^Retreat( II)?: (\d+) dmg back, (\d+) forced step\(s\) backward \(position (-?\d+)\)(?:, Defensive Bonus: (prevented (\d+)|drew (\d+)))?/))) {
+    if ((m = msg.match(/^Retreat( II)?: (\d+) dmg back, (\d+) forced step\(s\) backward \(position (-?\d+)\)/))) {
       const POS={'-2':'🛡️+3 Défensif','-1':'🂠 pige','0':'Neutral','1':'+1 Off.','2':'+3 Off.'};
-      let out = `🛡️ <b>Retreat${m[1]||''}</b> : ${m[2]} contre-dégât(s) · recule de ${m[3]} (→ ${POS[m[4]]||m[4]})`;
-      if (m[6]) out += ` · <b style="color:#5fbd8a">BONUS : ${m[6]} dégâts PRÉVENUS</b>`;
-      else if (m[7]) out += ` · <b>BONUS : pige ${m[7]} carte</b>`;
-      else out += ` · pas de bonus défensif (position ${POS[m[4]]||m[4]}${+m[4]>=0?'' : ' — bonus déjà consommé ce tour'})`;
-      return out;
+      return `🛡️ <b>Retreat${m[1]||''}</b> : ${m[2]} contre-dégât(s) · recule de ${m[3]} (→ ${POS[m[4]]||m[4]}) — joue tes cartes, le bonus se calcule après`;
     }
+    if ((m = msg.match(/^Footwork Defensive Bonus: prevented (\d+) \(position (-?\d+)\)/)))
+      return `👣 <b style="color:#5fbd8a">BONUS DÉFENSIF : ${m[1]} dégâts PRÉVENUS</b> (position finale ${m[2]})`;
+    if ((m = msg.match(/^Footwork Defensive Bonus: drew (\d+) \(position (-?\d+)\)/)))
+      return `👣 <b>BONUS DÉFENSIF : pige ${m[1]} carte</b> (position finale ${m[2]})`;
+    if ((m = msg.match(/^I Hate Waiting: (\d+) step\(s\) backward \(position (-?\d+)\)/)))
+      return `🂠 <b>I Hate Waiting</b> : recule de ${m[1]} (position ${m[2]})`;
     if ((m = msg.match(/^Reposition: (\d+) step\(s\) (forward|backward) \(position (-?\d+)\)(, \+1 Guard Break)?/)))
       return `👣 <b>Reposition</b> : ${m[1]} step ${m[2]==='forward'?'AVANT':'ARRIÈRE'} (position ${m[3]})${m[4]?' · <b>+1 Guard Break</b>':''}`;
     if ((m = msg.match(/^Offensive Bonus: \+(\d+) dmg/)))

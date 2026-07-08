@@ -6736,20 +6736,7 @@ var Game = (() => {
       const eff = retreatEffects(finalDefenseDice, up);
       if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage);
       const moved = eff.forcedBackSteps > 0 ? takeSteps(defender, -eff.forcedBackSteps) : 0;
-      let bonusMsg = "";
-      if (defender.footworkBonusUsedThisTurn !== true) {
-        const b = defensiveBonus(footworkPos(defender));
-        if (b.prevent > 0) {
-          damagePrevented = b.prevent;
-          defender.footworkBonusUsedThisTurn = true;
-          bonusMsg = `, Defensive Bonus: prevented ${b.prevent}`;
-        } else if (b.draw > 0) {
-          drawCards(defender, b.draw, rng);
-          defender.footworkBonusUsedThisTurn = true;
-          bonusMsg = `, Defensive Bonus: drew ${b.draw}`;
-        }
-      }
-      log(state, defenderIdx, "defense", `Retreat${up ? " II" : ""}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${footworkPos(defender)})${bonusMsg}`);
+      log(state, defenderIdx, "defense", `Retreat${up ? " II" : ""}: ${eff.counterDamage} dmg back, ${Math.abs(moved)} forced step(s) backward (position ${footworkPos(defender)})`);
     } else if (defender.heroId === "se") {
       const up = defender.upgradesInPlay.includes("harness-the-light-ii");
       const eff = harnessEffects(finalDefenseDice, up);
@@ -6822,6 +6809,19 @@ var Game = (() => {
       enumerateWindowActions,
       applyWindowAction
     );
+    if (defender.heroId === "du" && defender.footworkBonusUsedThisTurn !== true && state.pendingAttack) {
+      const b = defensiveBonus(footworkPos(defender));
+      if (b.prevent > 0) {
+        const prevented = Math.min(state.pendingAttack.remaining, b.prevent);
+        state.pendingAttack.remaining -= prevented;
+        defender.footworkBonusUsedThisTurn = true;
+        log(state, defenderIdx, "defense", `Footwork Defensive Bonus: prevented ${prevented} (position ${footworkPos(defender)})`);
+      } else if (b.draw > 0) {
+        drawCards(defender, b.draw, rng);
+        defender.footworkBonusUsedThisTurn = true;
+        log(state, defenderIdx, "defense", `Footwork Defensive Bonus: drew ${b.draw} (position ${footworkPos(defender)})`);
+      }
+    }
     if (state.pendingAttack && state.pendingAttack.remaining > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
       attacker.hp = Math.min(60, attacker.hp + SUN_MARKED_HEAL);
       log(state, attackerIdx, "defense", `Sun Marked: attacker heals ${SUN_MARKED_HEAL}`);
@@ -6867,22 +6867,7 @@ var Game = (() => {
     }
     if (cardId === "i-hate-waiting") {
       const moved = takeSteps(defender, -2);
-      let msg = `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${footworkPos(defender)})`;
-      if (defender.footworkBonusUsedThisTurn !== true) {
-        const b = defensiveBonus(footworkPos(defender));
-        if (b.prevent > 0) {
-          defender.footworkBonusUsedThisTurn = true;
-          const prevented = Math.min(remaining, b.prevent);
-          log(state, defenderIdx, "defense", `${msg}, Defensive Bonus: prevented ${prevented}`);
-          return remaining - prevented;
-        }
-        if (b.draw > 0) {
-          defender.footworkBonusUsedThisTurn = true;
-          drawCards(defender, b.draw, rng);
-          msg += `, Defensive Bonus: drew ${b.draw}`;
-        }
-      }
-      log(state, defenderIdx, "defense", msg);
+      log(state, defenderIdx, "defense", `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${footworkPos(defender)})`);
       return remaining;
     }
     if (cardId === "invulnerability") {
