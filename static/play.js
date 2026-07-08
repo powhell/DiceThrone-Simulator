@@ -1292,8 +1292,13 @@
       }
       // Sun Elf : côté DAWN, dumper la valeur du cadran en dégâts sur CETTE attaque (puis −4)
       // — ta décision, pré-armée (jamais automatique).
-      if (HUMAN==='se' && cands.length && you.sunDialDawn===true && (you.sunDial||0)>0) {
-        c.appendChild(btn(`${you.seDawnSpendArmed?'✅ ':''}🌅 DAWN : +${you.sunDial} dégâts sur cette attaque (cadran −4 ensuite)`,
+      if (HUMAN==='se' && cands.length && you.sunDialDawn===true) {
+        // La décharge lit le cadran AU MOMENT de l'attaque — APRÈS le « Increase Sun Dial »
+        // de l'habileté choisie (user-caught : l'étiquette montrait le cadran d'avant).
+        const dialGain = {'Ray Absorption':3,'Solar Burst':2,'Sunbeam':you.upgradesInPlay.includes('sunbeam-ii')?3:2,'Ray of Light':1,'Solar Flare!':3,'Bestow Your Light':4}
+        const gains = cands.map(cd=>{ const k=Object.keys(dialGain).find(n=>cd.name.startsWith(n)); return k?dialGain[k]:0; });
+        const maxAfter = Math.min(5,(you.sunDial||0)+Math.max(0,...gains,0));
+        c.appendChild(btn(`${you.seDawnSpendArmed?'✅ ':''}🌅 DAWN : décharger le cadran sur cette attaque (maintenant ${you.sunDial||0}${maxAfter>(you.sunDial||0)?`, jusqu'à ${maxAfter} si l'habileté le charge d'abord`:''} · cadran −4 ensuite)`,
           you.seDawnSpendArmed?'primary':'', ()=>{ you.seDawnSpendArmed=!you.seDawnSpendArmed; renderControls(); }));
       }
       // Duelist : direction pré-armée des Steps gratuits de l'habileté choisie (le Bonus
@@ -2321,9 +2326,17 @@
     'Combustion':'-4 FM max → 4/jeton indéf.','Pyroblast':'6 +2d6 effets','Pyroblast:iii':'6 +2d6 effets ·relance 1',
     'Hot Streak':'+2 FM ·6 +1/FM (+alt Scorch AABB)','Ignite':'+2 FM ·Burn ·5 +2/FM (+alt Blazing Soul BBCC)',
     'Meteorite':'+2 FM ·Stun ·1/FM indéf. +3 coll. (+alt Meteoroid DDD)',
+    // Duelist
+    'Blade Flurry':'5/6/7 ·3-kind: 1 Step','Balestra':'≤2 Steps ·8 (+alt Fancy Feet BBB)',
+    'Feint Attack':'+2 GB ·1 Step ·3 indéf.','Bladestorm':'+2 GB ·Disarm ·≤2 Steps ·9 (+alt Bladewind CCC)',
+    // Sun Elf
+    'Light Staff':'5/6/7 ·3-kind: cadran +1','Scorching Staff':'5 +2d6: +2/Stave ·cadran ·gem',
+    'Radiant Energy':'Sun Marked ·6 (+alt Praise the Sun AAAC)',
+    'Solar Burst':'cadran +2 ·Gem+Marked ·7 indéf. (+alt Bestow CCC)',
+    'Sunbeam':'cadran +3 ·9 (+alt Soaking BCCC)',
   };
   // Exigence modifiée par l'upgrade (seul cas connu : Fowl Friend II passe à BBB — ruling user)
-  const REF_II_REQ = { 'Fowl Friend':'BBB' };
+  const REF_II_REQ = { 'Fowl Friend':'BBB', 'Radiant Energy':'AACC' };
   // Which upgrade card marks each base ability as "II" on the side panel.
   const REF_UPGRADE = {
     'Cleave':'cleave-ii','Ride Down':'ride-down-ii','Reap':'reap-ii','Sow Despair':'sow-despair-ii',
@@ -2339,6 +2352,9 @@
     'Punch':'punch-ii','C-C-C-Combo':'combo-ii','Ensnare':'ensnare-ii','Ensnare (grande)':'ensnare-ii','Venom Punch':'venom-punch-ii',
     'Fireball':'fireball-ii','Burning Soul':'burning-soul-ii','Combustion':'combustion-ii',
     'Pyroblast':['pyroblast-ii','pyroblast-iii'],'Hot Streak':'hot-streak-ii','Ignite':'ignite-ii','Meteorite':'meteorite-ii',
+    'Blade Flurry':'blade-flurry-ii','Balestra':'balestra-ii','Feint Attack':'feint-attack-ii','Bladestorm':'bladestorm-ii',
+    'Light Staff':'light-staff-ii','Scorching Staff':'scorching-staff-ii','Radiant Energy':'radiant-energy-ii',
+    'Solar Burst':'solar-burst-ii','Sunbeam':'sunbeam-ii',
   };
   // Résout le tier actif d'une habileté (gère les paliers multiples type Hammered II/III).
   function refUpgradeInfo(name, upgradesInPlay){
