@@ -1650,10 +1650,10 @@
         if (HUMAN==='se' && (you.sunDial||0)>=1) vals.forEach((v,i)=>{ if(v!==6) out.push({cardId:id, dieIndices:[i], values:[6]}); });
       }
       else if (id==='try-try-again'){
-        // Only offer rerolling UNKEPT dice (rerolling a die you chose to keep makes no sense),
-        // lowest values first — keeps the button row short.
-        const idx = vals.map((v,i)=>({v,i})).filter(x=>!dice[x.i].kept).sort((x,y)=>x.v-y.v).slice(0,2);
-        for (const x of idx) out.push({cardId:id, dieIndices:[x.i]});
+        // TOUS les dés (carte : « up to two dice », n'importe lesquels — user-caught : le
+        // raccourci « 2 plus bas non gardés » empêchait de cibler le dé voulu, donc de le
+        // relancer deux fois de suite).
+        vals.forEach((v,i)=>out.push({cardId:id, dieIndices:[i]}));
       }
       // samesies: PAS énuméré ici — l'ancien code n'offrait que "→ valeur max" (bug rapporté :
       // impossible de copier un 4 sur un 2). Géré par le mode 2-clics (samMode) dans
