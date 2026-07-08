@@ -103,9 +103,12 @@ export interface PlayerState {
   footwork?: number
   footworkBonusUsedThisTurn?: boolean
   duRepositionDir?: 'forward' | 'forward2' | 'backward1' | 'backward2'
-  // Direction pré-armée du joueur humain pour les Steps gratuits des habiletés ('forward'
-  // par défaut : le Bonus offensif de la position finale paie sur l'attaque en cours).
-  duStepsMode?: 'forward' | 'backward' | 'none'
+  // Steps gratuits des habiletés (« up to N ») : direction ET quantité pré-armées par
+  // l'humain — 'forward'/'backward' = maximum, 'forward1'/'backward1' = UN seul step,
+  // 'none' = ne pas bouger. (User-caught : « up to » = jusqu'à, le max forcé volait le choix.)
+  duStepsMode?: 'forward' | 'forward1' | 'backward' | 'backward1' | 'none'
+  // I Hate Waiting : « up to 2 Steps backward » — nombre choisi par l'humain (défaut 2).
+  duIHWSteps?: 1 | 2
   // Choix humain pré-armé pour la résolution du Disarm à l'upkeep : 'skip' = sauter l'Income,
   // sinon l'id de la carte à défausser. Consommé (remis à undefined) à la résolution.
   duDisarmChoice?: string

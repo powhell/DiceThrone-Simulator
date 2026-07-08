@@ -1823,7 +1823,9 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     // se résout CENTRALEMENT après la fenêtre DRP5 (finalizeDefenseRoll) — cette carte ne fait
     // que déplacer, pour que le bonus tombe sur la bonne case (user-caught : l'ordre inverse
     // brûlait le bonus avant que la carte soit jouable).
-    const moved = du.takeSteps(defender, -2)
+    // « up to 2 » : l'humain choisit 1 ou 2 (pré-armé duIHWSteps, défaut 2) ; IA = 2.
+    const n = defender.humanControlled ? (defender.duIHWSteps ?? 2) : 2
+    const moved = du.takeSteps(defender, -n)
     log(state, defenderIdx, 'defense', `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${du.footworkPos(defender)})`)
     return remaining
   }
@@ -2923,7 +2925,10 @@ function applyDUAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     if (upTo <= 0) return
     const mode = self.humanControlled ? (self.duStepsMode ?? 'forward') : 'forward'
     if (mode === 'none') return
-    const moved = du.takeSteps(self, (mode === 'backward' ? -1 : 1) * upTo)
+    // « up to N » : l'humain choisit direction ET quantité (forward1/backward1 = un seul step).
+    const n = (mode === 'forward1' || mode === 'backward1') ? Math.min(1, upTo) : upTo
+    const dir = mode.startsWith('backward') ? -1 : 1
+    const moved = du.takeSteps(self, dir * n)
     if (moved !== 0) log(state, playerIdx, 'resolveAttack', `${label}: ${Math.abs(moved)} step(s) ${moved > 0 ? 'forward' : 'backward'} (position ${du.footworkPos(self)})`)
   }
 

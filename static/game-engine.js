@@ -6866,7 +6866,8 @@ var Game = (() => {
       return remaining - prevented;
     }
     if (cardId === "i-hate-waiting") {
-      const moved = takeSteps(defender, -2);
+      const n = defender.humanControlled ? defender.duIHWSteps ?? 2 : 2;
+      const moved = takeSteps(defender, -n);
       log(state, defenderIdx, "defense", `I Hate Waiting: ${Math.abs(moved)} step(s) backward (position ${footworkPos(defender)})`);
       return remaining;
     }
@@ -7868,7 +7869,9 @@ var Game = (() => {
       if (upTo <= 0) return;
       const mode = self.humanControlled ? self.duStepsMode ?? "forward" : "forward";
       if (mode === "none") return;
-      const moved = takeSteps(self, (mode === "backward" ? -1 : 1) * upTo);
+      const n = mode === "forward1" || mode === "backward1" ? Math.min(1, upTo) : upTo;
+      const dir = mode.startsWith("backward") ? -1 : 1;
+      const moved = takeSteps(self, dir * n);
       if (moved !== 0) log(state, playerIdx, "resolveAttack", `${label}: ${Math.abs(moved)} step(s) ${moved > 0 ? "forward" : "backward"} (position ${footworkPos(self)})`);
     };
     const gainGb2 = (n, label) => {

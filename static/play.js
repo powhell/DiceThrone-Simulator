@@ -1092,6 +1092,11 @@
         const sD=document.createElement('span'); sD.className='rolls';
         sD.innerHTML=`👣 Position : <b>${LBLD[String(posDu)]}</b>${youDu.footworkBonusUsedThisTurn?' (bonus du tour déjà consommé)':''} — chaque Boot/Pierce de Retreat te recule d'1 (obligatoire), le bonus se calcule sur la position FINALE`;
         c.appendChild(sD);
+        if (youDu.hand.includes('i-hate-waiting') && youDu.cp>=1) {
+          const n = youDu.duIHWSteps ?? 2;
+          c.appendChild(btn(`🂠 I Hate Waiting reculera de : ${n} step${n>1?'s':''} (clique pour changer — « up to 2 »)`,'', ()=>{
+            youDu.duIHWSteps = n===2 ? 1 : 2; renderControls(); }));
+        }
       }
       c.appendChild(s);
       c.appendChild(btn('🛡️ Lancer ta défense →','primary', aiDefenseStep));
@@ -1368,9 +1373,10 @@
       // offensif de la position FINALE s'ajoute à l'attaque — avancer paie tout de suite).
       if (HUMAN==='du' && cands.length) {
         const m = you.duStepsMode ?? 'forward';
-        const LBL = { forward:'⬆ Avancer (bonus offensif +1/+3)', backward:'⬇ Reculer (préparer la défense)', none:'⏸ Ne pas bouger' };
-        c.appendChild(btn(`👣 Steps de l'habileté : ${LBL[m]}`,'', ()=>{
-          you.duStepsMode = m==='forward' ? 'backward' : m==='backward' ? 'none' : 'forward';
+        const LBL = { forward:'⬆⬆ Avancer au MAX (bonus offensif)', forward1:'⬆ Avancer de 1 seulement', none:'⏸ Ne pas bouger', backward1:'⬇ Reculer de 1 seulement', backward:'⬇⬇ Reculer au MAX (préparer la défense)' };
+        const CYCLE = { forward:'forward1', forward1:'none', none:'backward1', backward1:'backward', backward:'forward' };
+        c.appendChild(btn(`👣 Steps de l'habileté (« up to ») : ${LBL[m]} (clique pour changer)`,'', ()=>{
+          you.duStepsMode = CYCLE[m];
           renderControls();
         }));
       }
