@@ -132,5 +132,20 @@ window.CARD_IMG = {
  "all-in-the-wrists": "../characters/Duelist/cards/Scan_20260707_215618.jpg",
  "confident-footing": "../characters/Duelist/cards/Scan_20260707_215640.jpg",
  "blade-barrage": "../characters/Duelist/cards/Scan_20260707_215650.jpg",
- "courageous-advance": "../characters/Duelist/cards/Scan_20260707_215658.jpg"
+ "courageous-advance": "../characters/Duelist/cards/Scan_20260707_215658.jpg",
+ "clouds-parting": "../characters/Sun_Elf/cards/Scan_20260707_220918.jpg",
+ "solstice": "../characters/Sun_Elf/cards/Scan_20260707_220926.jpg",
+ "here-comes-the-sun": "../characters/Sun_Elf/cards/Scan_20260707_220934.jpg",
+ "it-gives-life": "../characters/Sun_Elf/cards/Scan_20260707_220943.jpg",
+ "the-suns-blessing": "../characters/Sun_Elf/cards/Scan_20260707_220951.jpg",
+ "sun-shield": "../characters/Sun_Elf/cards/Scan_20260707_221003.jpg",
+ "first-light": "../characters/Sun_Elf/cards/Scan_20260707_221012.jpg",
+ "the-glorious-sun": "../characters/Sun_Elf/cards/Scan_20260707_221040.jpg",
+ "radiant-exchange": "../characters/Sun_Elf/cards/Scan_20260707_221051.jpg",
+ "scorching-staff-ii": "../characters/Sun_Elf/cards/Scan_20260707_221100.jpg",
+ "harness-the-light-ii": "../characters/Sun_Elf/cards/Scan_20260707_221117.jpg",
+ "light-staff-ii": "../characters/Sun_Elf/cards/Scan_20260707_221126.jpg",
+ "solar-burst-ii": "../characters/Sun_Elf/cards/Scan_20260707_221136.jpg",
+ "radiant-energy-ii": "../characters/Sun_Elf/cards/Scan_20260707_221236.jpg",
+ "sunbeam-ii": "../characters/Sun_Elf/cards/Scan_20260707_221245.jpg"
 };

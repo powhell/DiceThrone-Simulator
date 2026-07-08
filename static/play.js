@@ -94,6 +94,13 @@
            C:'<g class="glyph"><path d="M12 52 L44 20 M44 20 L30 22 M44 20 L42 34 M50 8 L38 14 M50 8 L46 20 M56 16 L46 26" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>'},
       symName:{A:'Blade',B:'Boot',C:'Pierce'},
       col:{A:'#7a86e8',B:'#c8a06a',C:'#b45ad2'} },
+    se: { name:'Sun Elf', crest:'SE', cls:v=>v<=3?'A':v<=5?'B':'C',
+      // Stave = bâton solaire, Charge = triangle à œil, Sun Power = éclat de soleil (dice.png)
+      sym:{A:'<g class="glyph"><path d="M30 54 L30 22 M30 22 L20 12 M30 22 L40 12 M24 16 L36 16" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="42" cy="10" r="3"/></g>',
+           B:'<g class="glyph"><path d="M12 16 L52 16 L32 50 Z" fill="none" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="26" r="5"/></g>',
+           C:'<g class="glyph"><circle cx="32" cy="32" r="6"/><path d="M32 8 L32 20 M32 44 L32 56 M8 32 L20 32 M44 32 L56 32 M15 15 L24 24 M40 40 L49 49 M49 15 L40 24 M24 40 L15 49" fill="none" stroke-width="4" stroke-linecap="round"/></g>'},
+      symName:{A:'Stave',B:'Charge',C:'Sun Power'},
+      col:{A:'#7aa8e8',B:'#3a5a9c',C:'#e8543a'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -103,7 +110,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py'||v==='du') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py'||v==='du'||v==='se') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -168,9 +175,10 @@
     sm: [['Punch',3,0,0],['C-C-C-Combo',2,0,2],['Spider-Reflexes',1,2,1],['Wall Crawler',2,3,0],['Venom Punch',0,0,4]],
     py: [['Fireball',3,0,0,0],['Burning Soul',0,0,2,0],['Combustion',1,1,1,1],['Pyroblast',4,0,0,1],['Meteorite',0,0,0,4]],
     du: [['Blade Flurry',3,0,0],['Balestra',2,2,0],['Feint Attack',2,0,2],['En Garde',0,3,1],['Bladestorm',0,0,4]],
+    se: [['Light Staff',3,0,0],['Ray Absorption',0,4,0],['Radiant Energy',3,0,2],['Scorching Staff',1,3,0],['Solar Burst',0,0,4]],
   };
   const SUITE_NAME = { hh:'Suite (Sow Despair)', fm:'Suite (Armored Up)', bw:'Suite (Hacked)',
-    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)', du:'Suite (Strike)' };
+    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)', du:'Suite (Strike)', se:'Suite (Ray of Light)' };
   function planHint(kept){
     const heroCls = humanHero.cls;
     const cnt = k => kept.filter(v=>heroCls(v)===k).length;
@@ -263,6 +271,12 @@
       out.push(`<span class="tok" style="border-color:#7a86e8"><b>👣 Footwork</b> ${track} ${LBL[String(pos)]}${p.footworkBonusUsedThisTurn?' (bonus consommé ce tour)':''}</span>`);
     }
     if (t.disarm) out.push(`<span class="tok" style="border-color:#c8a03a"><b>🪝 Disarm</b> (upkeep : défausse 1 ou saute l'Income)</span>`);
+    if (p.heroId === 'se') {
+      const dawn = p.sunDialDawn === true, v = p.sunDial || 0;
+      out.push(`<span class="tok" style="border-color:${dawn?'#e8a03a':'#8a6ad2'}"><b>${dawn?'🌅 DAWN':'🌆 DUSK'}</b> cadran ${v}/5${dawn?' (dump = +'+v+' dmg, puis −4)':' (à 5 → DAWN)'}</span>`);
+    }
+    if (t.chargedGem) out.push(`<span class="tok" style="border-color:#d24a4a"><b>💎 Charged Gem</b> (Main : d6 → CP et/ou 2 dmg)</span>`);
+    if (t.sunMarked) out.push(`<span class="tok" style="border-color:#e8891a"><b>☀️ Sun Marked</b> (ton attaquant se soigne de 2, persistant)</span>`);
     if (p.heroId === 'fm') {
       const ORE_SHORT = { 'gold-ore':'Or', 'diamond-ore':'Diamant', 'ultimanium-ore':'Ultimanium' };
       const counts = {};
@@ -729,6 +743,18 @@
         Pioche = Mine ton deck · Forge = double l'effet d'UNE armure · Enclume = double jusqu'à 2 armures<br>
         (Casque = contre-dégâts 1/2/3 · Bouclier = prévient 1/2 · bouclier Ultimanium : prévient 2 même l'indéfendable, sauf Ultimate)</div>`;
     }
+    if (heroKey==='du'){
+      const up = (p.upgradesInPlay||[]).includes('retreat-ii');
+      return `<div class="defbox"><b>🛡️ Retreat${up?' II':''}</b><br>
+        Lance 4 dés : 1 contre-dégât par ${up?'Blade':'2 Blades'}<br>
+        CHAQUE Boot/Pierce = 1 step backward OBLIGATOIRE (la position finale donne le bonus défensif : pige 1 / prévient 3, un bonus/tour)</div>`;
+    }
+    if (heroKey==='se'){
+      const up = (p.upgradesInPlay||[]).includes('harness-the-light-ii');
+      return `<div class="defbox"><b>🛡️ Harness the Light${up?' II':''}</b><br>
+        Lance 3 dés : soigne 1 par Stave (aucune prévention)<br>
+        ${up?'Charge (une fois) : cadran +1 · cadran +1 PAR Sun Power · Stave+Charge+Sun Power : +Charged Gem':'2 Charges (une fois) : cadran +1 · Sun Power (une fois) : cadran +1'}</div>`;
+    }
     if (heroKey==='hh'){
       const up = p.upgradesInPlay.includes('hallowed-reckoning-ii');
       return `<div class="defbox"><b>🛡️ Hallowed Reckoning${up?' II':''}</b><br>
@@ -1068,6 +1094,23 @@
             G.humanCraft(g, o.armorId); log(`🛠️ Tu craftes <b>${o.name}</b>.`); renderAll(); }));
         }
       }
+      // Sun Elf : dépenser le Charged Gem (Main Phase, d6 -> CP et/ou 2 dmg indéfendables).
+      if (HUMAN==='se') {
+        const youSe = g.state.players[g.humanIdx];
+        if ((youSe.tokens.chargedGem||0)>0) {
+          c.appendChild(btn('💎 Dépenser Charged Gem (d6 : 1-2 = +1 CP · 3-4 = 2 dmg · 5-6 = les deux)','primary', ()=>{
+            youSe.tokens.chargedGem = 0;
+            const face = Math.floor(g.rng()*6)+1;
+            const cp = (face<=2||face>=5)?1:0, dmgG = face>=3?2:0;
+            if (cp) youSe.cp = Math.min(15, youSe.cp+cp);
+            const oppSe = g.state.players[g.aiIdx];
+            if (dmgG) oppSe.hp -= dmgG;
+            log(`💎 Charged Gem : d6 = <b>${face}</b> → ${[cp?'+1 CP':'',dmgG?dmgG+' dégâts indéfendables':''].filter(Boolean).join(' + ')}.`);
+            renderAll();
+            if (oppSe.hp<=0) { g.state.winner=g.humanIdx; g.state.gameOver=true; end(); }
+          }));
+        }
+      }
       if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       addFmBtns(c);
@@ -1217,6 +1260,12 @@
       if ((HUMAN==='th'||HUMAN==='du') && cands.length && (you.tokens.guardBreak||0)>0) {
         c.appendChild(btn(`${gbSel?'✅ ':''}Guard Break : d6 par jeton, 4-5 = attaque INDÉFENDABLE (arrêt au 1er succès)`,
           gbSel?'primary':'', ()=>{ gbSel=!gbSel; renderControls(); }));
+      }
+      // Sun Elf : côté DAWN, dumper la valeur du cadran en dégâts sur CETTE attaque (puis −4)
+      // — ta décision, pré-armée (jamais automatique).
+      if (HUMAN==='se' && cands.length && you.sunDialDawn===true && (you.sunDial||0)>0) {
+        c.appendChild(btn(`${you.seDawnSpendArmed?'✅ ':''}🌅 DAWN : +${you.sunDial} dégâts sur cette attaque (cadran −4 ensuite)`,
+          you.seDawnSpendArmed?'primary':'', ()=>{ you.seDawnSpendArmed=!you.seDawnSpendArmed; renderControls(); }));
       }
       // Duelist : direction pré-armée des Steps gratuits de l'habileté choisie (le Bonus
       // offensif de la position FINALE s'ajoute à l'attaque — avancer paie tout de suite).
@@ -2284,6 +2333,14 @@
       {name:'Ignite',req:'SUITE 5',dmg:'+2 FM ·4 +2/FM'},
       {name:'Meteorite',req:'DDDD',dmg:'+2 FM ·Stun ·1/FM indéf. +2 coll.'},
       {name:'Scorch the Earth',req:'DDDDD',dmg:'12 ·Knockdown+Burn ·ULT'} ],
+    se:[ {name:'Light Staff',req:'AAA+',dmg:'4/5/7 ·4-kind: cadran +1'},
+      {name:'Ray Absorption',req:'BBBB',dmg:'cadran +3 ·soin 2 ·+Gem'},
+      {name:'Radiant Energy',req:'AAACC',dmg:'Sun Marked ·6'},
+      {name:'Scorching Staff',req:'ABBB',dmg:'5 +1d6 effets'},
+      {name:'Ray of Light',req:'SUITE 4',dmg:'cadran +1 ·7'},
+      {name:'Sunbeam',req:'SUITE 5',dmg:'cadran +2 ·9'},
+      {name:'Solar Burst',req:'CCCC',dmg:'cadran +2 ·Gem OU Marked ·8'},
+      {name:'Solar Flare',req:'CCCCC',dmg:'10 ·cadran +3 ·Gem+Marked ·ULT'} ],
     du:[ {name:'Blade Flurry',req:'AAA+',dmg:'4/5/6 ·4-kind: 1 Step'},
       {name:'Balestra',req:'AABB',dmg:'≤2 Steps ·6'},
       {name:'Feint Attack',req:'AACC',dmg:'+GB ·1 Step ·2 indéf.'},
@@ -2310,9 +2367,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm','py'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm','py','du','se'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv','dr','th','sm','py'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr','th','sm','py','du','se'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>
