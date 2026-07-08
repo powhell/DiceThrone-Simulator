@@ -2,9 +2,9 @@
 // GP mesuré 1.80±0.37 (le 1.66 du guide = mode (b) seul ; le surplus = valeur d'option du
 // mode (a)) ; pioche 1.61±0.38 ; CP 0.75±0.24 (probablement borné par la politique — à
 // re-mesurer après le ré-entraînement RL, ne pas descendre plus bas sans nouvelle mesure).
-export const GRIM_PURSUIT_AVG_DMG = 0.9 // v3 re-mesuré APRÈS câblage de la dépense (0.89±0.41)
-export const CARD_DRAW_VALUE = 0.5 // v3 : 0.46±0.48 — deck HH faible en pioche
-export const CP_TO_DMG_EQUIV = 0.75
+export const GRIM_PURSUIT_AVG_DMG = 1.3 // v4 archivé (réseau v2, n=500) : 1.32 — le 0.9 sous-payait Ride Down (+3 GP), sa ligne signature tombée de 36% à 12% des attaques
+export const CARD_DRAW_VALUE = 1.4 // v4 archivé (n=500) : 1.43 — jamais appliqué (§7.2 en attente de go)
+export const CP_TO_DMG_EQUIV = 1.15 // v4 archivé (n=500) : 1.16
 
 export const SPECTRAL_ASSAULT_BASE = 8.0
 export const SPECTRAL_ASSAULT_BASE_UPGRADED = 9.0 // Spectral Assault II

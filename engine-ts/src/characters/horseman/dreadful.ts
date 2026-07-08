@@ -4,7 +4,7 @@
 // réseau self-play des 2 côtés) : mesuré [1.93, 0.91, 0.91, 1.06, -0.14] ±0.4 — l'ancien
 // [3,3,3,5,0.5] (rétro-calibré sur le guide BGG) surévaluait ~3x et le "pic Terrorize" au
 // 4e jeton n'existe pas dans les parties réelles. Le 5e arrondi à 0.
-const MARGINAL_VALUE = [1.5, 0.8, 0.8, 0.4, 1.0] // v3 2026-07-05, 1200 paires/jeton, GP-fix inclus
+const MARGINAL_VALUE = [1.0, 1.4, 0.8, 0.45, 1.0] // v4 archivé (n=500/jeton) : [1.00,1.38,0.78,0.46,0.97]
 
 export function dreadfulValueOfGaining(current: number, gained: number): number {
   let total = 0.0
