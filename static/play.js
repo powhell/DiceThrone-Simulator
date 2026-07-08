@@ -1094,8 +1094,11 @@
         c.appendChild(sD);
         if (youDu.hand.includes('i-hate-waiting') && youDu.cp>=1) {
           const n = youDu.duIHWSteps ?? 2;
-          c.appendChild(btn(`🂠 I Hate Waiting reculera de : ${n} step${n>1?'s':''} (clique pour changer — « up to 2 »)`,'', ()=>{
-            youDu.duIHWSteps = n===2 ? 1 : 2; renderControls(); }));
+          const sIW=document.createElement('span'); sIW.className='rolls';
+          sIW.textContent='🂠 Si tu joues I Hate Waiting (bouton après ton jet de défense), elle reculera de :';
+          c.appendChild(sIW);
+          c.appendChild(btn(`${n===1?'✅ ':''}1 step`, n===1?'primary':'', ()=>{ youDu.duIHWSteps=1; renderControls(); }));
+          c.appendChild(btn(`${n===2?'✅ ':''}2 steps`, n===2?'primary':'', ()=>{ youDu.duIHWSteps=2; renderControls(); }));
         }
       }
       c.appendChild(s);
