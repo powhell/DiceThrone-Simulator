@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; du = Duelist ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun' | 'disarm'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {
@@ -87,6 +87,14 @@ export interface PlayerState {
   fmCapBonus?: number
   warmUpCpChoice?: number
   knockdownPay?: boolean
+  // Duelist : position du jeton Footwork (-2..+2, undefined = 0 Neutral). Un seul Bonus de
+  // position résolu par TOUR (offensif ou défensif) — le flag est remis à zéro pour les DEUX
+  // joueurs à chaque upkeep, car le bonus défensif se consomme pendant le tour adverse.
+  // duRepositionDir = préférence humaine pré-armée pour le passif Reposition ('forward'/
+  // 'backward1'/'backward2', undefined = heuristique IA).
+  footwork?: number
+  footworkBonusUsedThisTurn?: boolean
+  duRepositionDir?: 'forward' | 'forward2' | 'backward1' | 'backward2'
   // Forgemaster only (empty/zero for other heroes). `forge` = Ore card ids sitting on THE
   // FORGE (public zone: craft material / scrap fuel). `armor` = crafted Armor tier per slot
   // (0 = none, 1 = Gold, 2 = Diamond, 3 = Ultimanium) — Armor is NOT a bag token: it can't be
