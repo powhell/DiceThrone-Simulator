@@ -8774,11 +8774,12 @@ var Game = (() => {
       decide(state, _p, req) {
         if (i < script.length) return script[i++];
         if (probe && !probe.captured) {
+          const fromLog = [...state.log].reverse().find((e) => e.message.startsWith("Defense dice: "));
           probe.captured = {
             ctx: req.ctx,
             options: req.options,
             remaining: req.ctx.windowType === "defense" ? state.pendingAttack?.remaining ?? null : null,
-            defenseDice: state.pendingRoll ? state.pendingRoll.dice.slice() : null
+            defenseDice: state.pendingRoll ? state.pendingRoll.dice.slice() : fromLog ? fromLog.message.slice("Defense dice: ".length).split(",").map(Number) : null
           };
         }
         i++;

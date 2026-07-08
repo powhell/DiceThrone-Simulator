@@ -417,11 +417,17 @@ function defensePolicy(script: WindowAction[], probe?: { captured: DefensePrompt
     decide(state, _p, req) {
       if (i < script.length) return script[i++]
       if (probe && !probe.captured) {
+        // defenseDice : dans la fenêtre de CARTES (DRP5), pendingRoll est déjà vidé — on
+        // repêche le jet dans le log du clone pour que l'UI montre les dés au moment du
+        // choix de cartes (user-caught : « je dois voir mes dés pour savoir si la carte
+        // vaut la peine »).
+        const fromLog = [...state.log].reverse().find(e => e.message.startsWith('Defense dice: '))
         probe.captured = {
           ctx: req.ctx,
           options: req.options,
           remaining: req.ctx.windowType === 'defense' ? (state.pendingAttack?.remaining ?? null) : null,
-          defenseDice: state.pendingRoll ? state.pendingRoll.dice.slice() : null,
+          defenseDice: state.pendingRoll ? state.pendingRoll.dice.slice()
+            : fromLog ? fromLog.message.slice('Defense dice: '.length).split(',').map(Number) : null,
         }
       }
       i++

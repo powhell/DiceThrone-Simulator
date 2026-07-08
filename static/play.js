@@ -324,13 +324,14 @@
     // previously invisible, you were offered "set die 3 to 6" on dice you couldn't see.
     // Dice are CLICKABLE to select which ones Better D! rerolls (a Roll Attempt = up to 5 dice).
     if (phase==='defense' && pendingDefense && pendingDefense.defenseDice) {
-      // Defense dice are ALWAYS clickable (select which to modify/reroll) — before, only
-      // Better D! unlocked the click, so So Wild!/Tip It! on defense felt unusable (reported).
+      const isRollWin = pendingDefense.ctx && pendingDefense.ctx.windowType === 'defenseRoll';
+      // Fenêtre de CARTES (après le jet) : dés en lecture seule — tu vois ton jet et son
+      // bilan AVANT de décider si une carte vaut la peine (user-caught).
       $('tray').innerHTML =
-        `<div class="empty" style="width:100%">🛡️ TON JET DE DÉFENSE — clique 1-2 dés pour les modifier :</div>` +
-        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:defSel.has(i)}, i, true)).join('') +
+        `<div class="empty" style="width:100%">${isRollWin ? '🛡️ TON JET DE DÉFENSE — clique 1-2 dés pour les modifier :' : '🛡️ TON JET DE DÉFENSE (résolu) — décide tes cartes en dessous :'}</div>` +
+        pendingDefense.defenseDice.map((v,i)=>dieHTML(humanHero, {v,kept:isRollWin&&defSel.has(i)}, i, isRollWin)).join('') +
         `<div class="empty" style="width:100%">${defenseExplain(HUMAN, pendingDefense.defenseDice)}</div>`;
-      $('tray').querySelectorAll('.die').forEach(el=>{
+      if (isRollWin) $('tray').querySelectorAll('.die').forEach(el=>{
         el.onclick = () => { const i=+el.dataset.i;
           // cap 5 (Better D relance jusqu'à 5 dés) — l'ancien cap 2 (paires Twice As Wild)
           // empêchait d'en sélectionner 3 (user-caught, 2e rapport)
