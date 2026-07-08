@@ -776,9 +776,9 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     return
   }
   if (card.id === 'sashay') {
-    // « 1 Step forward + 2 dmg OU 1 Step backward + Heal 2 » — humain : duStepsMode pré-armé ;
-    // IA : soin quand la vie est basse, sinon pression.
-    const back = self.humanControlled ? self.duStepsMode === 'backward' : self.hp <= 35
+    // « 1 Step forward + 2 dmg OU 1 Step backward + Heal 2 » — humain : SON toggle pré-armé
+    // duSashayHeal (user-caught : plus AUCUN choix auto pour l'humain) ; IA : heuristique PV.
+    const back = self.humanControlled ? self.duSashayHeal === true : self.hp <= 35
     if (back) {
       const moved = du.takeSteps(self, -1)
       self.hp = Math.min(self.hp + 2, 60)
@@ -818,8 +818,9 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     return
   }
   if (card.id === 'solstice') {
-    // CHOIX : 2 dmg à tous les adversaires OU Heal 2 (1v1). IA : dmg sauf si PV bas.
-    const heal = self.humanControlled ? self.hp < 40 : self.hp <= 35 // TODO prompt humain si demandé
+    // CHOIX : 2 dmg à tous les adversaires OU Heal 2 (1v1). Humain : SON toggle pré-armé
+    // seSolsticeHeal (plus d'heuristique auto) ; IA : dmg sauf si PV bas.
+    const heal = self.humanControlled ? self.seSolsticeHeal === true : self.hp <= 35
     if (heal) { self.hp = Math.min(60, self.hp + 2); log(state, playerIdx, phase, 'Solstice!: healed 2') }
     else { opp.hp -= 2; log(state, playerIdx, phase, 'Solstice!: 2 dmg to opponent'); checkGameOver(state) }
     return
@@ -3145,9 +3146,12 @@ function applySEAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
       mark('Solar Burst II')
       attack(7, false) // 7 dmg INDÉFENDABLES (carte vérifiée)
     } else {
-      // CHOIX gem OU mark : prend celui qui manque (gem si les deux libres — auto-résolu IA ;
-      // pour l'humain le choix passe par le même heuristique v1, TODO prompt si demandé).
-      if ((opp.tokens.sunMarked ?? 0) === 0 && (self.tokens.chargedGem ?? 0) > 0) mark('Solar Burst')
+      // « Choose one : Gem OU Sun Marked ». Humain : SON toggle pré-armé (user-caught : le
+      // choix se faisait tout seul) ; IA : prend celui qui manque.
+      if (self.humanControlled) {
+        if (self.seBurstChoice === 'mark') mark('Solar Burst')
+        else gem('Solar Burst')
+      } else if ((opp.tokens.sunMarked ?? 0) === 0 && (self.tokens.chargedGem ?? 0) > 0) mark('Solar Burst')
       else if ((self.tokens.chargedGem ?? 0) === 0) gem('Solar Burst')
       else mark('Solar Burst')
       attack(8, true)

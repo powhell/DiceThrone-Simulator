@@ -116,6 +116,11 @@ export interface PlayerState {
   sunDial?: number
   sunDialDawn?: boolean
   seDawnSpendArmed?: boolean
+  // Choix humains pré-armés (JAMAIS d'heuristique auto pour l'humain — leçon Guard Break) :
+  // Solar Burst I « Choose one », Solstice! et Sashay (du) « Choose one ».
+  seBurstChoice?: 'gem' | 'mark'
+  seSolsticeHeal?: boolean
+  duSashayHeal?: boolean
   // Disarm résolu à l'upkeep : si le porteur n'a pas défaussé, il saute son Income Phase
   // (le flag est posé à l'upkeep, consommé par playIncomePhase).
   skipIncomeThisTurn?: boolean

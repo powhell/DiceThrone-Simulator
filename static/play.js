@@ -484,17 +484,19 @@
     return '';
   }
   function renderMatch() {
-    const adv = liveAdvice();
+    // DÉFAUT INVERSÉ (demande user 2026-07-08) : le conseil principal = DÉS SEULS — le mode
+    // « avec cartes » supposait que tu allais jouer tes cartes de conversion, ce qui n'est
+    // souvent pas vrai. La ligne secondaire montre ce que les cartes AJOUTERAIENT si tu es
+    // prêt à les payer.
+    const adv = liveAdvice(false);
     if (adv) {
       const stop = adv.kept.length===5 || adv.ev <= adv.keepAllEv + 0.05;
       const hint = stop ? '' : planHint(adv.kept);
-      // Demande user : montrer aussi le solveur « dés seuls » quand des cartes de manip
-      // gonflent l'EV — pour voir ce que valent le jet ET les cartes séparément.
       let rawLine = '';
       if (hasDiceCards()) {
-        const raw = liveAdvice(false);
-        if (raw && (Math.abs(raw.ev - adv.ev) >= 0.15 || raw.kept.join(',') !== adv.kept.join(','))) {
-          rawLine = `<div class="lead" style="margin-top:4px">🎲 dés seuls : garder [${raw.kept.join(',')||'rien'}] → EV ${raw.ev.toFixed(1)} · tes cartes ajoutent +${Math.max(0, adv.ev - raw.ev).toFixed(1)}</div>`;
+        const wc = liveAdvice(true);
+        if (wc && (Math.abs(wc.ev - adv.ev) >= 0.15 || wc.kept.join(',') !== adv.kept.join(','))) {
+          rawLine = `<div class="lead" style="margin-top:4px">🃏 si tu es prêt à payer tes cartes de manip : garder [${wc.kept.join(',')||'rien'}] → EV ${wc.ev.toFixed(1)} (+${Math.max(0, wc.ev - adv.ev).toFixed(1)})</div>`;
         }
       }
       // POURQUOI ce keep (user-caught : « je ne comprends jamais les raisons ») : où la garde
@@ -1163,6 +1165,21 @@
             G.humanCraft(g, o.armorId); log(`🛠️ Tu craftes <b>${o.name}</b>.`); renderAll(); }));
         }
       }
+      // Choix « Choose one » des cartes en main : pré-armés AVANT de cliquer la carte
+      // (plus aucun choix automatique pour l'humain — user-caught).
+      {
+        const youC = g.state.players[g.humanIdx];
+        if (HUMAN==='se' && youC.hand.includes('solstice')) {
+          const h = youC.seSolsticeHeal===true;
+          c.appendChild(btn(`Solstice! jouera : ${h?'💚 soin 2':'💥 2 dégâts'} (clique pour changer)`,'', ()=>{
+            youC.seSolsticeHeal=!h; renderControls(); }));
+        }
+        if (HUMAN==='du' && youC.hand.includes('sashay')) {
+          const h = youC.duSashayHeal===true;
+          c.appendChild(btn(`Sashay jouera : ${h?'⬇ recul + soin 2':'⬆ avance + 2 dégâts'} (clique pour changer)`,'', ()=>{
+            youC.duSashayHeal=!h; renderControls(); }));
+        }
+      }
       // Sun Elf : dépenser le Charged Gem (Main Phase, d6 -> CP et/ou 2 dmg indéfendables).
       if (HUMAN==='se') {
         const youSe = g.state.players[g.humanIdx];
@@ -1332,6 +1349,12 @@
       }
       // Sun Elf : côté DAWN, dumper la valeur du cadran en dégâts sur CETTE attaque (puis −4)
       // — ta décision, pré-armée (jamais automatique).
+      // Solar Burst I « Choose one » : TON choix pré-armé (plus jamais auto — user-caught).
+      if (HUMAN==='se' && cands.length && cands.some(cd=>cd.name.startsWith('Solar Burst')) && !you.upgradesInPlay.includes('solar-burst-ii')) {
+        const pick = you.seBurstChoice==='mark';
+        c.appendChild(btn(`Solar Burst choisira : ${pick?'☀️ infliger Sun Marked':'💎 gagner Charged Gem'} (clique pour changer)`, 'primary', ()=>{
+          you.seBurstChoice = pick ? 'gem' : 'mark'; renderControls(); }));
+      }
       if (HUMAN==='se' && cands.length && you.sunDialDawn===true) {
         // La décharge lit le cadran AU MOMENT de l'attaque — APRÈS le « Increase Sun Dial »
         // de l'habileté choisie (user-caught : l'étiquette montrait le cadran d'avant).

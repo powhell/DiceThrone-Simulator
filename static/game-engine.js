@@ -5992,7 +5992,7 @@ var Game = (() => {
       return;
     }
     if (card.id === "sashay") {
-      const back = self.humanControlled ? self.duStepsMode === "backward" : self.hp <= 35;
+      const back = self.humanControlled ? self.duSashayHeal === true : self.hp <= 35;
       if (back) {
         const moved = takeSteps(self, -1);
         self.hp = Math.min(self.hp + 2, 60);
@@ -6032,7 +6032,7 @@ var Game = (() => {
       return;
     }
     if (card.id === "solstice") {
-      const heal = self.humanControlled ? self.hp < 40 : self.hp <= 35;
+      const heal = self.humanControlled ? self.seSolsticeHeal === true : self.hp <= 35;
       if (heal) {
         self.hp = Math.min(60, self.hp + 2);
         log(state, playerIdx, phase, "Solstice!: healed 2");
@@ -8080,7 +8080,10 @@ var Game = (() => {
         mark("Solar Burst II");
         attack(7, false);
       } else {
-        if ((opp.tokens.sunMarked ?? 0) === 0 && (self.tokens.chargedGem ?? 0) > 0) mark("Solar Burst");
+        if (self.humanControlled) {
+          if (self.seBurstChoice === "mark") mark("Solar Burst");
+          else gem("Solar Burst");
+        } else if ((opp.tokens.sunMarked ?? 0) === 0 && (self.tokens.chargedGem ?? 0) > 0) mark("Solar Burst");
         else if ((self.tokens.chargedGem ?? 0) === 0) gem("Solar Burst");
         else mark("Solar Burst");
         attack(8, true);
