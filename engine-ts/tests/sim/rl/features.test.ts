@@ -31,12 +31,12 @@ describe('encodeState', () => {
     expect(f0[0]).toBeCloseTo(f1[0]) // turn-progress feature is the same regardless of perspective
   })
 
-  // v3 layout (2026-07-07, bloc joueur 48 champs — voir features.ts PLAYER_BLOCK_SIZE) :
-  // [turn, self(48 base + upgrade one-hot), selfHand(one-hot), opp(48 base + one-hot)].
+  // v4 layout (2026-07-08, bloc joueur 57 champs — voir features.ts PLAYER_BLOCK_SIZE) :
+  // [turn, self(57 base + upgrade one-hot), selfHand(one-hot), opp(57 base + one-hot)].
   // Les offsets sont dérivés des constantes exportées (les 21/8/33 v2 codés en dur ont cassé
   // au passage v3).
   const SELF_BASE = 1
-  const SELF_UPGRADES = SELF_BASE + 48
+  const SELF_UPGRADES = SELF_BASE + 57
   const SELF_HAND = SELF_UPGRADES + UPGRADE_ONEHOT_SIZE
 
   it('v2: encodes WHICH upgrades are in play, not just how many', () => {
@@ -62,7 +62,7 @@ describe('encodeState', () => {
     const state = createInitialGameState('bw', 'hh')
     state.players[0].tokens.dreadful = 3
     const f = encodeState(state, 0)
-    const dreadfulIdx = SELF_BASE + 21 // 8 scalaires + 8 identité + 5 forge/armures avant les jetons
+    const dreadfulIdx = SELF_BASE + 23 // 8 scalaires + 10 identité + 5 forge/armures avant les jetons
     expect(f[dreadfulIdx]).toBeCloseTo(3 / 5)
   })
 })

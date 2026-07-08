@@ -52,7 +52,8 @@ function buildHeroEncoding(heroId: HeroId): HeroEncoding {
 }
 
 // nx (boss) exclu : jamais encodé pour le réseau (pas dans le pool self-play)
-const HERO_IDS = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py'] as const
+// v4 (2026-07-08) : Duelist (du) + Sun Elf (se) — CHANGEMENT DE LAYOUT, re-train from scratch.
+const HERO_IDS = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se'] as const
 const ENCODINGS: Partial<Record<HeroId, HeroEncoding>> & Record<'hh' | 'bw' | 'fm', HeroEncoding> =
   Object.fromEntries(HERO_IDS.map(h => [h, buildHeroEncoding(h)])) as any
 
@@ -134,11 +135,21 @@ function encodePlayer(p: PlayerState): number[] {
     p.tokens.knockdown ?? 0,
     p.tokens.stun ?? 0,
     (p.fmCapBonus ?? 0) / 2,
+    // v4 : jetons Duelist / Sun Elf
+    p.tokens.disarm ?? 0,
+    p.tokens.chargedGem ?? 0,
+    p.tokens.sunMarked ?? 0,
     // Druid : forme (3 one-hot) ; Thor : Mjölnir chez l'adversaire
     p.form === 'druid' ? 1 : 0,
     p.form === 'cat' ? 1 : 0,
     p.form === 'bear' ? 1 : 0,
     p.mjolnirAway === true ? 1 : 0,
+    // v4 : Duelist — piste Footwork (-2..+2 normalisée) + bonus du tour dispo ;
+    // Sun Elf — cadran (0-5 normalisé) + face DAWN.
+    (p.footwork ?? 0) / 2,
+    p.footworkBonusUsedThisTurn === true ? 1 : 0,
+    (p.sunDial ?? 0) / 5,
+    p.sunDialDawn === true ? 1 : 0,
     ...encodeUpgradesInPlay(p),
   ]
 }
@@ -154,7 +165,8 @@ export function encodeState(state: GameState, forPlayerIdx: 0 | 1): number[] {
   ]
 }
 
-// v3 : 8 scalaires + 8 identité + 5 forge/armures + 5 jetons v2 + 17 jetons v3 + fmCapBonus
-// + 3 formes + mjolnir = 48, + upgrades one-hot. (Vérifié par printFeatureCount.ts.)
-export const PLAYER_BLOCK_SIZE = 48 + UPGRADE_ONEHOT_SIZE
+// v4 : 8 scalaires + 10 identité + 5 forge/armures + 5 jetons v2 + 17 jetons v3 + fmCapBonus
+// + 3 jetons v4 (disarm/chargedGem/sunMarked) + 3 formes + mjolnir + 4 états v4 (footwork,
+// bonusUsed, sunDial, dawn) = 57, + upgrades one-hot.
+export const PLAYER_BLOCK_SIZE = 57 + UPGRADE_ONEHOT_SIZE
 export const FEATURE_COUNT = 1 + (PLAYER_BLOCK_SIZE + HAND_ONEHOT_SIZE) + PLAYER_BLOCK_SIZE
