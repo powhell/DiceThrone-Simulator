@@ -154,6 +154,7 @@
   let tbShow = null;           // {rolls, dmg, defused} — the TB dice, displayed until you roll
   let altSel = new Set();      // dice selected in the alter phase (click 1-2 dice, then pick a value)
   let samMode = false;         // Samesies! 2-click mode during the roll phase (see below)
+  let ttaPickMode = false;     // Try Try Again! : clique le dé à relancer (puis 2e relance gratuite)
   let ttaCharges = 0;          // Try Try Again! : 2e relance séquentielle restante (gratuite)
   let samTarget = null;        // first click = the die to CHANGE; second click = the die to COPY
 
@@ -423,6 +424,12 @@
           if (nd) { dice = nd.map((v,k)=>({v, kept: dice[k] ? dice[k].kept : false}));
             log(`♻️ <b>Scrap ${m.oreId==='diamond-ore'?'Diamond':'Ultimanium'} Ore</b> : dé ${i+1} ${m.mode==='set6'?'→ 6':'relancé'}.`); }
           renderAll(); return;
+        }
+        // Mode Try Try Again! : le clic désigne le dé à relancer (1re des 2 relances).
+        if (ttaPickMode) {
+          ttaPickMode = false;
+          playRollCard({cardId:'try-try-again', dieIndices:[i]});
+          return;
         }
         // Mode Samesies! : 1er clic = dé à changer, 2e clic = dé dont on copie la valeur.
         if (samMode) {
@@ -1290,6 +1297,18 @@
         // AI reaches these via its oracle hook; the human plays them here, between attempts.
         // Hard cap 6 buttons to avoid flooding the row (the useful targets come first).
         humanRollCardChoices().slice(0,6).forEach(ch=>c.appendChild(btn(rollCardLabel(ch),'', ()=>playRollCard(ch))));
+        // Try Try Again! : mode 2-clics — UN bouton, puis clique N'IMPORTE QUEL dé (gardé ou
+        // non, la carte ne distingue pas) ; la 2e relance gratuite suit (même dé permis).
+        const ttaCard = G.cardById(G.heroTemplateFor(HUMAN), 'try-try-again');
+        if (ttaCard && you.hand.includes('try-try-again') && you.cp >= (ttaCard.cpCost||0)) {
+          c.appendChild(btn(`${ttaPickMode?'✅ ':''}Try Try Again! : relance un dé (×2, même dé permis) · ${ttaCard.cpCost||0} CP`,
+            ttaPickMode?'primary':'', ()=>{ ttaPickMode=!ttaPickMode; samMode=false; samTarget=null; renderDice(false); renderControls(); }));
+          if (ttaPickMode) {
+            const sT=document.createElement('span'); sT.className='rolls';
+            sT.textContent='→ clique le dé à relancer (1re des 2 relances)';
+            c.appendChild(sT);
+          }
+        }
         // Samesies! : mode 2-clics — n'importe quel dé peut copier n'importe quel AUTRE dé
         // (l'énumération "→ max seulement" cachait p.ex. 2→4, bug rapporté).
         const samCard = G.cardById(G.heroTemplateFor(HUMAN), 'samesies');
@@ -1663,12 +1682,9 @@
       else if (id==='radiant-exchange'){ // se : cadran -> 0 (min 1), 1 dé -> 6
         if (HUMAN==='se' && (you.sunDial||0)>=1) vals.forEach((v,i)=>{ if(v!==6) out.push({cardId:id, dieIndices:[i], values:[6]}); });
       }
-      else if (id==='try-try-again'){
-        // TOUS les dés (carte : « up to two dice », n'importe lesquels — user-caught : le
-        // raccourci « 2 plus bas non gardés » empêchait de cibler le dé voulu, donc de le
-        // relancer deux fois de suite).
-        vals.forEach((v,i)=>out.push({cardId:id, dieIndices:[i]}));
-      }
+      // try-try-again : PAS énuméré ici — 5 boutons (un par dé) se faisaient couper par le
+      // plafond slice(0,6) de la rangée (user-caught ×2 : « je ne peux pas relancer mon 2e
+      // dé »). Mode 2-clics comme Samesies! (ttaPickMode) : un bouton, puis clique le dé.
       // samesies: PAS énuméré ici — l'ancien code n'offrait que "→ valeur max" (bug rapporté :
       // impossible de copier un 4 sur un 2). Géré par le mode 2-clics (samMode) dans
       // renderControls/renderDice, qui couvre toutes les paires comme le moteur.
@@ -1686,7 +1702,7 @@
   }
   function playRollCard(ch){
     const lbl = rollCardLabel(ch); // label reads the CURRENT dice — compute before they change
-    samMode=false; samTarget=null; // les dés changent : toute sélection Samesies devient invalide
+    samMode=false; samTarget=null; ttaPickMode=false; // les dés changent : sélections invalides
     const r = G.humanPlayRollCard(g, ch, dice.map(d=>d.v));
     dice = r.dice.map((v,i)=>({v, kept: dice[i] ? dice[i].kept : false}));
     if (r.extraRollsGranted) rollsLeft += r.extraRollsGranted;
@@ -1713,7 +1729,7 @@
       you.warmUpCpChoice = (k>=0 && k<=you.cp) ? k : 0;
     }
     log(`Tu joues <b>${mainLabel(a)}</b>.`); G.humanApplyMain(g,a,mainPhaseNow()); renderAll(); }
-  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; ttaCharges=0; renderAll(); }
+  function toRoll(){ phase='roll'; dice=[]; attempts=0; rollsLeft=2; tbShow=null; samMode=false; samTarget=null; ttaCharges=0; ttaPickMode=false; renderAll(); }
   function toAlter(){
     try { // coach: stopping with rerolls left, when the DP says rerolling is worth more?
       if (phase==='roll' && rollsLeft > 0) {
