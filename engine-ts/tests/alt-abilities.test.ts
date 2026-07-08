@@ -2,8 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { clearCache } from '../src/index.js'
 import { hhConfig } from '../src/characters/horseman/config.js'
 import { bwConfig } from '../src/characters/black_widow/config.js'
+import { dreadfulValueOfGaining } from '../src/characters/horseman/dreadful.js'
+import { GRIM_PURSUIT_AVG_DMG, CARD_DRAW_VALUE } from '../src/characters/horseman/constants.js'
 
 beforeEach(() => clearCache())
+
+// Valeurs de jetons DÉRIVÉES des constantes (les chiffres en dur cassaient à chaque
+// recalibration — v3->v4 2026-07-07). GP plafonné à 3 (cap solveur).
+const GP = GRIM_PURSUIT_AVG_DMG
+const dv = dreadfulValueOfGaining
 
 function hhEntry(dice: number[], dreadful: number, hasHead: boolean, upgradeIds: string[], name: string) {
   return hhConfig.buildAbilityBoard(dice, { dreadful, hasHead, upgradeIds }).find(e => e.name === name)
@@ -25,7 +32,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Ghostly Charge (AABC)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['cleave-ii'], 'Ghostly Charge (AABC)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(2.0 + 2 * 0.9, 5) // GP calibré 1.8
+    expect(e?.value).toBeCloseTo(2.0 + 2 * GP, 5)
   })
 
   it('Cursed Gallop (Ride Down II -> BBB): only appears with ride-down-ii in play', () => {
@@ -33,7 +40,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Cursed Gallop (BBB)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['ride-down-ii'], 'Cursed Gallop (BBB)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(1.0 + 0.9, 5)
+    expect(e?.value).toBeCloseTo(1.0 + GP, 5)
   })
 
   it('The Reaper (Reap II -> BBBCC): only appears with reap-ii in play', () => {
@@ -41,8 +48,8 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'The Reaper (BBBCC)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['reap-ii'], 'The Reaper (BBBCC)')
     expect(e?.matched).toBe(true)
-    // 4 dmg + dreadfulValueOfGaining(0,3)=9.0 + card draw (2.0)
-    expect(e?.value).toBeCloseTo(4.0 + (1.5 + 0.8 + 0.8) + 0.5, 5) // The Reaper: dmg + 3 Dreadful calibrés + pioche 1.6
+    // The Reaper: dmg + 3 Dreadful + pioche
+    expect(e?.value).toBeCloseTo(4.0 + dv(0, 3) + CARD_DRAW_VALUE, 5)
   })
 
   it('Haunted Strike (Spectral Assault II -> AACC): only appears with spectral-assault-ii in play', () => {
@@ -58,7 +65,7 @@ describe('HH alt-abilities gated by upgradeIds', () => {
     expect(hhEntry(dice, 0, false, [], 'Spooky (CCC)')).toBeUndefined()
     const e = hhEntry(dice, 0, false, ['horrify-ii'], 'Spooky (CCC)')
     expect(e?.matched).toBe(true)
-    expect(e?.value).toBeCloseTo(7.0 + 2 * 0.9, 5)
+    expect(e?.value).toBeCloseTo(7.0 + 2 * GP, 5)
   })
 })
 
@@ -110,8 +117,8 @@ describe('HH base abilities buffed by their own II upgrade', () => {
 
   it('Ride Down: Grim Pursuit gain 2 -> 3 with ride-down-ii in play (dmg unchanged at 6)', () => {
     const dice = [1, 2, 3, 4, 5] // a=3, b=2, c=0
-    expect(hhEntry(dice, 0, false, [], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 2 * 0.9, 5)
-    expect(hhEntry(dice, 0, false, ['ride-down-ii'], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 3 * 0.9, 5)
+    expect(hhEntry(dice, 0, false, [], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 2 * GP, 5)
+    expect(hhEntry(dice, 0, false, ['ride-down-ii'], 'Ride Down (AAABB)')?.value).toBeCloseTo(6.0 + 3 * GP, 5)
   })
 
   it('Sow Despair S/L: dreadful gain bumped (1->2 / 2->3), L also 9 -> 10 dmg, with sow-despair-ii', () => {
@@ -135,8 +142,8 @@ describe('HH base abilities buffed by their own II upgrade', () => {
 
   it('Horrify: Grim Pursuit becomes unconditional 2 (was 1, Head-only) with horrify-ii in play', () => {
     const dice = [6, 6, 6, 6, 1] // c=4, a=1
-    expect(hhEntry(dice, 0, false, [], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + (1.5 + 0.8 + 0.8), 5) // no Head, no upgrade (Dreadful calibrés)
-    expect(hhEntry(dice, 0, false, ['horrify-ii'], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + (1.5 + 0.8 + 0.8) + 2 * 0.9, 5) // Dreadful + GP calibrés
+    expect(hhEntry(dice, 0, false, [], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + dv(0, 3), 5) // no Head, no upgrade
+    expect(hhEntry(dice, 0, false, ['horrify-ii'], 'Horrify (CCCC)')?.value).toBeCloseTo(6.0 + dv(0, 3) + 2 * GP, 5)
   })
 })
 

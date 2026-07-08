@@ -256,8 +256,13 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
   if ((self.tokens.disarm ?? 0) > 0) {
     self.tokens.disarm = 0
     const heroTD = heroTemplateFor(self.heroId)
-    const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice())
-    const pick = self.hand.length === 0 ? undefined
+    // Joueur humain : SON choix pré-armé (duDisarmChoice = 'skip' ou l'id à défausser) —
+    // jamais de décision automatique (leçon Guard Break). IA : défausse la moins chère.
+    const humanChoice = self.humanControlled ? self.duDisarmChoice : undefined
+    self.duDisarmChoice = undefined
+    const chosen = humanChoice && humanChoice !== 'skip' ? humanChoice
+      : policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice())
+    const pick = (humanChoice === 'skip' || self.hand.length === 0) ? undefined
       : (chosen && self.hand.includes(chosen)) ? chosen
       : self.hand.slice().sort((x, y) => (cardById(heroTD, x)?.cpCost ?? 0) - (cardById(heroTD, y)?.cpCost ?? 0))[0]
     if (pick !== undefined) {

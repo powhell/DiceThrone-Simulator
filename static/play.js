@@ -87,6 +87,13 @@
            D:'<g class="glyph"><ellipse cx="30" cy="34" rx="10" ry="8" transform="rotate(-25 30 34)"/><path d="M44 14 L52 8 M46 20 Q56 16 60 8" fill="none" stroke-width="3.5" stroke-linecap="round"/><path d="M14 52 Q24 50 40 40" fill="none" stroke-width="3.5" stroke-linecap="round"/><path d="M8 44 Q20 44 24 38" fill="none" stroke-width="2.5" stroke-linecap="round"/></g>'},
       symName:{A:'Flame',B:'Blaze',C:'Fiery Soul',D:'Meteor'},
       col:{A:'#f2d24b',B:'#3a3a3a',C:'#c8452a',D:'#e8e2d0'} },
+    du: { name:'Duelist', crest:'DU', cls:v=>v<=3?'A':v<=5?'B':'C',
+      // Blade = lame courbe, Boot = botte, Pierce = estoc éclaté (violet, leaflet V1)
+      sym:{A:'<g class="glyph"><path d="M14 50 L40 14 Q46 8 52 10 Q54 16 48 22 L22 48 Z M20 42 L28 50" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           B:'<g class="glyph"><path d="M24 10 L38 10 L38 32 Q50 34 52 44 L52 50 L16 50 L16 44 Q16 38 24 34 Z M16 44 L38 44" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           C:'<g class="glyph"><path d="M12 52 L44 20 M44 20 L30 22 M44 20 L42 34 M50 8 L38 14 M50 8 L46 20 M56 16 L46 26" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>'},
+      symName:{A:'Blade',B:'Boot',C:'Pierce'},
+      col:{A:'#7a86e8',B:'#c8a06a',C:'#b45ad2'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -96,7 +103,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py'||v==='du') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -160,9 +167,10 @@
     th: [['Hammered',3,0,0],['Mighty Summon',1,2,1],['Chain Lightning',3,0,2],['Odinforce',2,3,0],['Bottled Lightning',0,0,4]],
     sm: [['Punch',3,0,0],['C-C-C-Combo',2,0,2],['Spider-Reflexes',1,2,1],['Wall Crawler',2,3,0],['Venom Punch',0,0,4]],
     py: [['Fireball',3,0,0,0],['Burning Soul',0,0,2,0],['Combustion',1,1,1,1],['Pyroblast',4,0,0,1],['Meteorite',0,0,0,4]],
+    du: [['Blade Flurry',3,0,0],['Balestra',2,2,0],['Feint Attack',2,0,2],['En Garde',0,3,1],['Bladestorm',0,0,4]],
   };
   const SUITE_NAME = { hh:'Suite (Sow Despair)', fm:'Suite (Armored Up)', bw:'Suite (Hacked)',
-    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)' };
+    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)', du:'Suite (Strike)' };
   function planHint(kept){
     const heroCls = humanHero.cls;
     const cnt = k => kept.filter(v=>heroCls(v)===k).length;
@@ -247,6 +255,14 @@
       const dial = rvP ? (rvP.nevermoreDial||0) : 0;
       out.push(`<span class="tok" style="border-color:#4a4a6a"><b>🐦‍⬛ Nevermore</b> cadran ${dial}</span>`);
     }
+    if (p.heroId === 'du') {
+      // Piste Footwork : 5 positions, -2 (défense) .. +2 (offense), départ Neutral.
+      const pos = p.footwork || 0;
+      const LBL = { '-2':'🛡️+3 Défensif (prévient 3)', '-1':'🂠 Défensif (pige 1)', '0':'⚖️ Neutral', '1':'⚔️+1 Offensif', '2':'⚔️+3 Offensif' };
+      const track = [2,1,0,-1,-2].map(v => v===pos ? '●' : '○').join('');
+      out.push(`<span class="tok" style="border-color:#7a86e8"><b>👣 Footwork</b> ${track} ${LBL[String(pos)]}${p.footworkBonusUsedThisTurn?' (bonus consommé ce tour)':''}</span>`);
+    }
+    if (t.disarm) out.push(`<span class="tok" style="border-color:#c8a03a"><b>🪝 Disarm</b> (upkeep : défausse 1 ou saute l'Income)</span>`);
     if (p.heroId === 'fm') {
       const ORE_SHORT = { 'gold-ore':'Or', 'diamond-ore':'Diamant', 'ultimanium-ore':'Ultimanium' };
       const counts = {};
@@ -605,9 +621,64 @@
       }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
         <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
-        + defBoxHTML(HUMAN, self);
+        + defBoxHTML(HUMAN, self)
+        + evBoxHTML();
     }
     renderAiBoard();
+  }
+
+  // 📊 EV par habileté selon TON ÉTAT COURANT (jetons, upgrades, forme, taxe de la défense
+  // IA incluse) — demande user 2026-07-07 : « voir les EV en fonction de ce que tu as ».
+  // Pour chaque ligne du board, on fabrique un jet de dés qui satisfait juste son pattern et
+  // on lit la valeur du solveur (dégâts + valeur des jetons gagnés − taxe défense adverse).
+  function synthDiceForReq(req){
+    if (!req || req==='—') return null;
+    const su = req.match(/suite\s*(\d)/i);
+    const cls = humanHero.cls;
+    // faces par symbole, dérivées du classifieur du héros (py a 4 symboles)
+    const faces = {};
+    for (let f=1; f<=6; f++){ const k=cls(f); (faces[k]=faces[k]||[]).push(f); }
+    if (su){
+      return su[1]==='5' ? [1,2,3,4,5] : [1,2,3,4,4]; // le double 4 évite la grande suite
+    }
+    const syms = req.replace(/[^A-D]/g,'').split('');
+    if (!syms.length) return null;
+    const idx = {A:0,B:0,C:0,D:0};
+    const out = syms.map(s=>{ const fs=faces[s]||[1]; const v=fs[idx[s]%fs.length]; idx[s]++; return v; });
+    // Complète à 5 dés avec des symboles ABSENTS du pattern (faces distinctes) : padder le
+    // même symbole gonflerait le tier (AAA -> 5A), et des valeurs répétées créeraient un
+    // N-of-a-kind bonus fantôme. Les autres habiletés activées par le pad ne gênent pas —
+    // on lit la valeur de la ligne visée uniquement.
+    const others = Object.keys(faces).filter(s=>!syms.includes(s));
+    let oi = 0;
+    while (out.length < 5) {
+      const s = others.length ? others[oi % others.length] : syms[0];
+      const fs = faces[s] || [1];
+      out.push(fs[idx[s] % fs.length]); idx[s]++; oi++;
+    }
+    return out.slice(0,5);
+  }
+  function evBoxHTML(){
+    try {
+      const self=g.state.players[g.humanIdx], opp=g.state.players[g.aiIdx];
+      const st = G.oracleStateFor(self, opp);
+      const entries=[];
+      for (const a of REFERENCE[HUMAN]||[]) {
+        const d5 = synthDiceForReq(a.req);
+        if (!d5) continue;
+        const base = a.name.replace(/\s*\(grande\)\s*$/,'');
+        const hits = G.fullAbilityBoard(HUMAN, d5, st)
+          .filter(x=>x.matched && (x.name===base || x.name.startsWith(base+' ') || x.name.startsWith(base+'!')))
+          .sort((x,y)=>y.value-x.value);
+        if (hits.length) entries.push({ name:a.name, ev:hits[0].value });
+      }
+      if (!entries.length) return '';
+      entries.sort((x,y)=>y.ev-x.ev);
+      const best = entries[0].ev;
+      return `<div class="defbox"><b>📊 EV par habileté — ton état actuel</b> (jetons/upgrades comptés, taxe de la défense ${aiHero.name} déduite)<br>`
+        + entries.map(e=>`${e.ev===best?'⭐ ':''}${e.name} : <b>${e.ev.toFixed(1)}</b>`).join('<br>')
+        + `</div>`;
+    } catch(err){ return ''; }
   }
 
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
@@ -938,6 +1009,37 @@
       });
       c.appendChild(btn('Ne rien révéler (+1 CP)','', ()=>doBeginTurn(undefined,{kind:'cp'})));
       c.appendChild(btn('Ne pas miner','gold', ()=>doBeginTurn(undefined,{kind:'skip'})));
+    } else if (phase==='upkeep' && (HUMAN==='du'
+        // héros non-du porteur de Disarm (inflige par l'IA du) — sauf hh quand son prompt
+        // Headless Mayhem prime (dans ce cas rare le Disarm suit l'heuristique moteur)
+        || ((g.state.players[g.humanIdx].tokens.disarm||0)>0 && !(HUMAN==='hh' && (G.humanCanTerrorize(g) || g.state.players[g.humanIdx].tokens.head>0))))) {
+      const you=g.state.players[g.humanIdx];
+      const pos=you.footwork||0;
+      const heroDu=G.heroTemplateFor(HUMAN);
+      // Disarm : TON choix (défausser 1 carte ou sauter l'Income) — pré-armé avant Reposition.
+      if ((you.tokens.disarm||0)>0){
+        const s0=document.createElement('span'); s0.className='rolls';
+        s0.textContent='🪝 Disarm — défausse 1 carte OU saute ton Income :'; c.appendChild(s0);
+        const seenIds=new Set();
+        you.hand.forEach(id=>{
+          if (seenIds.has(id)) return; seenIds.add(id);
+          const nm=(G.cardById(heroDu,id)||{name:id}).name;
+          c.appendChild(btn(`${you.duDisarmChoice===id?'✅ ':''}Défausser ${nm}`, you.duDisarmChoice===id?'primary':'', ()=>{
+            you.duDisarmChoice=id; if (HUMAN!=='du') doBeginTurn(undefined); else renderControls(); }));
+        });
+        c.appendChild(btn(`${you.duDisarmChoice==='skip'?'✅ ':''}Sauter l'Income (garde ta main)`, you.duDisarmChoice==='skip'?'primary':'', ()=>{
+          you.duDisarmChoice='skip'; if (HUMAN!=='du') doBeginTurn(undefined); else renderControls(); }));
+        if (HUMAN!=='du') return;
+      }
+      // Reposition (passif OBLIGATOIRE) : 1 ou 2 Steps dans UNE direction ; recul d'EXACTEMENT
+      // 1 step = +1 Guard Break (dos du leaflet : 2 back = pas de GB).
+      const s=document.createElement('span'); s.className='rolls';
+      const POS_LBL={'-2':'🛡️+3 Défensif','-1':'🂠 Défensif (pige)','0':'⚖️ Neutral','1':'⚔️+1 Offensif','2':'⚔️+3 Offensif'};
+      s.textContent=`👣 Reposition (obligatoire) — tu es en ${POS_LBL[String(pos)]} :`; c.appendChild(s);
+      if (pos<2) c.appendChild(btn('⬆ 1 step forward','primary', ()=>{ you.duRepositionDir='forward'; doBeginTurn(undefined); }));
+      if (pos<1) c.appendChild(btn('⬆⬆ 2 steps forward','', ()=>{ you.duRepositionDir='forward2'; doBeginTurn(undefined); }));
+      if (pos>-2) c.appendChild(btn('⬇ 1 step backward (+1 Guard Break)','', ()=>{ you.duRepositionDir='backward1'; doBeginTurn(undefined); }));
+      if (pos>-1) c.appendChild(btn('⬇⬇ 2 steps backward (PAS de GB)','', ()=>{ you.duRepositionDir='backward2'; doBeginTurn(undefined); }));
     } else if (phase==='upkeep') {
       const canTz = G.humanCanTerrorize(g);
       const s=document.createElement('span'); s.className='rolls';
@@ -1107,11 +1209,21 @@
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
-      // Thor : Guard Break pré-armé (avant, les jetons partaient AUTOMATIQUEMENT dès 5+
-      // dégâts — heuristique IA appliquée au joueur humain, user-caught).
-      if (HUMAN==='th' && cands.length && (you.tokens.guardBreak||0)>0) {
+      // Thor/Duelist : Guard Break pré-armé (avant, les jetons partaient AUTOMATIQUEMENT dès
+      // 5+ dégâts — heuristique IA appliquée au joueur humain, user-caught). Même jeton.
+      if ((HUMAN==='th'||HUMAN==='du') && cands.length && (you.tokens.guardBreak||0)>0) {
         c.appendChild(btn(`${gbSel?'✅ ':''}Guard Break : d6 par jeton, 4-5 = attaque INDÉFENDABLE (arrêt au 1er succès)`,
           gbSel?'primary':'', ()=>{ gbSel=!gbSel; renderControls(); }));
+      }
+      // Duelist : direction pré-armée des Steps gratuits de l'habileté choisie (le Bonus
+      // offensif de la position FINALE s'ajoute à l'attaque — avancer paie tout de suite).
+      if (HUMAN==='du' && cands.length) {
+        const m = you.duStepsMode ?? 'forward';
+        const LBL = { forward:'⬆ Avancer (bonus offensif +1/+3)', backward:'⬇ Reculer (préparer la défense)', none:'⏸ Ne pas bouger' };
+        c.appendChild(btn(`👣 Steps de l'habileté : ${LBL[m]}`,'', ()=>{
+          you.duStepsMode = m==='forward' ? 'backward' : m==='backward' ? 'none' : 'forward';
+          renderControls();
+        }));
       }
       // Attack-modifier cards, armed the same toggle way (Cranial Assist! & co were unplayable
       // by the human before — the attack bridge always answered "none"; user-caught).
@@ -1121,6 +1233,9 @@
           'unescapable': 'Unescapable! : attaque INDÉFENDABLE (−1 Grim Pursuit) · 1 CP',
           'subversion': 'Subversion! : +2 dégâts, +1/upgrade posée ce tour · 1 CP',
           'thundering-hooves': 'Thundering Hooves! : CP → Grim Pursuit (jusqu\'à 3) · 0 CP',
+          'pick-it-up': `Pick It Up : retire le Disarm adverse, +3 dégâts${g.state.players[g.aiIdx].tokens.disarm>0?' (l\'IA est Disarmed ✔)':' (SANS effet : l\'IA n\'est pas Disarmed)'} · 0 CP`,
+          'burst-forward': 'Burst Forward : 1 Step forward AVANT le calcul du bonus · 1 CP',
+          'blade-barrage': 'Blade Barrage : lance 5 dés, +1 dégât par Blade (2 Boots → 1 Step) · 2 CP',
         };
         for (const id of G.humanAttackModifierOptions(g, gpFromCandidate)) {
           if (id==='thundering-hooves' && you.cp===0) continue; // rien à convertir
@@ -1756,6 +1871,11 @@
       // The Mines : le choix (révéler quel Ore / +1 CP / ne pas miner) t'appartient.
       phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
     }
+    else if (you.heroId==='du' || (you.tokens.disarm||0)>0) {
+      // Duelist : Reposition OBLIGATOIRE (direction/steps = ton choix) ; Disarm : défausser
+      // 1 carte ou sauter l'Income — tes décisions, jamais automatiques.
+      phase='upkeep'; $('turntag').textContent = `Ton Upkeep · tour ${g.state.turnNumber+1}`; renderAll();
+    }
     else doBeginTurn(undefined);
   }
   function doBeginTurn(mayhem, fmMine){
@@ -2147,6 +2267,14 @@
       {name:'Ignite',req:'SUITE 5',dmg:'+2 FM ·4 +2/FM'},
       {name:'Meteorite',req:'DDDD',dmg:'+2 FM ·Stun ·1/FM indéf. +2 coll.'},
       {name:'Scorch the Earth',req:'DDDDD',dmg:'12 ·Knockdown+Burn ·ULT'} ],
+    du:[ {name:'Blade Flurry',req:'AAA+',dmg:'4/5/6 ·4-kind: 1 Step'},
+      {name:'Balestra',req:'AABB',dmg:'≤2 Steps ·6'},
+      {name:'Feint Attack',req:'AACC',dmg:'+GB ·1 Step ·2 indéf.'},
+      {name:'En Garde',req:'CBBB',dmg:'8 +4d6: Pierce→Disarm'},
+      {name:'Strike',req:'SUITE 4',dmg:'7'},
+      {name:'Strike (grande)',req:'SUITE 5',dmg:'1 Step ·10'},
+      {name:'Bladestorm',req:'CCCC',dmg:'+GB ·Disarm ·≤2 Steps ·8'},
+      {name:'Master of the Blade',req:'CCCCC',dmg:'11 ·2 GB ·Disarm ·≤4 Steps ·ULT'} ],
     nx:[ {name:'1 · Swoop',req:'—',dmg:'3 indéf. ·soin 4 ·-1 statut'},
       {name:'2 · Ember Spark',req:'—',dmg:'8 ·mill 3'},
       {name:'3 · Gashing Bite',req:'—',dmg:'4d6: top2'},

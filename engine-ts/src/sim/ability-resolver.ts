@@ -14,14 +14,14 @@ import { duConfig, type DUState } from '../characters/duelist/config.js'
 import { heroTemplateFor, resolvedAbilityByBoardName } from './data/load.js'
 import type { AbilityCandidate, HeroId } from './types.js'
 
-export function resolveMatchedAbilities(
+// Le board COMPLET du solveur (matched + valeurs EV nettes, taxe de défense incluse) pour un
+// jeu de dés donné — exposé au bundle navigateur pour le panneau « EV par habileté » de l'UI.
+export function fullAbilityBoard(
   heroId: HeroId,
   dice: number[],
   oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState,
-): AbilityCandidate[] {
-  const template = heroTemplateFor(heroId)
-  const upgradeIds = oracleState.upgradeIds ?? []
-  const board = heroId === 'hh'
+) {
+  return heroId === 'hh'
     ? hhConfig.buildAbilityBoard(dice, oracleState as HHState)
     : heroId === 'fm'
       ? fmConfig.buildAbilityBoard(dice, oracleState as FMState)
@@ -38,6 +38,16 @@ export function resolveMatchedAbilities(
                 : heroId === 'du'
                   ? duConfig.buildAbilityBoard(dice, oracleState as DUState)
                   : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
+}
+
+export function resolveMatchedAbilities(
+  heroId: HeroId,
+  dice: number[],
+  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState,
+): AbilityCandidate[] {
+  const template = heroTemplateFor(heroId)
+  const upgradeIds = oracleState.upgradeIds ?? []
+  const board = fullAbilityBoard(heroId, dice, oracleState)
 
   return board
     .filter(e => e.matched && e.name !== 'Whiff')

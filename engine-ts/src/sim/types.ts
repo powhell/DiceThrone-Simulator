@@ -106,6 +106,9 @@ export interface PlayerState {
   // Direction pré-armée du joueur humain pour les Steps gratuits des habiletés ('forward'
   // par défaut : le Bonus offensif de la position finale paie sur l'attaque en cours).
   duStepsMode?: 'forward' | 'backward' | 'none'
+  // Choix humain pré-armé pour la résolution du Disarm à l'upkeep : 'skip' = sauter l'Income,
+  // sinon l'id de la carte à défausser. Consommé (remis à undefined) à la résolution.
+  duDisarmChoice?: string
   // Disarm résolu à l'upkeep : si le porteur n'a pas défaussé, il saute son Income Phase
   // (le flag est posé à l'upkeep, consommé par playIncomePhase).
   skipIncomeThisTurn?: boolean

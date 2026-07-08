@@ -118,5 +118,19 @@ window.CARD_IMG = {
  "molten-armor-ii": "../characters/Pyromancer/cards/Scan_20260706_132503.jpg",
  "burning-soul-ii": "../characters/Pyromancer/cards/Scan_20260706_132513.jpg",
  "fireball-ii": "../characters/Pyromancer/cards/Scan_20260706_132524.jpg",
- "hot-streak-ii": "../characters/Pyromancer/cards/Scan_20260706_132533.jpg"
+ "hot-streak-ii": "../characters/Pyromancer/cards/Scan_20260706_132533.jpg",
+ "blade-flurry-ii": "../characters/Duelist/cards/Scan_20260707_215404.jpg",
+ "retreat-ii": "../characters/Duelist/cards/Scan_20260707_215415.jpg",
+ "bladestorm-ii": "../characters/Duelist/cards/Scan_20260707_215424.jpg",
+ "feint-attack-ii": "../characters/Duelist/cards/Scan_20260707_215448.jpg",
+ "balestra-ii": "../characters/Duelist/cards/Scan_20260707_215458.jpg",
+ "pick-it-up": "../characters/Duelist/cards/Scan_20260707_215508.jpg",
+ "sashay": "../characters/Duelist/cards/Scan_20260707_215520.jpg",
+ "i-hate-waiting": "../characters/Duelist/cards/Scan_20260707_215528.jpg",
+ "burst-forward": "../characters/Duelist/cards/Scan_20260707_215557.jpg",
+ "quick-footwork": "../characters/Duelist/cards/Scan_20260707_215609.jpg",
+ "all-in-the-wrists": "../characters/Duelist/cards/Scan_20260707_215618.jpg",
+ "confident-footing": "../characters/Duelist/cards/Scan_20260707_215640.jpg",
+ "blade-barrage": "../characters/Duelist/cards/Scan_20260707_215650.jpg",
+ "courageous-advance": "../characters/Duelist/cards/Scan_20260707_215658.jpg"
 };

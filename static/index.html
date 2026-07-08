@@ -337,6 +337,52 @@ var Engine = (() => {
     evMemo.clear();
     distMemo.clear();
   }
+  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
+    if (!flags || !flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt) return base;
+    let best = base;
+    const counts = /* @__PURE__ */ new Map();
+    for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
+    let mode = dice[0];
+    for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v;
+    const tryVariant = (i, v, cost) => {
+      if (dice[i] === v) return;
+      const d2 = dice.slice();
+      d2[i] = v;
+      d2.sort((a, b) => a - b);
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) best = val;
+    };
+    for (let i = 0; i < dice.length; i++) {
+      if (flags.sixIt) tryVariant(i, 6, 1);
+      if (flags.soWild) {
+        tryVariant(i, 6, 2);
+        tryVariant(i, mode, 2);
+      }
+      if (flags.tipIt) {
+        if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1);
+        if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1);
+      }
+      if (flags.samesies) {
+        for (const v of counts.keys()) tryVariant(i, v, 1);
+      }
+    }
+    if (flags.twiceAsWild) {
+      const tryPair = (i, j, v) => {
+        if (dice[i] === v && dice[j] === v) return;
+        const d2 = dice.slice();
+        d2[i] = v;
+        d2[j] = v;
+        d2.sort((a, b) => a - b);
+        const val = evalDice(d2) - 3 * cpToDmg;
+        if (val > best) best = val;
+      };
+      for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
+        tryPair(i, j, 6);
+        tryPair(i, j, mode);
+      }
+    }
+    return best;
+  }
   function evalState(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
       if (kept.length !== totalDice) throw new Error(`evalState: need ${totalDice} dice at rolls=0, got ${kept.length}`);
@@ -482,8 +528,8 @@ var Engine = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 1.8;
-  var CARD_DRAW_VALUE = 1.6;
+  var GRIM_PURSUIT_AVG_DMG = 1.3;
+  var CARD_DRAW_VALUE = 1.4;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -523,7 +569,7 @@ var Engine = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [1.9, 0.9, 0.9, 1.1, 0];
+  var MARGINAL_VALUE = [1, 1.4, 0.8, 0.45, 1];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {
@@ -559,17 +605,21 @@ var Engine = (() => {
     }
     return false;
   }
-  function getCandidates(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
+  var GRIM_PURSUIT_CAP_SOLVER = 3;
+  function gpGainValue(gp, gain) {
+    return Math.min(gain, Math.max(0, GRIM_PURSUIT_CAP_SOLVER - gp)) * GRIM_PURSUIT_AVG_DMG;
+  }
+  function getCandidates(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
     const { A: a, B: b, C: c } = classify(dice);
     const out = [];
     const has = (id) => upgradeIds.includes(id);
     const tax = defenseTax;
     if (has("cleave-ii") && a >= 2 && b >= 1 && c >= 1) {
-      const val = GHOSTLY_CHARGE_DMG + GHOSTLY_CHARGE_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = GHOSTLY_CHARGE_DMG + gpGainValue(gp, GHOSTLY_CHARGE_GRIM_PURSUIT);
       out.push(["Ghostly Charge", val, GHOSTLY_CHARGE_DMG]);
     }
     if (has("ride-down-ii") && b >= 3) {
-      const val = CURSED_GALLOP_DMG + CURSED_GALLOP_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = CURSED_GALLOP_DMG + gpGainValue(gp, CURSED_GALLOP_GRIM_PURSUIT);
       out.push(["Cursed Gallop", val, CURSED_GALLOP_DMG]);
     }
     if (has("reap-ii") && b >= 3 && c >= 2) {
@@ -580,7 +630,7 @@ var Engine = (() => {
       out.push(["Haunted Strike", HAUNTED_STRIKE_DMG, HAUNTED_STRIKE_DMG]);
     }
     if (has("horrify-ii") && c >= 3) {
-      const val = SPOOKY_DMG + SPOOKY_GRIM_PURSUIT * GRIM_PURSUIT_AVG_DMG;
+      const val = SPOOKY_DMG + gpGainValue(gp, SPOOKY_GRIM_PURSUIT);
       out.push(["Spooky", val - tax, SPOOKY_DMG]);
     }
     if (c >= 5) {
@@ -591,8 +641,8 @@ var Engine = (() => {
       const base = HORRIFY_BASE_UNDEFENDABLE;
       const horrifyUpgraded = has("horrify-ii");
       let val = base + dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
-      if (horrifyUpgraded) val += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
-      else if (hasHead) val += GRIM_PURSUIT_AVG_DMG;
+      if (horrifyUpgraded) val += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED);
+      else if (hasHead) val += gpGainValue(gp, 1);
       out.push(["Horrify", val, base]);
     }
     if (a >= 3 && c >= 2) {
@@ -613,7 +663,7 @@ var Engine = (() => {
     }
     if (a >= 3 && b >= 2) {
       const grimPursuit = has("ride-down-ii") ? RIDE_DOWN_GRIM_PURSUIT_UPGRADED : RIDE_DOWN_GRIM_PURSUIT;
-      const val = RIDE_DOWN_BASE + grimPursuit * GRIM_PURSUIT_AVG_DMG;
+      const val = RIDE_DOWN_BASE + gpGainValue(gp, grimPursuit);
       out.push(["Ride Down", val - tax, RIDE_DOWN_BASE]);
     }
     if (b >= 3 && c >= 1) {
@@ -634,19 +684,19 @@ var Engine = (() => {
       const val = SOW_SMALL_DMG + dreadfulValueOfGaining(dreadful, dreadfulGiven);
       out.push(["Sow Despair S", val - tax, SOW_SMALL_DMG]);
     }
-    const whiffVal = WHIFF_PURSUIT_TOKENS * GRIM_PURSUIT_AVG_DMG;
+    const whiffVal = gpGainValue(gp, WHIFF_PURSUIT_TOKENS);
     out.push(["Whiff", whiffVal, whiffVal]);
     return out;
   }
-  function bestAbilityValue(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([, v]) => v));
+  function bestAbilityValue(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    return Math.max(...getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([, v]) => v));
   }
-  function bestAbilityName(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax);
+  function bestAbilityName(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    const cands = getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp);
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
-  function buildAbilityBoard(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0) {
-    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax).map(([name]) => name));
+  function buildAbilityBoard(dice, dreadful, hasHead, upgradeIds = [], defenseTax = 0, gp = 0) {
+    const matchedSet = new Set(getCandidates(dice, dreadful, hasHead, upgradeIds, defenseTax, gp).map(([name]) => name));
     const tax = defenseTax;
     const has = (id) => upgradeIds.includes(id);
     const cleaveUpgraded = has("cleave-ii");
@@ -664,8 +714,8 @@ var Engine = (() => {
     const dc = dreadfulValueOfGaining(dreadful, DREADFUL_CHARGE_DREADFUL_GIVEN);
     const horrifyGain = dreadfulValueOfGaining(dreadful, HORRIFY_DREADFUL_GIVEN);
     let horrifyVal = HORRIFY_BASE_UNDEFENDABLE + horrifyGain;
-    if (horrifyUpgraded) horrifyVal += HORRIFY_GRIM_PURSUIT_UPGRADED * GRIM_PURSUIT_AVG_DMG;
-    else if (hasHead) horrifyVal += GRIM_PURSUIT_AVG_DMG;
+    if (horrifyUpgraded) horrifyVal += gpGainValue(gp, HORRIFY_GRIM_PURSUIT_UPGRADED);
+    else if (hasHead) horrifyVal += gpGainValue(gp, 1);
     let reapVal = reapDmg + dreadfulValueOfGaining(dreadful, REAP_DREADFUL_GIVEN);
     if (hasHead) reapVal += CARD_DRAW_VALUE;
     const sowLVal = sowLDmg + dreadfulValueOfGaining(dreadful, sowLDreadful);
@@ -715,21 +765,29 @@ var Engine = (() => {
       return hhFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      const base = bestAbilityValue(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
     },
     buildAbilityBoard(dice, state) {
-      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
     },
     hasMatchedAbility(dice, state) {
-      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0);
+      const cands = getCandidates(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
       const upgrades = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgrades}`;
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
+      return `${state.dreadful}|${state.hasHead ? 1 : 0}|${Math.round((state.defenseTax ?? 0) * 2)}|${Math.min(state.grimPursuit ?? 0, 3)}|${wc}|${upgrades}`;
     }
   };
 
@@ -763,9 +821,9 @@ var Engine = (() => {
   var WIDOWS_BITE_TB_INFLICTED = 1;
   var RRT_THRESHOLD_UPGRADES = 5;
   var RRT_ALL_ATTACK_BONUS = 1;
-  var AGILITY_VALUE = 1.5;
+  var AGILITY_VALUE = 1.1;
   var CP_TO_DMG_EQUIV = 0.75;
-  var COVERT_OPS_VALUE = 0.75;
+  var COVERT_OPS_VALUE = 0.1;
   var WHIFF_VALUE = 0;
   var COVERT_MISSION_DMG = 0;
   var RECON_DMG = 0;
@@ -827,7 +885,7 @@ var Engine = (() => {
     const { A: a, B: b, C: c } = classify2(dice);
     const out = [];
     const tax = defenseTax;
-    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const rrt = upgradeIds.includes("red-room-training-ii") && upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     if (has("widows-gauntlets-ii") && a >= 2 && b >= 2) {
       const tb = tbGainValue(upgrades, tbOnOpp, 1);
@@ -899,7 +957,7 @@ var Engine = (() => {
     return cands.reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
   }
   function directDamageByName(upgrades, _tbOnOpp, upgradeIds = []) {
-    const rrt = upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
+    const rrt = upgradeIds.includes("red-room-training-ii") && upgrades >= RRT_THRESHOLD_UPGRADES ? RRT_ALL_ATTACK_BONUS : 0;
     const has = (id) => upgradeIds.includes(id);
     const batonStrikeUpgraded = has("baton-strike-ii");
     const gauntletsDmg = has("widows-gauntlets-ii") ? GAUNTLETS_BASE_DMG_UPGRADED : GAUNTLETS_BASE_DMG;
@@ -982,7 +1040,13 @@ var Engine = (() => {
       return bwFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const base = bestAbilityValue2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
       return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
@@ -996,7 +1060,9 @@ var Engine = (() => {
     },
     stateKey(state) {
       const upgradeIds = (state.upgradeIds ?? []).slice().sort().join(",");
-      return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${upgradeIds}`;
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
+      return `${state.upgrades}|${state.tbOnOpp}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}|${upgradeIds}`;
     },
     directDamageByName(state) {
       return directDamageByName(state.upgrades, state.tbOnOpp, state.upgradeIds);
@@ -1016,7 +1082,7 @@ var Engine = (() => {
   var ARMORED_UP_2ARMOR_BONUS = 2;
   var FINAL_TOUCHES_VALUE = 14;
   var CP_TO_DMG_EQUIV2 = 0.75;
-  var CARD_DRAW_VALUE2 = 1.3;
+  var CARD_DRAW_VALUE2 = 1.5;
   var MINE_VALUE = 2;
   var ORE_TUTOR_VALUE = 2.2;
   var WHIFF_VALUE2 = 0;
@@ -1101,7 +1167,13 @@ var Engine = (() => {
       return fmFaceToSymbol(face);
     },
     bestAbilityValue(dice, state) {
-      return bestAbilityValue3(dice, state.armorCount, state.defenseTax ?? 0);
+      const base = bestAbilityValue3(dice, state.armorCount, state.defenseTax ?? 0);
+      return augmentTerminalValue(
+        dice,
+        base,
+        state.wildcards,
+        (d) => bestAbilityValue3(d, state.armorCount, state.defenseTax ?? 0)
+      );
     },
     bestAbilityName(dice, state) {
       return bestAbilityName3(dice, state.armorCount, state.defenseTax ?? 0);
@@ -1114,13 +1186,17 @@ var Engine = (() => {
       return cands.some(([name]) => name !== "Whiff");
     },
     stateKey(state) {
-      return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}`;
+      const _w = state.wildcards || {};
+      const wc = (_w.sixIt ? 1 : 0) + (_w.soWild ? 2 : 0) + (_w.twiceAsWild ? 4 : 0) + (_w.samesies ? 8 : 0) + (_w.tipIt ? 16 : 0);
+      return `${Math.min(state.armorCount, 2)}|${Math.round((state.defenseTax ?? 0) * 2)}|${wc}`;
     }
   };
 
   // src/index.ts
-  function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIds) {
-    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds });
+  function evalState2(kept, rollsRemaining, dreadful, hasHead, upgradeIdsOrGp, grimPursuit = 0) {
+    const upgradeIds = Array.isArray(upgradeIdsOrGp) ? upgradeIdsOrGp : void 0;
+    const gp = typeof upgradeIdsOrGp === "number" ? upgradeIdsOrGp : grimPursuit;
+    return evalState(hhConfig, kept, rollsRemaining, { dreadful, hasHead, upgradeIds, grimPursuit: gp });
   }
   function calculateOptimalKeep2(dice, rollsRemaining, dreadful, hasHead, upgradeIds) {
     return calculateOptimalKeep(hhConfig, dice, rollsRemaining, { dreadful, hasHead, upgradeIds });

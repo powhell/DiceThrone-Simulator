@@ -10,7 +10,7 @@ export {
   finalizeDefenseRoll, resolveDefense, playCard, playUpkeepPhase, playDiscardPhase,
   applyAttackModifierCard, finalizePendingAttackDamage, oracleStateFor,
 } from './turn.js'
-export { resolveMatchedAbilities } from './ability-resolver.js'
+export { resolveMatchedAbilities, fullAbilityBoard } from './ability-resolver.js'
 export { runOffensiveRoll } from './oracle.js'
 // Interactive human-vs-AI driver (the UI calls these step by step — see interactive.ts).
 export {

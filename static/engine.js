@@ -249,8 +249,8 @@ var Engine = (() => {
   }
 
   // src/characters/horseman/constants.ts
-  var GRIM_PURSUIT_AVG_DMG = 0.9;
-  var CARD_DRAW_VALUE = 0.5;
+  var GRIM_PURSUIT_AVG_DMG = 1.3;
+  var CARD_DRAW_VALUE = 1.4;
   var SPECTRAL_ASSAULT_BASE = 8;
   var SPECTRAL_ASSAULT_BASE_UPGRADED = 9;
   var SPECTRAL_ASSAULT_PER_DREADFUL = 1.5;
@@ -290,7 +290,7 @@ var Engine = (() => {
   var SPOOKY_GRIM_PURSUIT = 2;
 
   // src/characters/horseman/dreadful.ts
-  var MARGINAL_VALUE = [1.5, 0.8, 0.8, 0.4, 1];
+  var MARGINAL_VALUE = [1, 1.4, 0.8, 0.45, 1];
   function dreadfulValueOfGaining(current, gained) {
     let total = 0;
     for (let i = 0; i < gained; i++) {

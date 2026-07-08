@@ -50,6 +50,7 @@ var Game = (() => {
     finishAiTurn: () => finishAiTurn,
     forward: () => forward,
     fromJSON: () => fromJSON,
+    fullAbilityBoard: () => fullAbilityBoard,
     greedyHighestDamagePolicy: () => greedyHighestDamagePolicy,
     hasHead: () => hasHead,
     heroTemplateFor: () => heroTemplateFor,
@@ -3996,10 +3997,13 @@ var Game = (() => {
   }
 
   // src/sim/ability-resolver.ts
+  function fullAbilityBoard(heroId, dice, oracleState) {
+    return heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : heroId === "py" ? pyConfig.buildAbilityBoard(dice, oracleState) : heroId === "du" ? duConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+  }
   function resolveMatchedAbilities(heroId, dice, oracleState) {
     const template = heroTemplateFor(heroId);
     const upgradeIds = oracleState.upgradeIds ?? [];
-    const board = heroId === "hh" ? hhConfig.buildAbilityBoard(dice, oracleState) : heroId === "fm" ? fmConfig.buildAbilityBoard(dice, oracleState) : heroId === "rv" ? rvConfig.buildAbilityBoard(dice, oracleState) : heroId === "dr" ? drConfig.buildAbilityBoard(dice, oracleState) : heroId === "th" ? thConfig.buildAbilityBoard(dice, oracleState) : heroId === "sm" ? smConfig.buildAbilityBoard(dice, oracleState) : heroId === "py" ? pyConfig.buildAbilityBoard(dice, oracleState) : heroId === "du" ? duConfig.buildAbilityBoard(dice, oracleState) : bwConfig.buildAbilityBoard(dice, oracleState);
+    const board = fullAbilityBoard(heroId, dice, oracleState);
     return board.filter((e) => e.matched && e.name !== "Whiff").map((e) => {
       const data = resolvedAbilityByBoardName(template, e.name, upgradeIds);
       return {
@@ -4949,8 +4953,10 @@ var Game = (() => {
     if ((self.tokens.disarm ?? 0) > 0) {
       self.tokens.disarm = 0;
       const heroTD = heroTemplateFor(self.heroId);
-      const chosen = policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice());
-      const pick = self.hand.length === 0 ? void 0 : chosen && self.hand.includes(chosen) ? chosen : self.hand.slice().sort((x, y) => (cardById(heroTD, x)?.cpCost ?? 0) - (cardById(heroTD, y)?.cpCost ?? 0))[0];
+      const humanChoice = self.humanControlled ? self.duDisarmChoice : void 0;
+      self.duDisarmChoice = void 0;
+      const chosen = humanChoice && humanChoice !== "skip" ? humanChoice : policy.chooseDiscardForRoar?.(state, playerIdx, self.hand.slice());
+      const pick = humanChoice === "skip" || self.hand.length === 0 ? void 0 : chosen && self.hand.includes(chosen) ? chosen : self.hand.slice().sort((x, y) => (cardById(heroTD, x)?.cpCost ?? 0) - (cardById(heroTD, y)?.cpCost ?? 0))[0];
       if (pick !== void 0) {
         self.hand.splice(self.hand.indexOf(pick), 1);
         self.discard.push(pick);
