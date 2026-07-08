@@ -178,7 +178,12 @@ export interface GameState {
   // the still-unprevented incoming damage, so defensive-card plays in the DRP5 response window can
   // whittle it down uniformly (via applyWindowAction), then DRP6 (finalizePendingAttackDamage)
   // queues it and applies simultaneously with the counter-damage. null outside a DRP.
-  pendingAttack: { attackerIdx: 0 | 1; defenderIdx: 0 | 1; remaining: number } | null
+  // `remaining` = le SOUS-TOTAL officiel (étape 2 « Add & Subtract » des règles Final DMG
+  // Total) : additions/préventions PLATES seulement. `halvings` = le nombre de préventions
+  // ½ actives (Agility, Spider-Sense, Recoil…) — étape 3 « Multiply & Divide » : chaque ½ se
+  // calcule INDÉPENDAMMENT sur le sous-total final (division arrondie VERS LE HAUT), à la
+  // toute fin, dans finalizePendingAttackDamage (page de règles scannée par l'user 2026-07-08).
+  pendingAttack: { attackerIdx: 0 | 1; defenderIdx: 0 | 1; remaining: number; halvings?: number } | null
   // Transient during the Offensive Roll Phase's "opponent may alter my dice" window (ORP2): the
   // roller and their just-rolled dice. alterDie/rerollDie actions mutate `dice` in place; once the
   // window closes the (possibly altered) dice are matched to an ability, so the roller re-decides

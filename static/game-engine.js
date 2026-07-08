@@ -5522,7 +5522,14 @@ var Game = (() => {
   function finalizePendingAttackDamage(state) {
     const pa = state.pendingAttack;
     if (pa) {
-      queueDamage(state, pa.defenderIdx, pa.remaining);
+      let final = pa.remaining;
+      const halv = pa.halvings ?? 0;
+      if (halv > 0 && pa.remaining > 0) {
+        const per = Math.ceil(pa.remaining / 2);
+        final = Math.max(0, pa.remaining - halv * per);
+        log(state, pa.defenderIdx, "defense", `Final total: subtotal ${pa.remaining}, ${halv} halving(s) of ${per} -> ${final}`);
+      }
+      queueDamage(state, pa.defenderIdx, final);
       state.pendingAttack = null;
     }
     flushDamage(state);
@@ -6682,6 +6689,7 @@ var Game = (() => {
     const attacker = state.players[attackerIdx];
     const defender = state.players[defenderIdx];
     let damagePrevented = 0;
+    let halvings = 0;
     if (defender.heroId === "th") {
       const twUp = defender.upgradesInPlay.includes("thunder-wheel-ii");
       const eff = thunderWheelEffects(finalDefenseDice, twUp);
@@ -6727,9 +6735,9 @@ var Game = (() => {
         log(state, defenderIdx, "defense", `Counterpunch: prevented 0, ${back} dmg back`);
       } else {
         const success = spiderSenseSuccess(finalDefenseDice, mode === "sense-swing");
-        damagePrevented = success ? spiderSensePrevention(incomingDamage) : 0;
-        defender.spiderSensePrevented = success && damagePrevented > 0;
-        log(state, defenderIdx, "defense", `Spider-Sense${mode === "sense-swing" ? " (Swing Escape)" : ""}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : "prevented 0 (no success face)"}, 0 dmg back`);
+        if (success) halvings += 1;
+        defender.spiderSensePrevented = success && incomingDamage > 0;
+        log(state, defenderIdx, "defense", `Spider-Sense${mode === "sense-swing" ? " (Swing Escape)" : ""}: ${success ? "will prevent 1/2 of the final subtotal (rounded up)" : "prevented 0 (no success face)"}, 0 dmg back`);
       }
     } else if (defender.heroId === "du") {
       const up = defender.upgradesInPlay.includes("retreat-ii");
@@ -6790,8 +6798,8 @@ var Game = (() => {
       const r = spendAgilityToHalveDamage(defender, remaining, rng);
       if (r.succeeded) {
         agilitySuccesses += 1;
-        remaining = agilitySuccesses >= 2 ? 0 : r.remainingDamage;
-        log(state, defenderIdx, "defense", agilitySuccesses >= 2 ? `Agility spent: rolled ${r.roll} \u2014 SECOND half = 100% prevented (verified clarification)` : `Agility spent: rolled ${r.roll}, halved damage`);
+        halvings += 1;
+        log(state, defenderIdx, "defense", agilitySuccesses >= 2 ? `Agility spent: rolled ${r.roll} \u2014 SECOND half = 100% prevented (verified clarification)` : `Agility spent: rolled ${r.roll} \u2014 will prevent 1/2 of the final subtotal`);
       } else {
         remaining = r.remainingDamage;
         log(state, defenderIdx, "defense", `Agility spent: rolled ${r.roll}, no effect`);
@@ -6799,7 +6807,7 @@ var Game = (() => {
         break;
       }
     }
-    state.pendingAttack = { attackerIdx, defenderIdx, remaining };
+    state.pendingAttack = { attackerIdx, defenderIdx, remaining, halvings };
     resolveResponseWindow(
       state,
       [attackerIdx, defenderIdx],
@@ -6822,9 +6830,14 @@ var Game = (() => {
         log(state, defenderIdx, "defense", `Footwork Defensive Bonus: drew ${b.draw} (position ${footworkPos(defender)})`);
       }
     }
-    if (state.pendingAttack && state.pendingAttack.remaining > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
-      attacker.hp = Math.min(60, attacker.hp + SUN_MARKED_HEAL);
-      log(state, attackerIdx, "defense", `Sun Marked: attacker heals ${SUN_MARKED_HEAL}`);
+    if (state.pendingAttack && (defender.tokens.sunMarked ?? 0) > 0) {
+      const paSM = state.pendingAttack;
+      const perSM = Math.ceil(paSM.remaining / 2);
+      const finalSM = Math.max(0, paSM.remaining - (paSM.halvings ?? 0) * perSM);
+      if (finalSM > 0) {
+        attacker.hp = Math.min(60, attacker.hp + SUN_MARKED_HEAL);
+        log(state, attackerIdx, "defense", `Sun Marked: attacker heals ${SUN_MARKED_HEAL}`);
+      }
     }
     finalizePendingAttackDamage(state);
   }
@@ -6923,8 +6936,13 @@ var Game = (() => {
     if (cardId === "recoil") {
       const r = resolveRecoil(remaining, rng);
       if (r.cpGained > 0) grantCp(defender, r.cpGained);
-      log(state, defenderIdx, "defense", `Recoil!: prevented ${r.damagePrevented} dmg, +${r.cpGained} CP`);
-      return remaining - r.damagePrevented;
+      if (r.damagePrevented > 0 && state.pendingAttack) {
+        state.pendingAttack.halvings = (state.pendingAttack.halvings ?? 0) + 1;
+        log(state, defenderIdx, "defense", `Recoil!: will prevent 1/2 of the final subtotal, +${r.cpGained} CP`);
+      } else {
+        log(state, defenderIdx, "defense", `Recoil!: prevented 0, +${r.cpGained} CP`);
+      }
+      return remaining;
     }
     if (cardId === "elude") {
       log(state, defenderIdx, "defense", `Elude!: ignored all ${remaining} incoming dmg`);

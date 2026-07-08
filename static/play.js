@@ -2166,6 +2166,13 @@
       if (/\+Charged Gem/.test(m[3]||'')) out += ' · +💎 Charged Gem';
       return out;
     }
+    if ((m = msg.match(/^Final total: subtotal (\d+), (\d+) halving\(s\) of (\d+) -> (\d+)/)))
+      return `🧮 <b>Total final</b> (règle Multiply & Divide) : sous-total ${m[1]} − ${m[2]} × ½ (${m[3]} chacun, arrondi haut) = <b>${m[4]} subis</b>`;
+    if (/will prevent 1\/2 of the final subtotal/.test(msg)) {
+      if (/^Spider-Sense/.test(msg)) return `🕷️ <b>Spider-Sense</b> : préviendra la MOITIÉ du total final (calculée à la fin — règle officielle)`;
+      if (/^Agility/.test(msg)) return `🩰 <b>Agility</b> réussie : préviendra la MOITIÉ du total final (calculée à la fin)`;
+      if (/^Recoil/.test(msg)) return `🃏 <b>Recoil!</b> : préviendra la MOITIÉ du total final`;
+    }
     if ((m = msg.match(/^Sun Marked: attacker heals (\d+)/)))
       return `☀️ <b>Sun Marked</b> : l'attaquant se soigne de ${m[1]}`;
     if ((m = msg.match(/^Charged Gem: rolled (\d+) -> (.+)$/)))

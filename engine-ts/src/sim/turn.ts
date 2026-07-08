@@ -241,7 +241,18 @@ function flushDamage(state: GameState): void {
 export function finalizePendingAttackDamage(state: GameState): void {
   const pa = state.pendingAttack
   if (pa) {
-    queueDamage(state, pa.defenderIdx, pa.remaining)
+    // Étape 3 des règles « Final DMG Total » (page vérifiée user 2026-07-08) : les divisions
+    // s'appliquent EN DERNIER, chacune calculée INDÉPENDAMMENT sur le sous-total de l'étape 2
+    // (division toujours arrondie vers le haut). Deux ½ sur un sous-total S : S - 2·ceil(S/2)
+    // <= 0 -> le « double Agility = 100% » du leaflet BW en découle naturellement.
+    let final = pa.remaining
+    const halv = pa.halvings ?? 0
+    if (halv > 0 && pa.remaining > 0) {
+      const per = Math.ceil(pa.remaining / 2)
+      final = Math.max(0, pa.remaining - halv * per)
+      log(state, pa.defenderIdx, 'defense', `Final total: subtotal ${pa.remaining}, ${halv} halving(s) of ${per} -> ${final}`)
+    }
+    queueDamage(state, pa.defenderIdx, final)
     state.pendingAttack = null
   }
   flushDamage(state)
@@ -1599,8 +1610,11 @@ export function finalizeDefenseRoll(
   const attacker = state.players[attackerIdx]
   const defender = state.players[defenderIdx]
 
-  // DRP4: resolve the defense roll's effects on the final dice.
+  // DRP4: resolve the defense roll's effects on the final dice. Les préventions PLATES vont
+  // dans damagePrevented (étape 2 des règles) ; les préventions ½ (Spider-Sense…) se comptent
+  // dans `halvings` et s'appliquent À LA FIN (étape 3 — page Final DMG Total, user 2026-07-08).
   let damagePrevented = 0
+  let halvings = 0
   if (defender.heroId === 'th') {
     const twUp = defender.upgradesInPlay.includes('thunder-wheel-ii')
     const eff = th.thunderWheelEffects(finalDefenseDice, twUp)
@@ -1648,10 +1662,11 @@ export function finalizeDefenseRoll(
       log(state, defenderIdx, 'defense', `Counterpunch: prevented 0, ${back} dmg back`)
     } else {
       // « On Spider, prevent 1/2 dmg (rounded up) » — UNE fois si >=1 Spider (ruling user).
+      // ½ = division -> étape 3 : se calcule sur le SOUS-TOTAL final, pas ici (règles).
       const success = sm.spiderSenseSuccess(finalDefenseDice, mode === 'sense-swing')
-      damagePrevented = success ? sm.spiderSensePrevention(incomingDamage) : 0
-      defender.spiderSensePrevented = success && damagePrevented > 0
-      log(state, defenderIdx, 'defense', `Spider-Sense${mode === 'sense-swing' ? ' (Swing Escape)' : ''}: ${success ? `prevented ${damagePrevented} (1/2 rounded up)` : 'prevented 0 (no success face)'}, 0 dmg back`)
+      if (success) halvings += 1
+      defender.spiderSensePrevented = success && incomingDamage > 0
+      log(state, defenderIdx, 'defense', `Spider-Sense${mode === 'sense-swing' ? ' (Swing Escape)' : ''}: ${success ? 'will prevent 1/2 of the final subtotal (rounded up)' : 'prevented 0 (no success face)'}, 0 dmg back`)
     }
   } else if (defender.heroId === 'du') {
     // Retreat (board vérifié) : 1 dmg par 2 Blades (II : par Blade) ; pour CHAQUE Boot/Pierce,
@@ -1726,10 +1741,10 @@ export function finalizeDefenseRoll(
     const r = bw.spendAgilityToHalveDamage(defender, remaining, rng)
     if (r.succeeded) {
       agilitySuccesses += 1
-      remaining = agilitySuccesses >= 2 ? 0 : r.remainingDamage
+      halvings += 1 // ½ = division -> étape 3, sur le sous-total final (plus de soustraction ici)
       log(state, defenderIdx, 'defense', agilitySuccesses >= 2
         ? `Agility spent: rolled ${r.roll} — SECOND half = 100% prevented (verified clarification)`
-        : `Agility spent: rolled ${r.roll}, halved damage`)
+        : `Agility spent: rolled ${r.roll} — will prevent 1/2 of the final subtotal`)
     } else {
       remaining = r.remainingDamage
       log(state, defenderIdx, 'defense', `Agility spent: rolled ${r.roll}, no effect`)
@@ -1743,7 +1758,7 @@ export function finalizeDefenseRoll(
   // (Not This Time!, Recoil!, Elude!, Spirited Reprisal!) to whittle `remaining`; either player may
   // also play Instants. The state the window mutates lives on state.pendingAttack, so
   // applyWindowAction('defense') — shared with the RL lookahead — can reach `remaining`.
-  state.pendingAttack = { attackerIdx, defenderIdx, remaining }
+  state.pendingAttack = { attackerIdx, defenderIdx, remaining, halvings }
   resolveResponseWindow(
     state, [attackerIdx, defenderIdx], { windowType: 'defense', eludeEligible },
     rng, policies, enumerateWindowActions, applyWindowAction,
@@ -1765,10 +1780,16 @@ export function finalizeDefenseRoll(
     }
   }
   // Sun Marked (se) : si des dégâts passent encore après la fenêtre DRP5, l'attaquant Heal 2
-  // (« en autant qu'il y ait du damage » — ruling user 2026-07-08).
-  if (state.pendingAttack && state.pendingAttack.remaining > 0 && (defender.tokens.sunMarked ?? 0) > 0) {
-    attacker.hp = Math.min(60, attacker.hp + se.SUN_MARKED_HEAL)
-    log(state, attackerIdx, 'defense', `Sun Marked: attacker heals ${se.SUN_MARKED_HEAL}`)
+  // (« en autant qu'il y ait du damage » — ruling user). Évalué sur le TOTAL FINAL (étape 3 :
+  // sous-total moins les ½ indépendants), pas sur le sous-total.
+  if (state.pendingAttack && (defender.tokens.sunMarked ?? 0) > 0) {
+    const paSM = state.pendingAttack
+    const perSM = Math.ceil(paSM.remaining / 2)
+    const finalSM = Math.max(0, paSM.remaining - (paSM.halvings ?? 0) * perSM)
+    if (finalSM > 0) {
+      attacker.hp = Math.min(60, attacker.hp + se.SUN_MARKED_HEAL)
+      log(state, attackerIdx, 'defense', `Sun Marked: attacker heals ${se.SUN_MARKED_HEAL}`)
+    }
   }
   // DRP6: the defender's surviving damage and the attacker's counter-damage land simultaneously.
   finalizePendingAttackDamage(state)
@@ -1869,8 +1890,15 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
   if (cardId === 'recoil') {
     const r = bw.resolveRecoil(remaining, rng)
     if (r.cpGained > 0) grantCp(defender, r.cpGained)
-    log(state, defenderIdx, 'defense', `Recoil!: prevented ${r.damagePrevented} dmg, +${r.cpGained} CP`)
-    return remaining - r.damagePrevented
+    // « Prevent 1/2 » = division -> étape 3 des règles : enregistrée comme halving sur le
+    // total final, pas soustraite du sous-total ici.
+    if (r.damagePrevented > 0 && state.pendingAttack) {
+      state.pendingAttack.halvings = (state.pendingAttack.halvings ?? 0) + 1
+      log(state, defenderIdx, 'defense', `Recoil!: will prevent 1/2 of the final subtotal, +${r.cpGained} CP`)
+    } else {
+      log(state, defenderIdx, 'defense', `Recoil!: prevented 0, +${r.cpGained} CP`)
+    }
+    return remaining
   }
   if (cardId === 'elude') {
     log(state, defenderIdx, 'defense', `Elude!: ignored all ${remaining} incoming dmg`)
