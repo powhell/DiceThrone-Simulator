@@ -621,10 +621,10 @@
       }
       box.innerHTML = rows.map(a=>`<div class="abil${a.on?' on':''}">
         <div><div class="an">${a.name}</div><div class="req">${renderReq(humanHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
-        + defBoxHTML(HUMAN, self)
-        + evBoxHTML();
+        + defBoxHTML(HUMAN, self);
     }
     renderAiBoard();
+    renderEvPanel();
   }
 
   // 📊 EV par habileté selon TON ÉTAT COURANT (jetons, upgrades, forme, taxe de la défense
@@ -658,7 +658,9 @@
     }
     return out.slice(0,5);
   }
-  function evBoxHTML(){
+  function renderEvPanel(){
+    const box = document.getElementById('ev-panel');
+    if (!box) return;
     try {
       const self=g.state.players[g.humanIdx], opp=g.state.players[g.aiIdx];
       const st = G.oracleStateFor(self, opp);
@@ -670,15 +672,16 @@
         const hits = G.fullAbilityBoard(HUMAN, d5, st)
           .filter(x=>x.matched && (x.name===base || x.name.startsWith(base+' ') || x.name.startsWith(base+'!')))
           .sort((x,y)=>y.value-x.value);
-        if (hits.length) entries.push({ name:a.name, ev:hits[0].value });
+        if (hits.length) entries.push({ name:a.name, req:a.req, ev:hits[0].value });
       }
-      if (!entries.length) return '';
+      if (!entries.length) { box.innerHTML = '<div class="empty">—</div>'; return; }
       entries.sort((x,y)=>y.ev-x.ev);
       const best = entries[0].ev;
-      return `<div class="defbox"><b>📊 EV par habileté — ton état actuel</b> (jetons/upgrades comptés, taxe de la défense ${aiHero.name} déduite)<br>`
-        + entries.map(e=>`${e.ev===best?'⭐ ':''}${e.name} : <b>${e.ev.toFixed(1)}</b>`).join('<br>')
-        + `</div>`;
-    } catch(err){ return ''; }
+      box.innerHTML = entries.map(e=>`<div class="abil${e.ev===best?' on':''}">
+        <div><div class="an">${e.ev===best?'⭐ ':''}${e.name}</div><div class="req">${renderReq(humanHero,e.req)}</div></div>
+        <div class="dv">${e.ev.toFixed(1)}</div></div>`).join('')
+        + `<div class="defbox">EV nette si l'habileté part MAINTENANT : dégâts + valeur des jetons/effets gagnés − ce que la défense ${aiHero.name} va te bouffer. Recalculée avec TES jetons, upgrades et position à chaque changement.</div>`;
+    } catch(err){ box.innerHTML = '<div class="empty">—</div>'; }
   }
 
   // The DEFENSE box each printed hero board has — name, dice formula, per-symbol effects —
@@ -2153,12 +2156,26 @@
     for (let i=lastLogLen; i<L.length; i++){ const e=L[i];
       const isHuman = e.playerIdx===g.humanIdx;
       const t = translateLog(e.message, isHuman, isHuman?humanHero:aiHero);
-      if (t !== null) addLog(`<span class="t">T${e.turn}·${isHuman?'Toi':'IA'}</span>${t}`);
+      if (t !== null) addLog(`<span class="t">${isHuman?'Toi':'IA'}</span>${t}`, `Tour ${e.turn}`, isHuman?'you':'ai');
     }
     lastLogLen = L.length;
   }
-  function addLog(html){ const l=document.createElement('div'); l.className='l'; l.innerHTML=html; logBox.prepend(l); }
-  function log(html){ addLog(`<span class="t">→</span>${html}`); }
+  // Journal CHRONOLOGIQUE (user-caught : le prepend affichait tout « à l'envers ») — les
+  // lignes s'ajoutent en bas, un bandeau doré sépare chaque tour, et on suit le fil en bas
+  // sauf si tu as remonté lire plus haut.
+  let lastLogHdr = '';
+  function addLog(html, hdr, who){
+    const follow = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 40;
+    if (hdr && hdr !== lastLogHdr) {
+      const h=document.createElement('div'); h.className='lh'; h.textContent=hdr;
+      logBox.appendChild(h); lastLogHdr=hdr;
+    }
+    const l=document.createElement('div');
+    l.className='l' + (who==='you'?' you-line':who==='ai'?' ai-line':'');
+    l.innerHTML=html; logBox.appendChild(l);
+    if (follow) logBox.scrollTop = logBox.scrollHeight;
+  }
+  function log(html){ addLog(html, undefined, 'you'); }
 
   function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities(); renderHand(); renderCardsDrawer(); drainEngineLog(); }
 
