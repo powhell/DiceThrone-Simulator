@@ -32,7 +32,7 @@ Le jeton Footwork **démarre en Neutral** (Hero Setup).
 | Master of the Blade! **ULT** | CCCCC (5 Pierce) | gagne **2 Guard Break** ; inflige **Disarm** ; may take up to 4 Steps ; puis **11 dmg** |
 | **Retreat** (déf.) | Defense Roll **4** | **1 dmg par 2 Blades** à l'attaquant ; **pour CHAQUE Boot ou Pierce roulé, tu DOIS prendre 1 Step backward** |
 
-## Cartes (14 : 8 upgrades + 6 actions)
+## Cartes (14 : 5 upgrades + 9 actions)
 **Upgrades** :
 - Blade Flurry II (2 CP) : 5/6/7 dmg ; le Step passe au **3-of-a-kind**.
 - Balestra II (2 CP) : up to 2 Steps ; **8 dmg** ; + alt **FANCY FEET (BBB)** : gagne Guard Break, may take up to 3 Steps (pas de dmg).
