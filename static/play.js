@@ -1383,9 +1383,9 @@
         const b = btn(`${gpBonusSel?'✅ ':''}Grim Pursuit : lance 5 dés, +1 dégât par Fer (1×/tour · −1 jeton)${hint}`, gpBonusSel?'primary':'', ()=>{ gpBonusSel=!gpBonusSel; renderControls(); });
         c.appendChild(b);
       }
-      // Thor/Duelist : Guard Break pré-armé (avant, les jetons partaient AUTOMATIQUEMENT dès
-      // 5+ dégâts — heuristique IA appliquée au joueur humain, user-caught). Même jeton.
-      if ((HUMAN==='th'||HUMAN==='du') && cands.length && (you.tokens.guardBreak||0)>0) {
+      // Guard Break pré-armé — TOUT perso qui détient le jeton (transférable via
+      // Transference!, user-caught : volé au Duelist, indépensable ailleurs). Jamais auto.
+      if (cands.length && (you.tokens.guardBreak||0)>0) {
         c.appendChild(btn(`${gbSel?'✅ ':''}Guard Break : d6 par jeton, 4-5 = attaque INDÉFENDABLE (arrêt au 1er succès)`,
           gbSel?'primary':'', ()=>{ gbSel=!gbSel; renderControls(); }));
       }

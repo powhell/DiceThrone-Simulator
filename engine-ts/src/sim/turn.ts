@@ -1506,6 +1506,22 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     return
   }
 
+  // Guard Break — jeton TRANSFÉRABLE : quiconque le détient peut le dépenser sur sa propre
+  // attaque défendable (user-caught : volé au Duelist via Transference!, indépensable ailleurs
+  // — le spend vivait dans les closures th/du seulement ; centralisé ici pour les 10 persos).
+  // IA : heuristique >= 5 dmg ; humain : son pré-armage (chooseGuardBreakSpend), jamais auto.
+  if ((attacker.tokens.guardBreak ?? 0) > 0 && incomingDamage > 0) {
+    const atkPolicy = policies[attackerIdx]
+    const gbWanted = atkPolicy.chooseGuardBreakSpend
+      ? atkPolicy.chooseGuardBreakSpend(state, attackerIdx, incomingDamage)
+      : incomingDamage >= 5
+    if (gbWanted) {
+      const gb = th.tryGuardBreak(attacker, rng)
+      log(state, attackerIdx, 'resolveAttack', `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(',')}] — ${gb.success ? 'attack is UNDEFENDABLE' : 'failed'}`)
+      if (gb.success) { queueAttackDamageVsArmor(state, attackerIdx, incomingDamage, false, rng, policies); return }
+    }
+  }
+
   // Webbed (sm, jeton vérifié) : « The next time a player afflicted with this token is Attacked
   // with normal damage, the damage type becomes undefendable instead and this token is
   // immediately removed. » — pas de jet de défense du tout (Invisibility peut encore intervenir
@@ -2811,16 +2827,8 @@ function applyTHAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
     for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
     if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
-    // Guard Break : a la conclusion d'une attaque defendable. Politique scriptee/IA :
-    // heuristique >= 5 dmg ; joueur humain : son choix pre-arme (hook), jamais automatique.
-    const gbWanted = policy.chooseGuardBreakSpend
-      ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg)
-      : result.dmg >= 5
-    if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
-      const gb = th.tryGuardBreak(self, rng)
-      log(state, playerIdx, 'resolveAttack', `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(',')}] — ${gb.success ? 'attack is UNDEFENDABLE' : 'failed'}`)
-      if (gb.success) result = { ...result, undefendable: true }
-    }
+    // Guard Break : désormais centralisé dans resolveDefense (jeton transférable — tout
+    // détenteur peut le dépenser, pas seulement th/du).
     // Le total final n'apparaissait nulle part dans le journal : on passait des effets
     // directement aux dés de défense, et l'user ne pouvait pas voir que l'EK était compté.
     log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)

@@ -6661,6 +6661,18 @@ var Game = (() => {
       flushDamage(state);
       return;
     }
+    if ((attacker.tokens.guardBreak ?? 0) > 0 && incomingDamage > 0) {
+      const atkPolicy = policies[attackerIdx];
+      const gbWanted = atkPolicy.chooseGuardBreakSpend ? atkPolicy.chooseGuardBreakSpend(state, attackerIdx, incomingDamage) : incomingDamage >= 5;
+      if (gbWanted) {
+        const gb = tryGuardBreak(attacker, rng);
+        log(state, attackerIdx, "resolveAttack", `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(",")}] \u2014 ${gb.success ? "attack is UNDEFENDABLE" : "failed"}`);
+        if (gb.success) {
+          queueAttackDamageVsArmor(state, attackerIdx, incomingDamage, false, rng, policies);
+          return;
+        }
+      }
+    }
     if ((defender.tokens.webbed ?? 0) > 0 && incomingDamage > 0) {
       defender.tokens.webbed = 0;
       log(state, defenderIdx, "defense", "Webbed: incoming attack becomes UNDEFENDABLE, token removed");
@@ -7791,12 +7803,6 @@ var Game = (() => {
       if (result.dmg <= 0) {
         log(state, playerIdx, "resolveAttack", `${name} deals no damage \u2014 no defense roll`);
         return;
-      }
-      const gbWanted = policy.chooseGuardBreakSpend ? policy.chooseGuardBreakSpend(state, playerIdx, result.dmg) : result.dmg >= 5;
-      if (!result.undefendable && !ultimate && (self.tokens.guardBreak ?? 0) > 0 && gbWanted) {
-        const gb = tryGuardBreak(self, rng);
-        log(state, playerIdx, "resolveAttack", `Guard Break: spent ${gb.spent}, rolls [${gb.rolls.join(",")}] \u2014 ${gb.success ? "attack is UNDEFENDABLE" : "failed"}`);
-        if (gb.success) result = { ...result, undefendable: true };
       }
       log(state, playerIdx, "resolveAttack", `${name}: attack total ${result.dmg} dmg${result.undefendable ? " (undefendable)" : ""}`);
       if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies);
