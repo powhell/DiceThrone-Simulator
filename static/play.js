@@ -870,11 +870,34 @@
     document.getElementById('ai-board-title').textContent = 'Board IA — ' + aiHero.name;
     const ai = g.state.players[g.aiIdx];
     const aiHeroT = G.heroTemplateFor(AI_HERO);
+    // Allumage (user-caught) : quand les dés de l'IA sont visibles (fenêtre d'altération /
+    // défense), on allume ses habiletés MATCHÉES, et son attaque CHOISIE en doré.
+    let aiCands = [];
+    try {
+      if (aiDice) aiCands = G.fullAbilityBoard(AI_HERO, aiDice, G.oracleStateFor(ai, g.state.players[g.humanIdx]))
+        .filter(x=>x.matched);
+    } catch(e) {}
+    const aiIsOn = name => {
+      const grand = / \(grande\)$/.test(name);
+      const base = name.replace(/ \(grande\)$/,'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const largeRe = new RegExp('^'+base+'( L\\b|\\s*\\(5-straight)');
+      return aiCands.some(c => grand ? largeRe.test(c.name)
+        : (c.name===name || c.name.startsWith(name+' ')) && !largeRe.test(c.name));
+    };
+    const rawChosen = pendingAttackInfo && pendingAttackInfo.abilityName ? pendingAttackInfo.abilityName : null;
+    const chosenIsLarge = rawChosen ? / L\b|\(5-straight/.test(rawChosen) : false;
+    const chosenName = rawChosen ? rawChosen.replace(/\s*\([^)]*\)$/,'').replace(/ [SL]$/,'') : null;
     const aiRows = [];
     for (const a of REFERENCE[AI_HERO]) {
       const up = refUpgradeInfo(a.name, ai.upgradesInPlay);
-      aiRows.push({ name: a.name + (up ? up.suffix : ''), req: (up && up.req) || a.req,
+      const baseName = a.name.replace(/ \(grande\)$/,'');
+      aiRows.push({ req: (up && up.req) || a.req,
+        // upgrade posée = badge doré bien visible (avant : suffixe discret)
+        name: a.name + (up ? ` <span style="color:var(--gold);font-weight:800">${up.suffix.trim()}</span>` : ''),
         dmg: (up && up.dmg) || a.dmg,
+        on: aiIsOn(a.name),
+        chosen: chosenName !== null && baseName === chosenName
+          && (/ \(grande\)$/.test(a.name) ? chosenIsLarge : !chosenIsLarge || !REFERENCE[AI_HERO].some(r=>r.name===a.name+' (grande)')),
         eff: boardRowEffects(AI_HERO, g.aiIdx, a.name) });
     }
     for (const card of aiHeroT.cards) {
@@ -894,8 +917,8 @@
         dmg: alt.baseDamage != null ? String(alt.baseDamage) : '—',
         eff: alt.notes || alt.effect || '' });
     }
-    box.innerHTML = aiRows.map(a=>`<div class="abil" style="opacity:.85">
-      <div><div class="an">${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
+    box.innerHTML = aiRows.map(a=>`<div class="abil${a.on||a.chosen?' on':''}" style="${a.chosen?'border-color:var(--gold);box-shadow:0 0 0 1px var(--gold);':a.on?'':'opacity:.85'}">
+      <div><div class="an">${a.chosen?'⚔️ ':''}${a.name}</div><div class="req">${renderReq(aiHero,a.req)}</div>${a.eff?`<div class="eff">${a.eff}</div>`:''}</div><div class="dv">${a.dmg}</div></div>`).join('')
       + defBoxHTML(AI_HERO, ai);
   }
 
