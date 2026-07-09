@@ -518,7 +518,15 @@
       if (hasDiceCards()) {
         const wc = liveAdvice(true);
         if (wc && (Math.abs(wc.ev - adv.ev) >= 0.15 || wc.kept.join(',') !== adv.kept.join(','))) {
-          rawLine = `<div class="lead" style="margin-top:4px">🃏 si tu es prêt à payer tes cartes de manip : garder [${wc.kept.join(',')||'rien'}] → EV ${wc.ev.toFixed(1)} (+${Math.max(0, wc.ev - adv.ev).toFixed(1)})</div>`;
+          // NOMMER la cible : la distribution du solveur « avec cartes » est désormais consciente
+          // des cartes (augmentTerminalName) — son atterrissage le plus probable EST l'habileté que
+          // tes cartes de manip visent (user-caught : « le coach dit reroll 2256 mais pas vers QUOI »).
+          const wtop = wc.topOptions && wc.topOptions[0];
+          const target = wtop && wtop.probDist
+            ? Object.entries(wtop.probDist).filter(([n])=>n!=='Whiff').sort((x,y)=>y[1]-x[1])[0]
+            : null;
+          const aimTxt = target ? ` — vise <b>${formatAbility(humanHero,target[0]).name}</b> (${Math.round(target[1])}%)` : '';
+          rawLine = `<div class="lead" style="margin-top:4px">🃏 si tu es prêt à payer tes cartes de manip : garder [${wc.kept.join(',')||'rien'}] → EV ${wc.ev.toFixed(1)} (+${Math.max(0, wc.ev - adv.ev).toFixed(1)})${aimTxt}</div>`;
         }
       }
       // POURQUOI ce keep (user-caught : « je ne comprends jamais les raisons ») : où la garde
@@ -1956,13 +1964,18 @@
     const r0 = G.runAiTurnUpToAlter(g);
     if (g.state.gameOver) { renderAll(); return end(); }
     if (r0.done) { renderAll(); return startHumanTurn(); }
-    aiDice = r0.dice.slice();
+    enterAiRoll(r0.dice);
+  }
+  // L'IA a un jet ouvert (1re attaque OU Combo/2e Offensive Roll Phase) : fenêtre d'altération
+  // humaine si dispo, sinon on file à la résolution. Partagé par le tour normal et le Combo.
+  function enterAiRoll(dice){
+    aiDice = dice.slice();
     aiAlterSel.clear();
     // Fenêtre ORP2 : tes cartes d'altération sur SES dés (user-caught : Helping Hand injouable).
     if (G.humanAiAlterOptions(g).length) {
       phase='aialter';
       $('turntag').textContent = "Le jet de l'IA — fenêtre d'altération";
-      log(`⚔️ L'IA a lancé <b>${r0.dice.join(', ')}</b> — tu peux altérer son jet.`);
+      log(`⚔️ L'IA a lancé <b>${dice.join(', ')}</b> — tu peux altérer son jet.`);
       renderAll();
       return;
     }
@@ -2057,6 +2070,18 @@
         `${countered>0?` · tu renvoies ${countered} dégât(s)`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
     renderAll();                                   // shows your Hallowed/Sabotage roll + damage in the log
     if (g.state.gameOver) return end();
+    // Spider-Man Combo : 2e Offensive Roll Phase (même cible) — DÉFENDABLE par toi aussi. Avant,
+    // l'IA n'utilisait jamais son Combo contre toi (le driver interactif l'ignorait, user-caught).
+    if (G.aiComboPending(g)) {
+      const c = G.startAiComboOrp(g);
+      if (!c.done && !g.state.gameOver) {
+        pendingAttackInfo = null;
+        log(`👊 <b>Combo</b> : l'IA relance une <b>2ᵉ Offensive Roll Phase</b> (même cible) !`);
+        $('turntag').textContent = "Combo — 2ᵉ attaque de l'IA";
+        renderAll();
+        return setTimeout(()=>enterAiRoll(c.dice), 700);
+      }
+    }
     $('turntag').textContent = `L'IA (${aiHero.name}) termine son tour…`;
     setTimeout(()=>{
       G.finishAiTurn(g); pendingAttackInfo = null; aiDice = null; renderAll();

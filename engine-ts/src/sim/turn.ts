@@ -952,6 +952,9 @@ export function playOffensiveRollPhase(state: GameState, playerIdx: 0 | 1, rng: 
   const opp = state.players[(1 - playerIdx) as 0 | 1]
 
   const beforeReroll = (step: RollStep): RollStepUpdate => {
+    // Trace du jet : dés au début de cette tentative (2 relances restantes = jet initial,
+    // puis 1, puis 0 = fenêtre finale). Ce qui n'a pas changé d'un jet au suivant = gardé par le solveur.
+    log(state, playerIdx, 'roll', `Roll (relances restantes ${step.rollsRemaining}): [${step.dice.join(',')}]`)
     if (self.heroId === 'bw') {
       const cardIds = policy.chooseMidRollCards(state, playerIdx, step.dice, step.rollsRemaining)
       for (const id of cardIds) playCard(state, playerIdx, 'roll', id, rng)
@@ -3537,6 +3540,17 @@ export function playEndOfTurn(state: GameState, playerIdx: 0 | 1): void {
 // where upgrades/actions get played using CP on hand BEFORE committing to an attack roll.
 export function playTurn(state: GameState, playerIdx: 0 | 1, rng: RNG, policies: [Policy, Policy]): void {
   const policy = policies[playerIdx]
+  // En-tête de tour (trace lisible pour l'audit) : PV/CP/jetons des deux joueurs.
+  {
+    const brief = (p: PlayerState) => {
+      const toks = Object.entries(p.tokens).filter(([, v]) => (v as number) > 0).map(([k, v]) => `${k}:${v}`).join(' ')
+      const mj = p.heroId === 'th' ? ` mjolnir:${p.mjolnirAway ? 'away' : 'home'}` : ''
+      const up = p.upgradesInPlay.length ? ` upg:${p.upgradesInPlay.length}` : ''
+      return `HP${p.hp} CP${p.cp}${up}${mj}${toks ? ` [${toks}]` : ''}`
+    }
+    const s = state.players[playerIdx], o = state.players[(1 - playerIdx) as 0 | 1]
+    log(state, playerIdx, 'upkeep', `===== ${s.heroId.toUpperCase()} turn — ${s.heroId} ${brief(s)} | vs ${o.heroId} ${brief(o)} (hand ${s.hand.length})`)
+  }
   playUpkeepPhase(state, playerIdx, rng, policy)
   if (checkGameOver(state)) return
 

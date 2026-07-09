@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   drFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -23,7 +23,9 @@ export const drConfig: CharacterConfig<DRState> = {
       d => bestAbilityValue(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, state.wildcards, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0)

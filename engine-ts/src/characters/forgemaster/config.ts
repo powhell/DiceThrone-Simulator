@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   fmFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -24,7 +24,9 @@ export const fmConfig: CharacterConfig<FMState> = {
       d => bestAbilityValue(d, state.armorCount, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.armorCount, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.armorCount, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.armorCount, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, (state as any).wildcards as WildcardFlags, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.armorCount, state.defenseTax ?? 0)

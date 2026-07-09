@@ -35,6 +35,48 @@ export function clearCache(): void {
 // au JET FINAL, Six-It!/So Wild! peuvent corriger un de — la valeur terminale d'une main
 // est donc max(main, meilleure variante - cout CP). Les flags viennent de l'etat du hero.
 export interface WildcardFlags { sixIt?: boolean; soWild?: boolean; twiceAsWild?: boolean; samesies?: boolean; tipIt?: boolean }
+
+function hasAnyWildcard(flags: WildcardFlags | undefined): flags is WildcardFlags {
+  return !!flags && !!(flags.sixIt || flags.soWild || flags.twiceAsWild || flags.samesies || flags.tipIt)
+}
+
+// SOURCE UNIQUE de la logique des cartes de manipulation : énumère les mains converties
+// possibles (dé(s) modifié(s)) + leur coût CP. La valeur (augmentTerminalValue) ET le nom
+// (augmentTerminalName) consomment ce même générateur pour rester parfaitement synchrones —
+// sinon la distribution du coach pointe une habileté différente de son EV (bug user 2026-07-09).
+function* wildcardVariants(dice: number[], flags: WildcardFlags): Generator<{ dice: number[]; cost: number }> {
+  const counts = new Map<number, number>()
+  for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1)
+  let mode = dice[0]
+  for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v
+  const single = (i: number, v: number, cost: number): { dice: number[]; cost: number } | null => {
+    if (dice[i] === v) return null
+    const d2 = dice.slice(); d2[i] = v; d2.sort((a, b) => a - b)
+    return { dice: d2, cost }
+  }
+  for (let i = 0; i < dice.length; i++) {
+    if (flags.sixIt) { const r = single(i, 6, 1); if (r) yield r }              // Six-It! : de -> 6, 1 CP
+    if (flags.soWild) { for (const v of [6, mode]) { const r = single(i, v, 2); if (r) yield r } } // So Wild! ~= ->6 ou ->majorite, 2 CP
+    if (flags.tipIt) {                                                          // Tip It! : ±1, 1 CP
+      if (dice[i] < 6) { const r = single(i, dice[i] + 1, 1); if (r) yield r }
+      if (dice[i] > 1) { const r = single(i, dice[i] - 1, 1); if (r) yield r }
+    }
+    if (flags.samesies) {                                                       // Samesies! : copie un autre de, 1 CP
+      for (const v of counts.keys()) { const r = single(i, v, 1); if (r) yield r }
+    }
+  }
+  // Twice As Wild! : DEUX des -> meme valeur (3 CP) — le plus gros filet ([6,6,6]+TAW = Ultimate).
+  if (flags.twiceAsWild) {
+    for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
+      for (const v of [6, mode]) {
+        if (dice[i] === v && dice[j] === v) continue
+        const d2 = dice.slice(); d2[i] = v; d2[j] = v; d2.sort((a, b) => a - b)
+        yield { dice: d2, cost: 3 }
+      }
+    }
+  }
+}
+
 export function augmentTerminalValue(
   dice: number[],
   base: number,
@@ -42,44 +84,35 @@ export function augmentTerminalValue(
   evalDice: (d: number[]) => number,
   cpToDmg = 0.75,
 ): number {
-  if (!flags || (!flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt)) return base
+  if (!hasAnyWildcard(flags)) return base
   let best = base
-  const counts = new Map<number, number>()
-  for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1)
-  let mode = dice[0]
-  for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v
-  const tryVariant = (i: number, v: number, cost: number) => {
-    if (dice[i] === v) return
-    const d2 = dice.slice(); d2[i] = v
-    d2.sort((a, b) => a - b)
+  for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
     const val = evalDice(d2) - cost * cpToDmg
     if (val > best) best = val
   }
-  for (let i = 0; i < dice.length; i++) {
-    if (flags.sixIt) tryVariant(i, 6, 1)              // Six-It! : de -> 6, 1 CP
-    if (flags.soWild) { tryVariant(i, 6, 2); tryVariant(i, mode, 2) } // So Wild! ~= ->6 ou ->majorite, 2 CP
-    if (flags.tipIt) {                                // Tip It! : ±1, 1 CP
-      if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1)
-      if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1)
-    }
-    if (flags.samesies) {                             // Samesies! : copie un autre de, 1 CP
-      for (const v of counts.keys()) tryVariant(i, v, 1)
-    }
-  }
-  // Twice As Wild! : DEUX des -> meme valeur (3 CP) — le plus gros filet ([6,6,6]+TAW = Ultimate).
-  if (flags.twiceAsWild) {
-    const tryPair = (i: number, j: number, v: number) => {
-      if (dice[i] === v && dice[j] === v) return
-      const d2 = dice.slice(); d2[i] = v; d2[j] = v
-      d2.sort((a, b) => a - b)
-      const val = evalDice(d2) - 3 * cpToDmg
-      if (val > best) best = val
-    }
-    for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
-      tryPair(i, j, 6); tryPair(i, j, mode)
-    }
-  }
   return best
+}
+
+// Nom de l'habileté que le solveur « avec cartes » vise VRAIMENT : le meilleur variant converti
+// (net du coût CP) ou la main brute si aucune carte n'améliore. Sert à la distribution du coach —
+// sans ça l'EV pointe (p.ex.) Chain Lightning mais la distribution ne liste que les dés bruts.
+// N'affecte QUE l'affichage (cfg.bestAbilityName n'est lu que pour probDist), jamais le pilotage.
+export function augmentTerminalName(
+  dice: number[],
+  flags: WildcardFlags | undefined,
+  evalDice: (d: number[]) => number,
+  nameDice: (d: number[]) => string,
+  cpToDmg = 0.75,
+): string {
+  const baseName = nameDice(dice)
+  if (!hasAnyWildcard(flags)) return baseName
+  let best = evalDice(dice)
+  let bestName = baseName
+  for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
+    const val = evalDice(d2) - cost * cpToDmg
+    if (val > best) { best = val; bestName = nameDice(d2) }
+  }
+  return bestName
 }
 
 export function evalState<S>(

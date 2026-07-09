@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   rvFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -24,7 +24,9 @@ export const rvConfig: CharacterConfig<RVState> = {
       d => bestAbilityValue(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, state.wildcards, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0)

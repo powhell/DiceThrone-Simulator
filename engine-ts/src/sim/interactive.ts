@@ -610,6 +610,30 @@ export function resolveAiAttack(g: HumanGame): void {
   resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, undefined, d.roarDiscard)))
 }
 
+// Spider-Man Combo (interactif) : après que la 1re attaque a résolu, l'IA doit-elle dépenser son
+// jeton Combo pour une Offensive Roll Phase ADDITIONNELLE ? Même condition que playTurn (turn.ts
+// ~3600). Le driver interactif l'ignorait totalement -> l'IA n'utilisait JAMAIS son Combo contre
+// un humain (user-caught 2026-07-09). smAttackedThisPhase est reposé true par resolveAiAttack si
+// une attaque est vraiment partie.
+export function aiComboPending(g: HumanGame): boolean {
+  const ai = g.state.players[g.aiIdx]
+  return ai.heroId === 'sm' && (ai.tokens.combo ?? 0) > 0 && !ai.comboSpentThisTurn && ai.smAttackedThisPhase === true
+}
+
+// Dépense le Combo et ouvre une 2e Offensive Roll Phase (même cible, 1x/tour). Laisse pendingRoll
+// ouvert comme runAiTurnUpToAlter -> l'UI ré-entre dans la fenêtre d'altération + la défense
+// interactive, pour que l'humain puisse défendre CETTE 2e attaque aussi.
+export function startAiComboOrp(g: HumanGame): { done: boolean; dice?: number[] } {
+  if (!aiComboPending(g)) return { done: true }
+  const ai = g.state.players[g.aiIdx]
+  ai.tokens.combo = 0
+  ai.comboSpentThisTurn = true
+  g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.aiIdx, phase: 'resolveAttack', message: 'Combo spent: additional Offensive Roll Phase' })
+  const dice = playOffensiveRollPhase(g.state, g.aiIdx, g.rng, g.ai)
+  g.state.pendingRoll = { rollerIdx: g.aiIdx, dice }
+  return { done: false, dice: dice.slice() }
+}
+
 // The AI's Main Phase 2 -> discard -> end of turn, then priority returns to the human.
 export function finishAiTurn(g: HumanGame): void {
   if (!checkGameOver(g.state)) {

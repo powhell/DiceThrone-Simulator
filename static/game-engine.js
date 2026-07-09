@@ -25,6 +25,7 @@ var Game = (() => {
     MAX_TURNS: () => MAX_TURNS,
     TRANSFERABLE_TOKENS: () => TRANSFERABLE_TOKENS,
     abilityByBoardName: () => abilityByBoardName,
+    aiComboPending: () => aiComboPending,
     applyAttackModifierCard: () => applyAttackModifierCard,
     applyOffensiveAlter: () => applyOffensiveAlter,
     applyWindowAction: () => applyWindowAction,
@@ -108,6 +109,7 @@ var Game = (() => {
     runMatch: () => runMatch,
     runOffensiveRoll: () => runOffensiveRoll,
     shuffle: () => shuffle,
+    startAiComboOrp: () => startAiComboOrp,
     toJSON: () => toJSON
   });
 
@@ -247,51 +249,84 @@ var Game = (() => {
   function cacheKey(cfg, kept, rollsRemaining, state, totalDice) {
     return `${cfg.id}|${totalDice}|${kept.join(",")}|${rollsRemaining}|${cfg.stateKey(state)}`;
   }
-  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
-    if (!flags || !flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt) return base;
-    let best = base;
+  function hasAnyWildcard(flags) {
+    return !!flags && !!(flags.sixIt || flags.soWild || flags.twiceAsWild || flags.samesies || flags.tipIt);
+  }
+  function* wildcardVariants(dice, flags) {
     const counts = /* @__PURE__ */ new Map();
     for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
     let mode = dice[0];
     for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v;
-    const tryVariant = (i, v, cost) => {
-      if (dice[i] === v) return;
+    const single = (i, v, cost) => {
+      if (dice[i] === v) return null;
       const d2 = dice.slice();
       d2[i] = v;
       d2.sort((a, b) => a - b);
-      const val = evalDice(d2) - cost * cpToDmg;
-      if (val > best) best = val;
+      return { dice: d2, cost };
     };
     for (let i = 0; i < dice.length; i++) {
-      if (flags.sixIt) tryVariant(i, 6, 1);
+      if (flags.sixIt) {
+        const r = single(i, 6, 1);
+        if (r) yield r;
+      }
       if (flags.soWild) {
-        tryVariant(i, 6, 2);
-        tryVariant(i, mode, 2);
+        for (const v of [6, mode]) {
+          const r = single(i, v, 2);
+          if (r) yield r;
+        }
       }
       if (flags.tipIt) {
-        if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1);
-        if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1);
+        if (dice[i] < 6) {
+          const r = single(i, dice[i] + 1, 1);
+          if (r) yield r;
+        }
+        if (dice[i] > 1) {
+          const r = single(i, dice[i] - 1, 1);
+          if (r) yield r;
+        }
       }
       if (flags.samesies) {
-        for (const v of counts.keys()) tryVariant(i, v, 1);
+        for (const v of counts.keys()) {
+          const r = single(i, v, 1);
+          if (r) yield r;
+        }
       }
     }
     if (flags.twiceAsWild) {
-      const tryPair = (i, j, v) => {
-        if (dice[i] === v && dice[j] === v) return;
-        const d2 = dice.slice();
-        d2[i] = v;
-        d2[j] = v;
-        d2.sort((a, b) => a - b);
-        const val = evalDice(d2) - 3 * cpToDmg;
-        if (val > best) best = val;
-      };
       for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
-        tryPair(i, j, 6);
-        tryPair(i, j, mode);
+        for (const v of [6, mode]) {
+          if (dice[i] === v && dice[j] === v) continue;
+          const d2 = dice.slice();
+          d2[i] = v;
+          d2[j] = v;
+          d2.sort((a, b) => a - b);
+          yield { dice: d2, cost: 3 };
+        }
       }
     }
+  }
+  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
+    if (!hasAnyWildcard(flags)) return base;
+    let best = base;
+    for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) best = val;
+    }
     return best;
+  }
+  function augmentTerminalName(dice, flags, evalDice, nameDice, cpToDmg = 0.75) {
+    const baseName = nameDice(dice);
+    if (!hasAnyWildcard(flags)) return baseName;
+    let best = evalDice(dice);
+    let bestName = baseName;
+    for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) {
+        best = val;
+        bestName = nameDice(d2);
+      }
+    }
+    return bestName;
   }
   function evalState(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
@@ -684,7 +719,9 @@ var Game = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      const evalFn = (d) => bestAbilityValue(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      const nameFn = (d) => bestAbilityName(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
@@ -959,7 +996,9 @@ var Game = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
@@ -1086,7 +1125,9 @@ var Game = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName3(dice, state.armorCount, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue3(d, state.armorCount, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName3(d, state.armorCount, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard3(dice, state.armorCount, state.defenseTax ?? 0);
@@ -1265,7 +1306,9 @@ var Game = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue4(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName4(d, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard4(dice, state.feathers, state.nevermoreOnOpponent, state.hexed, state.upgradeIds, state.defenseTax ?? 0);
@@ -1419,7 +1462,9 @@ var Game = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue5(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName5(d, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard5(dice, state.form, state.shapeShift, state.upgradeIds, state.defenseTax ?? 0);
@@ -1644,7 +1689,9 @@ var Game = (() => {
       return v;
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName6(dice, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue6(d, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName6(d, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard6(dice, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0);
@@ -1799,7 +1846,9 @@ var Game = (() => {
       return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName7(dice, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue7(d, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName7(d, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard7(dice, state.comboHeld, state.invisHeld, state.oppWebbed, state.upgradeIds, state.defenseTax ?? 0);
@@ -1971,7 +2020,9 @@ var Game = (() => {
       return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName8(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue8(d, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName8(d, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard8(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0);
@@ -2161,7 +2212,9 @@ var Game = (() => {
       return v;
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName9(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue9(d, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName9(d, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard9(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0);
@@ -2344,7 +2397,9 @@ var Game = (() => {
       return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn);
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName10(dice, state.sunDial, state.dawn, state.gemHeld, state.oppMarked, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue10(d, state.sunDial, state.dawn, state.gemHeld, state.oppMarked, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName10(d, state.sunDial, state.dawn, state.gemHeld, state.oppMarked, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard10(dice, state.sunDial, state.dawn, state.gemHeld, state.oppMarked, state.upgradeIds, state.defenseTax ?? 0);
@@ -3233,7 +3288,7 @@ var Game = (() => {
       { id: "chain_lightning", boardName: "Chain Lightning (HHHTT)", dicePattern: "AAACC", baseDamage: 8, defendable: true, effect: "Roll 3 dice: deal dmg = total of any two. +2 isolated collateral.", upgradedBy: { upgradeId: "chain-lightning-ii" }, verified: true },
       { id: "odinforce", boardName: "Odinforce (HHWWW)", dicePattern: "AABBB", baseDamage: 5, defendable: true, effect: "Roll 5: >=2 Hammer -> Throw/Retrieve; >=2 Worthy -> +1 CP; +1 EK per Thunder. Then +1 dmg x EK.", upgradedBy: { upgradeId: "odinforce-ii", baseDamage: 6 }, verified: true },
       { id: "bottled_lightning", boardName: "Bottled Lightning (TTTT)", dicePattern: "CCCC", baseDamage: 7, defendable: true, effect: "Throw/Retrieve x2. Gain 2 Guard Break. Then deal 7 + 1 x EK.", upgradedBy: { upgradeId: "bottled-lightning-ii", baseDamage: 8 }, verified: true },
-      { id: "lightning_rod", boardName: "Lightning Rod (4-straight)", dicePattern: "small-straight", baseDamage: 7, defendable: true, effect: "9 dmg if opponent has Mj\xF6lnir, otherwise gain 1 EK.", upgradedBy: { upgradeId: "lightning-rod-ii", baseDamage: 9 }, verified: true },
+      { id: "lightning_rod", boardName: "Lightning Rod (4-straight)", dicePattern: "small-straight", baseDamage: 7, defendable: true, effect: "7 dmg + gain 1 EK ; 9 dmg instead (no EK) if the opponent holds Mj\xF6lnir.", upgradedBy: { upgradeId: "lightning-rod-ii", baseDamage: 9, effect: "9 dmg (always) \xB7 Throw/Retrieve Mj\xF6lnir \xB7 gain 1 EK." }, verified: true },
       { id: "thunder_bolt", boardName: "Thunder Bolt (5-straight)", dicePattern: "large-straight", baseDamage: 10, defendable: true, effect: "Throw/Retrieve. Gain 2 EK.", upgradedBy: { upgradeId: "thunder-bolt-ii", baseDamage: 12 }, verified: true },
       { id: "for_asgard", boardName: "For Asgard! (TTTTT)", dicePattern: "CCCCC", baseDamage: 14, defendable: false, ultimate: true, effect: "Gain Guard Break. Throw/Retrieve up to 4 times. Deal 14 dmg.", verified: true }
     ],
@@ -6220,6 +6275,7 @@ var Game = (() => {
     const self = state.players[playerIdx];
     const opp = state.players[1 - playerIdx];
     const beforeReroll = (step) => {
+      log(state, playerIdx, "roll", `Roll (relances restantes ${step.rollsRemaining}): [${step.dice.join(",")}]`);
       if (self.heroId === "bw") {
         const cardIds = policy.chooseMidRollCards(state, playerIdx, step.dice, step.rollsRemaining);
         for (const id of cardIds) playCard(state, playerIdx, "roll", id, rng);
@@ -8474,6 +8530,16 @@ var Game = (() => {
   }
   function playTurn(state, playerIdx, rng, policies) {
     const policy = policies[playerIdx];
+    {
+      const brief = (p) => {
+        const toks = Object.entries(p.tokens).filter(([, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(" ");
+        const mj = p.heroId === "th" ? ` mjolnir:${p.mjolnirAway ? "away" : "home"}` : "";
+        const up = p.upgradesInPlay.length ? ` upg:${p.upgradesInPlay.length}` : "";
+        return `HP${p.hp} CP${p.cp}${up}${mj}${toks ? ` [${toks}]` : ""}`;
+      };
+      const s = state.players[playerIdx], o = state.players[1 - playerIdx];
+      log(state, playerIdx, "upkeep", `===== ${s.heroId.toUpperCase()} turn \u2014 ${s.heroId} ${brief(s)} | vs ${o.heroId} ${brief(o)} (hand ${s.hand.length})`);
+    }
     playUpkeepPhase(state, playerIdx, rng, policy);
     if (checkGameOver(state)) return;
     playIncomePhase(state, playerIdx, rng);
@@ -9015,6 +9081,20 @@ var Game = (() => {
     const d = g.def;
     if (!d) return;
     resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, void 0, d.roarDiscard)));
+  }
+  function aiComboPending(g) {
+    const ai = g.state.players[g.aiIdx];
+    return ai.heroId === "sm" && (ai.tokens.combo ?? 0) > 0 && !ai.comboSpentThisTurn && ai.smAttackedThisPhase === true;
+  }
+  function startAiComboOrp(g) {
+    if (!aiComboPending(g)) return { done: true };
+    const ai = g.state.players[g.aiIdx];
+    ai.tokens.combo = 0;
+    ai.comboSpentThisTurn = true;
+    g.state.log.push({ turn: g.state.turnNumber, playerIdx: g.aiIdx, phase: "resolveAttack", message: "Combo spent: additional Offensive Roll Phase" });
+    const dice = playOffensiveRollPhase(g.state, g.aiIdx, g.rng, g.ai);
+    g.state.pendingRoll = { rollerIdx: g.aiIdx, dice };
+    return { done: false, dice: dice.slice() };
   }
   function finishAiTurn(g) {
     if (!checkGameOver(g.state)) {

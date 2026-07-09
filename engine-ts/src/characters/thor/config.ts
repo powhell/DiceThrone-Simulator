@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   thFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -38,7 +38,9 @@ export const thConfig: CharacterConfig<THState> = {
     return v
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, state.wildcards, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.mjolnirHome, state.electrokinesis, state.upgradeIds, state.defenseTax ?? 0)

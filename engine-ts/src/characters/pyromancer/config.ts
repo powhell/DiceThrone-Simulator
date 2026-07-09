@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   pyFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -24,7 +24,9 @@ export const pyConfig: CharacterConfig<PYState> = {
     return augmentTerminalValue(dice, evalFn(dice), state.wildcards, evalFn)
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, state.wildcards, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.fireMastery, state.fmCap, state.oppBurned, state.oppKnocked, state.upgradeIds, state.defenseTax ?? 0)

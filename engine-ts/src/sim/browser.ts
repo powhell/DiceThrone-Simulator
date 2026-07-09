@@ -18,6 +18,7 @@ export {
   rollOffense, beginOffensiveAlter, offensiveAlterOptions, applyOffensiveAlter, endOffensiveAlter,
   matchedAbilities, humanAttack, humanSpendGrimPursuitReroll, humanPlayRollCard, humanKeepAdvice, humanAttackModifierOptions, humanInstantOptions, humanApplyInstant, humanMinePeek, humanForgeOre, humanCraftOptions, humanCraft, humanMinesDraw, humanScrap, humanScrapDie, humanDragonsHoard, humanSetRoarDiscard, humanFreeRerollDie, nevermoreRollDue, humanNevermoreRollStart, humanNevermoreCull, humanNevermoreFeatherShift, humanNevermoreFeatherReroll, humanNevermoreFinish, endHumanTurn, runAiTurn,
   runAiTurnUpToAttack, runAiTurnUpToAlter, humanAiAlterOptions, humanApplyAiAlter, finishAiAlter, nextDefenseDecision, chooseDefense, resolveAiAttack, finishAiTurn,
+  aiComboPending, startAiComboOrp,
 } from './interactive.js'
 export { createValueGreedyPolicy } from './rl/valueGreedyPolicy.js'
 export { fromJSON, toJSON, forward, createNetwork } from './rl/network.js'

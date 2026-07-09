@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   bwFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
   directDamageByName,
@@ -26,7 +26,9 @@ export const bwConfig: CharacterConfig<BWState> = {
       d => bestAbilityValue(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0))
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, (state as any).wildcards as WildcardFlags, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0)

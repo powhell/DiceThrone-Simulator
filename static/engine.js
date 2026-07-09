@@ -58,51 +58,84 @@ var Engine = (() => {
     evMemo.clear();
     distMemo.clear();
   }
-  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
-    if (!flags || !flags.sixIt && !flags.soWild && !flags.twiceAsWild && !flags.samesies && !flags.tipIt) return base;
-    let best = base;
+  function hasAnyWildcard(flags) {
+    return !!flags && !!(flags.sixIt || flags.soWild || flags.twiceAsWild || flags.samesies || flags.tipIt);
+  }
+  function* wildcardVariants(dice, flags) {
     const counts = /* @__PURE__ */ new Map();
     for (const v of dice) counts.set(v, (counts.get(v) ?? 0) + 1);
     let mode = dice[0];
     for (const [v, n] of counts) if (n > (counts.get(mode) ?? 0)) mode = v;
-    const tryVariant = (i, v, cost) => {
-      if (dice[i] === v) return;
+    const single = (i, v, cost) => {
+      if (dice[i] === v) return null;
       const d2 = dice.slice();
       d2[i] = v;
       d2.sort((a, b) => a - b);
-      const val = evalDice(d2) - cost * cpToDmg;
-      if (val > best) best = val;
+      return { dice: d2, cost };
     };
     for (let i = 0; i < dice.length; i++) {
-      if (flags.sixIt) tryVariant(i, 6, 1);
+      if (flags.sixIt) {
+        const r = single(i, 6, 1);
+        if (r) yield r;
+      }
       if (flags.soWild) {
-        tryVariant(i, 6, 2);
-        tryVariant(i, mode, 2);
+        for (const v of [6, mode]) {
+          const r = single(i, v, 2);
+          if (r) yield r;
+        }
       }
       if (flags.tipIt) {
-        if (dice[i] < 6) tryVariant(i, dice[i] + 1, 1);
-        if (dice[i] > 1) tryVariant(i, dice[i] - 1, 1);
+        if (dice[i] < 6) {
+          const r = single(i, dice[i] + 1, 1);
+          if (r) yield r;
+        }
+        if (dice[i] > 1) {
+          const r = single(i, dice[i] - 1, 1);
+          if (r) yield r;
+        }
       }
       if (flags.samesies) {
-        for (const v of counts.keys()) tryVariant(i, v, 1);
+        for (const v of counts.keys()) {
+          const r = single(i, v, 1);
+          if (r) yield r;
+        }
       }
     }
     if (flags.twiceAsWild) {
-      const tryPair = (i, j, v) => {
-        if (dice[i] === v && dice[j] === v) return;
-        const d2 = dice.slice();
-        d2[i] = v;
-        d2[j] = v;
-        d2.sort((a, b) => a - b);
-        const val = evalDice(d2) - 3 * cpToDmg;
-        if (val > best) best = val;
-      };
       for (let i = 0; i < dice.length; i++) for (let j = i + 1; j < dice.length; j++) {
-        tryPair(i, j, 6);
-        tryPair(i, j, mode);
+        for (const v of [6, mode]) {
+          if (dice[i] === v && dice[j] === v) continue;
+          const d2 = dice.slice();
+          d2[i] = v;
+          d2[j] = v;
+          d2.sort((a, b) => a - b);
+          yield { dice: d2, cost: 3 };
+        }
       }
     }
+  }
+  function augmentTerminalValue(dice, base, flags, evalDice, cpToDmg = 0.75) {
+    if (!hasAnyWildcard(flags)) return base;
+    let best = base;
+    for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) best = val;
+    }
     return best;
+  }
+  function augmentTerminalName(dice, flags, evalDice, nameDice, cpToDmg = 0.75) {
+    const baseName = nameDice(dice);
+    if (!hasAnyWildcard(flags)) return baseName;
+    let best = evalDice(dice);
+    let bestName = baseName;
+    for (const { dice: d2, cost } of wildcardVariants(dice, flags)) {
+      const val = evalDice(d2) - cost * cpToDmg;
+      if (val > best) {
+        best = val;
+        bestName = nameDice(d2);
+      }
+    }
+    return bestName;
   }
   function evalState(cfg, kept, rollsRemaining, state, totalDice = 5) {
     if (rollsRemaining === 0) {
@@ -495,7 +528,9 @@ var Engine = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      const evalFn = (d) => bestAbilityValue(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      const nameFn = (d) => bestAbilityName(d, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard(dice, state.dreadful, state.hasHead, state.upgradeIds, state.defenseTax ?? 0, state.grimPursuit ?? 0);
@@ -770,7 +805,9 @@ var Engine = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName2(d, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard2(dice, state.upgrades, state.tbOnOpp, state.upgradeIds, state.defenseTax ?? 0);
@@ -897,7 +934,9 @@ var Engine = (() => {
       );
     },
     bestAbilityName(dice, state) {
-      return bestAbilityName3(dice, state.armorCount, state.defenseTax ?? 0);
+      const evalFn = (d) => bestAbilityValue3(d, state.armorCount, state.defenseTax ?? 0);
+      const nameFn = (d) => bestAbilityName3(d, state.armorCount, state.defenseTax ?? 0);
+      return augmentTerminalName(dice, state.wildcards, evalFn, nameFn);
     },
     buildAbilityBoard(dice, state) {
       return buildAbilityBoard3(dice, state.armorCount, state.defenseTax ?? 0);

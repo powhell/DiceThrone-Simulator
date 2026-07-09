@@ -1,5 +1,5 @@
 import type { CharacterConfig, AbilityEntry } from '../../core/types.js'
-import { augmentTerminalValue, type WildcardFlags } from '../../core/evaluator.js'
+import { augmentTerminalValue, augmentTerminalName, type WildcardFlags } from '../../core/evaluator.js'
 import {
   duFaceToSymbol, bestAbilityValue, bestAbilityName, buildAbilityBoard, getCandidates,
 } from './abilities.js'
@@ -40,7 +40,9 @@ export const duConfig: CharacterConfig<DUState> = {
     return v
   },
   bestAbilityName(dice, state) {
-    return bestAbilityName(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0)
+    const evalFn = (d: number[]) => bestAbilityValue(d, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0)
+    const nameFn = (d: number[]) => bestAbilityName(d, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0)
+    return augmentTerminalName(dice, state.wildcards, evalFn, nameFn)
   },
   buildAbilityBoard(dice, state): AbilityEntry[] {
     return buildAbilityBoard(dice, state.footwork, state.guardBreak, state.oppDisarmed, state.bonusAvailable, state.upgradeIds, state.defenseTax ?? 0)
