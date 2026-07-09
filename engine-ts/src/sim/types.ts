@@ -255,6 +255,9 @@ export type WindowAction =
   // Covert Ops mode (b) (texte vérifié du jeton) : regarde le top 3 du deck ; si AUCUN
   // upgrade, cherche un upgrade du deck vers la MAIN puis mélange ; sinon remet (raté).
   | { kind: 'covertOpsSearch' }
+  // Mjölnir (th, déf vérifiée) : « At ANY time, discard a card to Throw or Retrieve » —
+  // offert en Main Phase ; la défausse est choisie par l'application (carte la moins utile).
+  | { kind: 'mjolnirShuttle' }
 
 // What kind of decision point this is, plus any context the enumeration/application needs.
 export interface WindowContext {

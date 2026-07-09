@@ -1,0 +1,6 @@
+200 parties · 0.3/s
+400 parties · 0.3/s
+600 parties · 0.3/s
+800 parties · 0.4/s
+1000 parties · 0.4/s
+1200 parties · 0.4/s

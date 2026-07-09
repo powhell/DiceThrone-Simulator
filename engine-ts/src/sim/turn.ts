@@ -203,10 +203,11 @@ export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHSt
   if (player.heroId === 'th') {
     return {
       mjolnirHome: th.mjolnirHome(player),
-      // EK bucketise (0/2/4) : cache solveur chaud — l'exact ne vaut que ±1 dmg sur 2 habiletes.
-      // FLOOR, pas round : Math.round comptait EK 1 comme 2 et EK 3 comme 4 (boost fantôme
-      // +1-2 dmg sur les lignes Odinforce/Bottled Lightning dans les gardes).
-      electrokinesis: Math.min(4, Math.floor((player.tokens.electrokinesis ?? 0) / 2) * 2),
+      // EK EXACT (0-4). L'ancien bucketing floor-even (1->0, 3->2) — hérité du fix « boost
+      // fantôme » de Math.round — faisait sous-évaluer Odinforce/Bottled Lightning d'1 dmg
+      // un tour sur deux (audit Thor, user 2026-07-09 « il n'est pas supposé être aussi
+      // faible »). 5 états au lieu de 3 : coût de cache négligeable.
+      electrokinesis: Math.min(4, player.tokens.electrokinesis ?? 0),
       guardBreak: player.tokens.guardBreak ?? 0, upgradeIds: player.upgradesInPlay,
       defenseTax: defenseTaxFor(opponent), wildcards: wildcardFlagsFor(player),
       heIsWorthy: player.hand.includes('he-is-worthy') && player.cp >= 1,
@@ -1251,6 +1252,13 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
       // Selling: any hand card may be sold for 1 CP during your Main Phases (user-confirmed
       // official rule — the Discard-phase sale is only the forced version of the same exchange).
       for (const cardId of player.hand) options.push({ kind: 'sellCard', cardId })
+      // Mjölnir (th, déf vérifiée : « At ANY time, discard a card to Throw or Retrieve »).
+      // Audit Thor 2026-07-09 : l'HUMAIN avait ce bouton, l'IA JAMAIS — le réseau ne pouvait
+      // ni rapatrier un marteau coincé (Lightning Rod 9, EK) ni le lancer avant d'attaquer.
+      // Offert en Main Phase (le « any time » complet viendrait avec la couche Instants).
+      if (player.heroId === 'th' && player.hand.length > 0) {
+        options.push({ kind: 'mjolnirShuttle' } as any)
+      }
       // Scrap (fm, verifie leaflet) : gold -> soin 1 OU +1 CP ; diamond -> +1 CP ;
       // ultimanium -> pioche 2. Audit 2026-07-05 : l'IA ne scrappait JAMAIS (humain seul).
       if (player.heroId === 'fm') {
@@ -1392,6 +1400,20 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
   if (action.kind === 'removeToken') { applyRemoveToken(state, playerIdx, action); return }
   if (action.kind === 'removeAllTokens') { applyRemoveAllTokens(state, playerIdx, action); return }
   if (action.kind === 'moveHead') { applyMoveHead(state, playerIdx, action); return }
+  if (action.kind === 'mjolnirShuttle') {
+    const self = state.players[playerIdx]
+    if (self.hand.length === 0) return
+    // Défausse la carte la moins utile : un doublon si possible, sinon le coût CP le plus bas.
+    const hero = heroTemplateFor(self.heroId)
+    let pick = self.hand.find((id, i) => self.hand.indexOf(id) !== i)
+    if (!pick) pick = self.hand.slice().sort((a, b) => (cardById(hero, a)?.cpCost ?? 0) - (cardById(hero, b)?.cpCost ?? 0))[0]
+    self.hand.splice(self.hand.indexOf(pick), 1)
+    self.discard.push(pick)
+    const r = th.shuttleOnce(self)
+    if (r.damage > 0) { state.players[1 - playerIdx as 0 | 1].hp -= r.damage; checkGameOver(state) }
+    log(state, playerIdx, ctx.phase ?? 'main1', `Mjolnir shuttle (discarded ${pick}): ${r.action === 'throw' ? '1 isolated undefendable dmg' : `+${r.ekGained} EK`}`)
+    return
+  }
   if (action.kind === 'covertOpsUpgrade') { applyCovertOpsUpgrade(state, playerIdx, action.cardId); rrtIIDrawOnUpgrade(state, playerIdx, action.cardId, rng); return }
   if (action.kind === 'covertOpsSearch') {
     const self = state.players[playerIdx]

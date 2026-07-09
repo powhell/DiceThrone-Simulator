@@ -5517,10 +5517,11 @@ var Game = (() => {
     if (player.heroId === "th") {
       return {
         mjolnirHome: mjolnirHome(player),
-        // EK bucketise (0/2/4) : cache solveur chaud — l'exact ne vaut que ±1 dmg sur 2 habiletes.
-        // FLOOR, pas round : Math.round comptait EK 1 comme 2 et EK 3 comme 4 (boost fantôme
-        // +1-2 dmg sur les lignes Odinforce/Bottled Lightning dans les gardes).
-        electrokinesis: Math.min(4, Math.floor((player.tokens.electrokinesis ?? 0) / 2) * 2),
+        // EK EXACT (0-4). L'ancien bucketing floor-even (1->0, 3->2) — hérité du fix « boost
+        // fantôme » de Math.round — faisait sous-évaluer Odinforce/Bottled Lightning d'1 dmg
+        // un tour sur deux (audit Thor, user 2026-07-09 « il n'est pas supposé être aussi
+        // faible »). 5 états au lieu de 3 : coût de cache négligeable.
+        electrokinesis: Math.min(4, player.tokens.electrokinesis ?? 0),
         guardBreak: player.tokens.guardBreak ?? 0,
         upgradeIds: player.upgradesInPlay,
         defenseTax: defenseTaxFor(opponent),
@@ -6420,6 +6421,9 @@ var Game = (() => {
         }
         for (const id of MAIN_PHASE_ACTION_IDS) if (canAfford(id)) options.push({ kind: "playInstant", cardId: id });
         for (const cardId of player.hand) options.push({ kind: "sellCard", cardId });
+        if (player.heroId === "th" && player.hand.length > 0) {
+          options.push({ kind: "mjolnirShuttle" });
+        }
         if (player.heroId === "fm") {
           const seen = /* @__PURE__ */ new Set();
           for (const oreId of player.forge) {
@@ -6552,6 +6556,22 @@ var Game = (() => {
     }
     if (action.kind === "moveHead") {
       applyMoveHead(state, playerIdx, action);
+      return;
+    }
+    if (action.kind === "mjolnirShuttle") {
+      const self = state.players[playerIdx];
+      if (self.hand.length === 0) return;
+      const hero = heroTemplateFor(self.heroId);
+      let pick = self.hand.find((id, i) => self.hand.indexOf(id) !== i);
+      if (!pick) pick = self.hand.slice().sort((a, b) => (cardById(hero, a)?.cpCost ?? 0) - (cardById(hero, b)?.cpCost ?? 0))[0];
+      self.hand.splice(self.hand.indexOf(pick), 1);
+      self.discard.push(pick);
+      const r = shuttleOnce(self);
+      if (r.damage > 0) {
+        state.players[1 - playerIdx].hp -= r.damage;
+        checkGameOver(state);
+      }
+      log(state, playerIdx, ctx.phase ?? "main1", `Mjolnir shuttle (discarded ${pick}): ${r.action === "throw" ? "1 isolated undefendable dmg" : `+${r.ekGained} EK`}`);
       return;
     }
     if (action.kind === "covertOpsUpgrade") {

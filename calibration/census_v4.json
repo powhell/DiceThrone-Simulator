@@ -1,0 +1,532 @@
+{
+ "hh": {
+  "games": 36,
+  "wins": 20,
+  "ownTurns": 186,
+  "dmg": 1336,
+  "heal": 0,
+  "whiffs": 26,
+  "attacks": 177,
+  "prevented": 106,
+  "countered": 0,
+  "cardsPlayed": 69,
+  "sold": 25,
+  "upgrades": 46,
+  "topLines": [
+   [
+    "Sow Despair S",
+    31
+   ],
+   [
+    "Sow Despair L",
+    29
+   ],
+   [
+    "Ride Down",
+    27
+   ],
+   [
+    "Spectral Assault",
+    25
+   ],
+   [
+    "Reap",
+    20
+   ]
+  ],
+  "dmgPerOwnTurn": 7.18,
+  "healPerGame": 0,
+  "preventedPerGame": 2.9,
+  "counteredPerGame": 0,
+  "whiffPct": 12.8,
+  "curve": [
+   4.81,
+   8.17,
+   8.78,
+   7.42,
+   6.58,
+   5.82,
+   10.5,
+   9,
+   null,
+   null
+  ]
+ },
+ "bw": {
+  "games": 36,
+  "wins": 18,
+  "ownTurns": 208,
+  "dmg": 1304,
+  "heal": 3,
+  "whiffs": 14,
+  "attacks": 207,
+  "prevented": 256,
+  "countered": 0,
+  "cardsPlayed": 92,
+  "sold": 40,
+  "upgrades": 46,
+  "topLines": [
+   [
+    "Widow's Gauntlets",
+    102
+   ],
+   [
+    "Baton Strike 4B",
+    28
+   ],
+   [
+    "Vengeance",
+    28
+   ],
+   [
+    "Hacked",
+    15
+   ],
+   [
+    "Grapple",
+    8
+   ]
+  ],
+  "dmgPerOwnTurn": 6.27,
+  "healPerGame": 0.1,
+  "preventedPerGame": 7.1,
+  "counteredPerGame": 0,
+  "whiffPct": 6.3,
+  "curve": [
+   4.92,
+   5.42,
+   6.33,
+   6.78,
+   7.58,
+   7.05,
+   6.2,
+   8,
+   7,
+   0
+  ]
+ },
+ "fm": {
+  "games": 36,
+  "wins": 24,
+  "ownTurns": 232,
+  "dmg": 1483,
+  "heal": 3,
+  "whiffs": 26,
+  "attacks": 229,
+  "prevented": 469,
+  "countered": 0,
+  "cardsPlayed": 42,
+  "sold": 11,
+  "upgrades": 0,
+  "topLines": [
+   [
+    "A Good Haul",
+    87
+   ],
+   [
+    "Armored Up L",
+    39
+   ],
+   [
+    "Armored Up S",
+    36
+   ],
+   [
+    "Smelting Time",
+    19
+   ],
+   [
+    "Pick Axe 3A",
+    18
+   ]
+  ],
+  "dmgPerOwnTurn": 6.39,
+  "healPerGame": 0.1,
+  "preventedPerGame": 13,
+  "counteredPerGame": 0,
+  "whiffPct": 10.2,
+  "curve": [
+   5.92,
+   6.97,
+   6.64,
+   7.34,
+   6.59,
+   6.33,
+   5.07,
+   4.4,
+   5.4,
+   0
+  ]
+ },
+ "dr": {
+  "games": 36,
+  "wins": 14,
+  "ownTurns": 217,
+  "dmg": 1114,
+  "heal": 256,
+  "whiffs": 14,
+  "attacks": 210,
+  "prevented": 181,
+  "countered": 6,
+  "cardsPlayed": 68,
+  "sold": 49,
+  "upgrades": 42,
+  "topLines": [
+   [
+    "Forest's Call",
+    48
+   ],
+   [
+    "Nature's Cure",
+    41
+   ],
+   [
+    "Ferocity 3A",
+    22
+   ],
+   [
+    "Forest's Answer",
+    22
+   ],
+   [
+    "Wild Realignment",
+    18
+   ]
+  ],
+  "dmgPerOwnTurn": 5.13,
+  "healPerGame": 7.1,
+  "preventedPerGame": 5,
+  "counteredPerGame": 0.2,
+  "whiffPct": 6.3,
+  "curve": [
+   4.61,
+   5.25,
+   5.69,
+   4.91,
+   6.37,
+   4.5,
+   3.85,
+   4.63,
+   5,
+   null
+  ]
+ },
+ "th": {
+  "games": 36,
+  "wins": 16,
+  "ownTurns": 247,
+  "dmg": 1354,
+  "heal": 0,
+  "whiffs": 13,
+  "attacks": 252,
+  "prevented": 497,
+  "countered": 0,
+  "cardsPlayed": 136,
+  "sold": 23,
+  "upgrades": 109,
+  "topLines": [
+   [
+    "Mighty Summon",
+    54
+   ],
+   [
+    "Lightning Rod",
+    52
+   ],
+   [
+    "Thunder Bolt",
+    37
+   ],
+   [
+    "Odinforce",
+    31
+   ],
+   [
+    "Chain Lightning",
+    21
+   ]
+  ],
+  "dmgPerOwnTurn": 5.48,
+  "healPerGame": 0,
+  "preventedPerGame": 13.8,
+  "counteredPerGame": 0,
+  "whiffPct": 4.9,
+  "curve": [
+   5.17,
+   5.19,
+   5.81,
+   6.08,
+   5.4,
+   6.1,
+   5.05,
+   6,
+   2,
+   0
+  ]
+ },
+ "sm": {
+  "games": 36,
+  "wins": 19,
+  "ownTurns": 182,
+  "dmg": 1446,
+  "heal": 39,
+  "whiffs": 9,
+  "attacks": 286,
+  "prevented": 56,
+  "countered": 3,
+  "cardsPlayed": 70,
+  "sold": 50,
+  "upgrades": 47,
+  "topLines": [
+   [
+    "C-C-C-Combo",
+    86
+   ],
+   [
+    "Ensnare",
+    72
+   ],
+   [
+    "Spider-Reflexes",
+    53
+   ],
+   [
+    "Punch 3A",
+    19
+   ],
+   [
+    "Wall Crawler",
+    16
+   ]
+  ],
+  "dmgPerOwnTurn": 7.95,
+  "healPerGame": 1.1,
+  "preventedPerGame": 1.6,
+  "counteredPerGame": 0.1,
+  "whiffPct": 3.1,
+  "curve": [
+   7.64,
+   9.06,
+   8.39,
+   7.09,
+   7.61,
+   7.18,
+   6,
+   12.5,
+   null,
+   null
+  ]
+ },
+ "py": {
+  "games": 36,
+  "wins": 12,
+  "ownTurns": 185,
+  "dmg": 1097,
+  "heal": 0,
+  "whiffs": 7,
+  "attacks": 207,
+  "prevented": 42,
+  "countered": 0,
+  "cardsPlayed": 107,
+  "sold": 28,
+  "upgrades": 87,
+  "topLines": [
+   [
+    "Hot Streak",
+    49
+   ],
+   [
+    "Burning Soul",
+    43
+   ],
+   [
+    "Combustion",
+    28
+   ],
+   [
+    "Fireball 4F",
+    25
+   ],
+   [
+    "Fireball 5F",
+    21
+   ]
+  ],
+  "dmgPerOwnTurn": 5.93,
+  "healPerGame": 0,
+  "preventedPerGame": 1.2,
+  "counteredPerGame": 0,
+  "whiffPct": 3.3,
+  "curve": [
+   5.42,
+   6.19,
+   7.78,
+   5.38,
+   5.32,
+   4.85,
+   4,
+   null,
+   null,
+   null
+  ]
+ },
+ "rv": {
+  "games": 36,
+  "wins": 14,
+  "ownTurns": 214,
+  "dmg": 1221,
+  "heal": 126,
+  "whiffs": 14,
+  "attacks": 214,
+  "prevented": 250,
+  "countered": 0,
+  "cardsPlayed": 102,
+  "sold": 29,
+  "upgrades": 85,
+  "topLines": [
+   [
+    "Craven",
+    47
+   ],
+   [
+    "Beguile",
+    31
+   ],
+   [
+    "Murder of Crows",
+    31
+   ],
+   [
+    "Raven Sight",
+    19
+   ],
+   [
+    "Peck 3T",
+    19
+   ]
+  ],
+  "dmgPerOwnTurn": 5.71,
+  "healPerGame": 3.5,
+  "preventedPerGame": 6.9,
+  "counteredPerGame": 0,
+  "whiffPct": 6.1,
+  "curve": [
+   4.72,
+   5.5,
+   6.97,
+   6.56,
+   6.03,
+   5.48,
+   3.5,
+   4.2,
+   2,
+   null
+  ]
+ },
+ "du": {
+  "games": 36,
+  "wins": 15,
+  "ownTurns": 214,
+  "dmg": 1516,
+  "heal": 8,
+  "whiffs": 6,
+  "attacks": 225,
+  "prevented": 320,
+  "countered": 146,
+  "cardsPlayed": 85,
+  "sold": 41,
+  "upgrades": 59,
+  "topLines": [
+   [
+    "Balestra",
+    77
+   ],
+   [
+    "Strike",
+    70
+   ],
+   [
+    "En Garde",
+    34
+   ],
+   [
+    "Blade Flurry 3A",
+    12
+   ],
+   [
+    "Feint Attack",
+    11
+   ]
+  ],
+  "dmgPerOwnTurn": 7.08,
+  "healPerGame": 0.2,
+  "preventedPerGame": 8.9,
+  "counteredPerGame": 4.1,
+  "whiffPct": 2.6,
+  "curve": [
+   7.28,
+   6.97,
+   7.28,
+   7.5,
+   6.22,
+   6.91,
+   7.71,
+   9,
+   3,
+   null
+  ]
+ },
+ "se": {
+  "games": 36,
+  "wins": 15,
+  "ownTurns": 227,
+  "dmg": 1521,
+  "heal": 359,
+  "whiffs": 12,
+  "attacks": 234,
+  "prevented": 66,
+  "countered": 0,
+  "cardsPlayed": 89,
+  "sold": 13,
+  "upgrades": 75,
+  "topLines": [
+   [
+    "Scorching Staff",
+    48
+   ],
+   [
+    "Ray of Light",
+    40
+   ],
+   [
+    "Sunbeam",
+    35
+   ],
+   [
+    "Radiant Energy",
+    25
+   ],
+   [
+    "Ray Absorption",
+    21
+   ]
+  ],
+  "dmgPerOwnTurn": 6.7,
+  "healPerGame": 10,
+  "preventedPerGame": 1.8,
+  "counteredPerGame": 0,
+  "whiffPct": 4.9,
+  "curve": [
+   5.53,
+   7.67,
+   7.44,
+   7.31,
+   6.8,
+   6.6,
+   5.63,
+   5.38,
+   2.33,
+   6
+  ]
+ }
+}

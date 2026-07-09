@@ -1,0 +1,45 @@
+FEATURE_COUNT=168 | sizes=[168, 256, 128, 1] | device=cuda (NVIDIA GeForce RTX 4090)
+fresh network initialized -> current.json
+  PARITY OK: 16 vectors, worst diff 4.58e-8 <= 0.00001
+TensorBoard: rl-py/runs/20260708-093405  (view: rl-py\venv\Scripts\tensorboard --logdir rl-py/runs)
+[round 1/250] 48 games (220s gen, 0.5s train) | buffer 1840 samples | loss 0.8188 | terrorize 0/34 (0%) | upgrades paid/free 196/88 | 220s total
+[round 2/250] 48 games (102s gen, 0.1s train) | buffer 3148 samples | loss 0.6804 | terrorize 0/19 (0%) | upgrades paid/free 135/29 | 322s total
+[round 3/250] 48 games (115s gen, 0.1s train) | buffer 4456 samples | loss 0.6360 | terrorize 0/20 (0%) | upgrades paid/free 182/11 | 437s total
+[round 4/250] 48 games (129s gen, 0.1s train) | buffer 5822 samples | loss 0.6151 | terrorize 0/28 (0%) | upgrades paid/free 182/8 | 566s total
+[round 5/250] 48 games (143s gen, 0.1s train) | buffer 7206 samples | loss 0.6131 | terrorize 10/11 (91%) | upgrades paid/free 220/10 | 709s total
+  eval vs best: 82.7% (115-24, 5 draws) | vs greedy: 75.0% -> PROMOTED to best.json
+[round 6/250] 48 games (142s gen, 0.1s train) | buffer 8504 samples | loss 0.6394 | terrorize 10/10 (100%) | upgrades paid/free 213/12 | 2378s total
+[round 7/250] 48 games (111s gen, 0.1s train) | buffer 9580 samples | loss 0.5974 | terrorize 8/8 (100%) | upgrades paid/free 166/12 | 2489s total
+[round 8/250] 48 games (110s gen, 0.1s train) | buffer 10644 samples | loss 0.5889 | terrorize 0/16 (0%) | upgrades paid/free 187/10 | 2599s total
+[round 9/250] 48 games (122s gen, 0.1s train) | buffer 11824 samples | loss 0.5693 | terrorize 7/7 (100%) | upgrades paid/free 169/5 | 2721s total
+[round 10/250] 48 games (128s gen, 0.1s train) | buffer 13068 samples | loss 0.5673 | terrorize 11/11 (100%) | upgrades paid/free 158/11 | 2849s total
+  eval vs best: 60.7% (82-53, 9 draws) | vs greedy: 72.5% -> PROMOTED to best.json
+[round 11/250] 48 games (119s gen, 0.1s train) | buffer 14168 samples | loss 0.5642 | terrorize 0/25 (0%) | upgrades paid/free 165/10 | 4329s total
+[round 12/250] 48 games (86s gen, 0.1s train) | buffer 14860 samples | loss 0.5577 | terrorize 10/30 (33%) | upgrades paid/free 120/10 | 4415s total
+[round 13/250] 48 games (89s gen, 0.1s train) | buffer 15688 samples | loss 0.5585 | terrorize 0/108 (0%) | upgrades paid/free 133/8 | 4504s total
+[round 14/250] 48 games (116s gen, 0.1s train) | buffer 16882 samples | loss 0.5604 | terrorize 7/105 (7%) | upgrades paid/free 154/42 | 4621s total
+[round 15/250] 48 games (111s gen, 0.1s train) | buffer 18162 samples | loss 0.5715 | terrorize 0/50 (0%) | upgrades paid/free 135/58 | 4732s total
+  eval vs best: 52.9% (72-64, 8 draws) | vs greedy: 76.8%
+[round 16/250] 48 games (107s gen, 0.1s train) | buffer 19506 samples | loss 0.5669 | terrorize 0/19 (0%) | upgrades paid/free 125/38 | 6220s total
+[round 17/250] 48 games (113s gen, 0.1s train) | buffer 20810 samples | loss 0.5700 | terrorize 0/14 (0%) | upgrades paid/free 147/8 | 6333s total
+[round 18/250] 48 games (119s gen, 0.3s train) | buffer 22140 samples | loss 0.5691 | terrorize 1/15 (7%) | upgrades paid/free 152/12 | 6453s total
+[round 19/250] 48 games (132s gen, 0.3s train) | buffer 23546 samples | loss 0.5756 | terrorize 0/28 (0%) | upgrades paid/free 173/11 | 6585s total
+[round 20/250] 48 games (130s gen, 0.3s train) | buffer 24820 samples | loss 0.5902 | terrorize 0/23 (0%) | upgrades paid/free 192/12 | 6715s total
+  eval vs best: 51.1% (72-69, 3 draws) | vs greedy: 87.0%
+[round 21/250] 48 games (126s gen, 0.3s train) | buffer 25930 samples | loss 0.5842 | terrorize 12/12 (100%) | upgrades paid/free 169/11 | 8203s total
+[round 22/250] 48 games (114s gen, 0.3s train) | buffer 27002 samples | loss 0.5870 | terrorize 7/7 (100%) | upgrades paid/free 156/8 | 8317s total
+[round 23/250] 48 games (125s gen, 0.3s train) | buffer 28138 samples | loss 0.5845 | terrorize 8/8 (100%) | upgrades paid/free 197/7 | 8442s total
+[round 24/250] 48 games (131s gen, 0.3s train) | buffer 29340 samples | loss 0.5845 | terrorize 9/9 (100%) | upgrades paid/free 176/12 | 8574s total
+[round 25/250] 48 games (117s gen, 0.1s train) | buffer 30409 samples | loss 0.5787 | terrorize 12/12 (100%) | upgrades paid/free 159/10 | 8691s total
+  eval vs best: 57.2% (79-59, 6 draws) | vs greedy: 80.3% -> PROMOTED to best.json
+[round 26/250] 48 games (95s gen, 0.3s train) | buffer 29298 samples | loss 0.5907 | terrorize 8/8 (100%) | upgrades paid/free 124/6 | 10210s total
+[round 27/250] 48 games (94s gen, 0.3s train) | buffer 28686 samples | loss 0.6131 | terrorize 47/47 (100%) | upgrades paid/free 117/12 | 10305s total
+[round 28/250] 48 games (115s gen, 0.4s train) | buffer 28429 samples | loss 0.5850 | terrorize 71/72 (99%) | upgrades paid/free 136/47 | 10421s total
+[round 29/250] 48 games (119s gen, 0.4s train) | buffer 28331 samples | loss 0.5810 | terrorize 25/25 (100%) | upgrades paid/free 132/73 | 10540s total
+[round 30/250] 48 games (111s gen, 0.3s train) | buffer 28285 samples | loss 0.5765 | terrorize 9/9 (100%) | upgrades paid/free 115/50 | 10651s total
+  eval vs best: 52.1% (73-67, 4 draws) | vs greedy: 85.9%
+[round 31/250] 48 games (110s gen, 0.3s train) | buffer 28267 samples | loss 0.5747 | terrorize 5/5 (100%) | upgrades paid/free 142/9 | 12212s total
+[round 32/250] 48 games (128s gen, 0.3s train) | buffer 28529 samples | loss 0.5745 | terrorize 11/11 (100%) | upgrades paid/free 172/13 | 12341s total
+[round 33/250] 48 games (133s gen, 0.3s train) | buffer 28789 samples | loss 0.5678 | terrorize 8/8 (100%) | upgrades paid/free 161/12 | 12474s total
+[round 34/250] 48 games (152s gen, 0.4s train) | buffer 29013 samples | loss 0.5752 | terrorize 6/17 (35%) | upgrades paid/free 199/9 | 12626s total
+[round 35/250] 48 games (126s gen, 0.4s train) | buffer 28969 samples | loss 0.5731 | terrorize 8/8 (100%) | upgrades paid/free 167/8 | 12753s total
