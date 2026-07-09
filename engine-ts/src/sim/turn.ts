@@ -45,7 +45,42 @@ function log(state: GameState, playerIdx: 0 | 1, phase: Phase, message: string):
 // prevention attendue + contre-degats attendus de sa defense (esperances des regles
 // verifiees, voir calibration/analysis_data.json). C'est la prime des attaques
 // indefendables (user-caught : Reap/Horrify/ults n'etaient pas creditees).
+// Risque de RÉPONSE en fenêtre DRP5 (user 2026-07-09 : « si l'adversaire a plusieurs CP pour
+// répondre, des fois ça [ne] vaut [pas] la peine — il faut que le calcul de risque soit
+// calculé ») : espérance de prévention par ses cartes défensives, estimée depuis l'info
+// PUBLIQUE seulement — ses CP, la taille de sa main, et sa défausse (une carte déjà passée
+// ne menace plus). 1 copie vivante -> P(en main) ≈ main/(main+deck).
+function responseRiskFor(opponent: PlayerState): number {
+  const hand = opponent.hand.length, deck = opponent.deck.length
+  if (hand === 0) return 0
+  const pInHand = hand / Math.max(1, hand + deck)
+  // [id, coût CP, prévention effective moyenne]
+  const RESP: Array<[string, number, number]> = [
+    ['not-this-time', 1, 4.5],
+    ['spirited-reprisal', 1, 3],
+    ['recoil', 0, 3],
+    ['sun-shield', 1, 2.5],
+    ['indomitable-will', 2, 2.5],
+    ['invulnerability', 2, 4],
+  ]
+  let risk = 0
+  for (const [id, cost, prev] of RESP) {
+    if (opponent.cp < cost) continue
+    if (opponent.discard.includes(id)) continue // déjà jouée/vendue — info publique
+    if (id === 'spirited-reprisal' && (opponent.tokens.head ?? 0) <= 0) continue
+    if (id === 'invulnerability' && (opponent.tokens.electrokinesis ?? 0) < 2) continue
+    if (!cardById(heroTemplateFor(opponent.heroId), id)) continue // pas dans son deck
+    risk += pInHand * prev
+  }
+  // Discount : le défenseur garde souvent sa réponse pour une attaque plus grosse/létale.
+  return Math.min(risk, 5) * 0.8
+}
+
 export function defenseTaxFor(opponent: PlayerState): number {
+  return baseDefenseTaxFor(opponent) + responseRiskFor(opponent)
+}
+
+function baseDefenseTaxFor(opponent: PlayerState): number {
   if (opponent.heroId === 'se') {
     // Harness the Light : AUCUNE prévention, aucun contre — il soigne (E[Staves]=1.5) et
     // charge son cadran. Taxe = son soin attendu (II : pareil + gem parfois).

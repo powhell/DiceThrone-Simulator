@@ -5385,7 +5385,33 @@ var Game = (() => {
   function log(state, playerIdx, phase, message) {
     state.log.push({ turn: state.turnNumber, playerIdx, phase, message });
   }
+  function responseRiskFor(opponent) {
+    const hand = opponent.hand.length, deck = opponent.deck.length;
+    if (hand === 0) return 0;
+    const pInHand = hand / Math.max(1, hand + deck);
+    const RESP = [
+      ["not-this-time", 1, 4.5],
+      ["spirited-reprisal", 1, 3],
+      ["recoil", 0, 3],
+      ["sun-shield", 1, 2.5],
+      ["indomitable-will", 2, 2.5],
+      ["invulnerability", 2, 4]
+    ];
+    let risk = 0;
+    for (const [id, cost, prev] of RESP) {
+      if (opponent.cp < cost) continue;
+      if (opponent.discard.includes(id)) continue;
+      if (id === "spirited-reprisal" && (opponent.tokens.head ?? 0) <= 0) continue;
+      if (id === "invulnerability" && (opponent.tokens.electrokinesis ?? 0) < 2) continue;
+      if (!cardById(heroTemplateFor(opponent.heroId), id)) continue;
+      risk += pInHand * prev;
+    }
+    return Math.min(risk, 5) * 0.8;
+  }
   function defenseTaxFor(opponent) {
+    return baseDefenseTaxFor(opponent) + responseRiskFor(opponent);
+  }
+  function baseDefenseTaxFor(opponent) {
     if (opponent.heroId === "se") {
       return 1.5;
     }
