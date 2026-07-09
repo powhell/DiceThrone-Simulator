@@ -658,7 +658,16 @@
     } else {
       $('board-title').textContent = 'Habiletés — ' + humanHero.name;
       const cands = ((phase==='roll' && attempts>0) || phase==='alter') ? G.matchedAbilities(g, dice.map(d=>d.v)) : [];
-      const isOn = name => cands.some(c=>c.name===name || c.name.startsWith(name+' '));
+      // Les lignes « X (grande) » du board doivent s'allumer sur les candidats grande-suite du
+      // moteur — nommés « X L » (hh/fm) ou « X (5-straight) » (du) — et la ligne petite ne doit
+      // PAS voler leur allumage (user-caught : grande suite faite, ligne éteinte).
+      const isOn = name => {
+        const grand = / \(grande\)$/.test(name);
+        const base = name.replace(/ \(grande\)$/,'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const largeRe = new RegExp('^'+base+'( L\\b|\\s*\\(5-straight)');
+        return cands.some(c => grand ? largeRe.test(c.name)
+          : (c.name===name || c.name.startsWith(name+' ')) && !largeRe.test(c.name));
+      };
       const self = g.state.players[g.humanIdx];
       const hero = G.heroTemplateFor(HUMAN);
       // Data-driven board: base abilities (marked ' II' when their upgrade is in play) PLUS the
