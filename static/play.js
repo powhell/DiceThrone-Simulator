@@ -2236,7 +2236,7 @@
   function translateLog(msg, isHuman, hero){
     let m;
     if ((m = msg.match(/^Final dice: ([\d,\s]+)$/)))
-      return `Dés finaux : <b>${diceWords(hero, m[1])}</b> (${m[1]})`;
+      return `Dés du jet : <b>${diceWords(hero, m[1])}</b> (${m[1]}) — ses cartes de manipulation (Tip It!…) peuvent encore les changer`;
     if ((m = msg.match(/^Chose ability: (.+)$/)))
       return `${isHuman?'Tu choisis':'Choisit'} <b>${formatAbility(hero, m[1]).name}</b>`;
     if (/^HP: self=/.test(msg)) return null; // pure debug line — drop from the player log
