@@ -21,6 +21,9 @@ const argv = process.argv.slice(2)
 const argVal = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1] : d }
 const GAMES = +argVal('games', 24)
 const OUT = argVal('out', path.join(root, 'calibration/matrix10.json'))
+// --seed-base N : décale les seeds pour qu'une passe supplémentaire joue des parties NEUVES
+// (sinon deux passes rejouent exactement les mêmes seeds 1..GAMES -> résultats identiques).
+const SEED_BASE = +argVal('seed-base', 0)
 
 const HEROES = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se']
 const cells = {}
@@ -31,7 +34,7 @@ const pairs = HEROES.flatMap(a => HEROES.filter(b => b !== a).map(b => [a, b]))
 for (const [a, b] of pairs) {
   let w = 0, n = 0
   for (let s = 1; s <= GAMES; s++) {
-    const r = G.runMatch(a, b, s, [pol, pol])
+    const r = G.runMatch(a, b, SEED_BASE + s, [pol, pol])
     if (r.winner === 0) w += 1
     if (r.winner !== null || r.finalState.gameOver) n += 1
     else { w += 0.5; n += 1 } // timeout = 0.5 (rare)
