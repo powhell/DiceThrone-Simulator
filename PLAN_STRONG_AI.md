@@ -144,8 +144,11 @@ mesuré**. Le solveur de dés exact reste tel quel (optimal).
 - **Phase 6 — Montée en puissance & évaluation.** Boucles longues, courbe de force, table
   d'équilibre RE-générée avec l'agent fort (= vrai guide tournoi). Réserve CPU raisonnable (cf.
   [[feedback_resource_usage]]).
-- **Phase 7 — Jeu haut niveau.** Brancher l'agent (IS)MCTS dans `interactive.ts`/l'UI. Réglage du
-  budget de recherche (force vs temps de réponse).
+- **Phase 7 — Jeu haut niveau + refonte UX.** Brancher l'agent (IS)MCTS dans `interactive.ts`/l'UI.
+  Réglage du budget de recherche (force vs temps de réponse). **Refonte de l'interface « jouer
+  contre l'IA »** (user 2026-07-09 : « l'interface je ne l'aime pas vraiment » — APRÈS le réseau) :
+  maquetter 2-3 directions avec le skill `prototype` (mode UI), le user choisit, puis implémenter ;
+  `artifact-design` pour le rendu soigné. Voir [[project_interface_ui]].
 
 ## 4. Décisions ouvertes — TRANCHÉES (revisiter seulement si un test le contredit)
 
@@ -198,6 +201,45 @@ sous-jets d'habiletés (Chain Lightning, Odinforce, dé de Guard Break, Vegas Ba
 points ci-dessus de façon homogène ; + un pilote générique qui joue une partie complète via cette
 seule interface. **Parité prouvée vs `playTurn`** (test rouge de la Phase 1).
 
+## 5c. Phase 1 — design détaillé (`Action` + test de parité)
+
+**Principe : un coup est OPAQUE pour la recherche.** MCTS n'interprète pas les coups. Contrat
+minimal : `legalActions()` renvoie une liste stable, `apply(a)` avance, et chaque coup a une **clé
+texte stable** `actionKey(a)` — identité des enfants dans l'arbre, et plus tard index de la tête
+politique du réseau (Phase 4). Le type `Action` peut donc être une grosse union interne ; sa forme
+est une implémentation derrière le seam, pas dans l'interface §2b.
+
+**Trois sortes de nœuds :**
+- **Joueur** — `legalActions()` énumère ; `apply(a)` avance.
+- **Chance (dés)** — `sampleChance(rng)` échantillonne (6^n issues = trop pour énumérer). Concerne
+  roll offensif/défensif + sous-jets d'habiletés (Chain Lightning, Odinforce, dé de Guard Break…).
+- **Expert (garde des dés)** — **non cherché** : le nœud délègue à `calculateOptimalKeep` (DP exact)
+  et applique sa réponse. La combinatoire la plus lourde est déjà résolue optimalement.
+
+**Le type `Action`** — réutilise `WindowAction` (types.ts) là où c'est déjà unifié, étend pour les
+hooks §5b :
+```ts
+type Action =
+  // déjà unifiées (WindowAction) : le couple enumerate/apply existe deja
+  | { kind: 'pass' } | { kind: 'playCard'; cardId } | { kind: 'alterDie'; cardId; dieIndex; delta }
+  | { kind: 'rerollDie'; cardId; dieIndex } | { kind: 'rerollAll'; cardId; dieIndices? } | { kind: 'sell'; cardId }
+  // hooks bespoke a migrer (§5b) :
+  | { kind: 'activateAbility'; abilityName }          // chooseAbility (le + important)
+  | { kind: 'spendToken'; token; amount }             // GuardBreak / GrimPursuit / Combo / EK
+  | { kind: 'craft'; ... } | { kind: 'nevermore'; ... } | ...
+// actionKey(a): string  -> cle stable (identite arbre + index politique)
+```
+
+**Test de parité (le ROUGE de la Phase 1) :** rejouer une partie DEUX fois, mêmes politiques + même
+graine — une fois par `playTurn`, une fois pilotée par le `GameNode` (à chaque nœud joueur, on
+demande à la MÊME `Policy.decide` quel coup légal prendre). **Exiger PV finaux + vainqueur + état du
+rng IDENTIQUES**, sur un lot de graines × plusieurs duels de héros. Vert = le `GameNode` ré-expose
+exactement les décisions du moteur, ni plus ni moins (rien cassé/oublié en inversant le contrôle).
+
+**Ordre d'attaque suggéré (tdd, un hook à la fois) :** commencer par `activateAbility` (le plus
+important + le plus impactant sur la force), puis les nœuds de chance des dés, puis les hooks par
+héros. Le test de parité tourne en continu — il vire au rouge dès qu'un hook migré diverge.
+
 ## 6. Journal (append à chaque session)
 
 - 2026-07-09 : plan créé après constat que l'existant est structurellement faible (réseau minuscule,
@@ -209,3 +251,9 @@ seule interface. **Parité prouvée vs `playTurn`** (test rouge de la Phase 1).
   Design-it-twice tranché : rejeu-par-script (B) vs générateur (A) → B (clonabilité). Décisions
   ouvertes §4 toutes tranchées. Chaque phase a désormais un **test rouge mesurable**. Skills
   mattpocock installés.
+- 2026-07-09 (détail Phase 1) : ajouté §5c — `Action` opaque + `actionKey` stable, 3 sortes de
+  nœuds (joueur / chance échantillonné / expert-dés délégué au solveur), type `Action` esquissé,
+  spec du test de parité, ordre d'attaque tdd (`activateAbility` en premier). Phase 7 : ajout de la
+  refonte UX de l'UI de jeu (user n'aime pas l'interface actuelle — APRÈS le réseau, via
+  `prototype`/`artifact-design`). Plan jugé PRÊT à exécuter phases 0-1-2 ; phases 3-5 = direction
+  juste, détail à concevoir quand leur prédécesseur est vert (délibéré, pas un manque).
