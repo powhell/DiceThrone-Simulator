@@ -1210,8 +1210,9 @@
             youC.duSashayHeal=!h; renderControls(); }));
         }
       }
-      // Sun Elf : dépenser le Charged Gem (Main Phase, d6 -> CP et/ou 2 dmg indéfendables).
-      if (HUMAN==='se') {
+      // Charged Gem : texte SUR le jeton (« Spend during your Main Phase ») — TOUT détenteur
+      // peut le dépenser (transférable ; audit user 2026-07-09), pas seulement Sun Elf.
+      {
         const youSe = g.state.players[g.humanIdx];
         if ((youSe.tokens.chargedGem||0)>0) {
           c.appendChild(btn('💎 Dépenser Charged Gem (d6 : 1-2 = +1 CP · 3-4 = 2 dmg · 5-6 = les deux)','primary', ()=>{
@@ -1231,6 +1232,17 @@
       else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
       addFmBtns(c);
       addThorBtns(c, true); // ⚡×4→pioche (Main Phase, leaflet) + navette Mjölnir
+      { // ⚡ EK volés : « spend 4 during Main Phase to draw 1 » est sur le JETON — tout détenteur
+        const youEk = g.state.players[g.humanIdx];
+        if (HUMAN!=='th' && (youEk.tokens.electrokinesis||0)>=4 && !youEk.ekDrawUsedThisTurn){
+          c.appendChild(btn('⚡×4 → pioche 1','', ()=>{
+            youEk.tokens.electrokinesis-=4; youEk.ekDrawUsedThisTurn=true;
+            if (youEk.deck.length>0){ youEk.hand.push(youEk.deck.shift()); }
+            log('⚡ <b>Electrokinesis ×4</b> dépensés : pioche 1.');
+            renderAll();
+          }));
+        }
+      }
       addMorphBtns(c); // 🧙 revenir Druide en fin de tour = Regenerate (user-caught : bouton absent en Main Phase)
       // Combo (sm) : la dépense officielle est « à la conclusion de la Defensive Roll Phase
       // adverse » — dans le flux UI, juste après le BILAN, donc offerte en arrivant en main2.

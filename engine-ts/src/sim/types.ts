@@ -213,13 +213,13 @@ export interface AbilityCandidate {
 // added as later stages migrate more decisions onto this model.
 // Status-effect token kinds that cross-player cards (Transference! / Get That Outta Here! / What
 // Status Effects?) may move or remove. Per verified hero.json token defs: all status effects EXCEPT
-// the « Unique... may not be removed/transferred » ones (covertOps, shapeShift, hex). The Haunted
-// Head has its own dedicated card (Rolling Pumpkin! → moveHead) and is deliberately excluded here.
+// the « Unique... Not transferable / may not be removed » ones (covertOps, shapeShift, hex, combo,
+// invisibility). The Haunted Head has its own dedicated card (Rolling Pumpkin!), excluded here.
 // User-caught : l'ancienne liste (4 jetons) datait de l'ère 2 persos — What Status Effects?
 // était injouable contre la régén du Druide et tout jeton des 8 persos suivants.
 export type TransferableToken = 'dreadful' | 'grimPursuit' | 'agility' | 'timeBomb'
   | 'feather' | 'nevermore' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak'
-  | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun'
+  | 'webbed' | 'fireMastery' | 'burn' | 'knockdown' | 'stun'
   | 'disarm' | 'chargedGem' | 'sunMarked'
 
 export type WindowAction =

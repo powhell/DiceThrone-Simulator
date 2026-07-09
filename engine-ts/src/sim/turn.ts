@@ -1042,17 +1042,19 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
   {
     // Thor : 1x/tour, depenser 4 Electrokinesis pour piocher 1 (leaflet verifie).
     // Regle : seulement si la main est courte (l'EK vaut aussi +1 dmg x EK sur BL/Odinforce).
+    // Dépenses de jetons dont le texte est SUR le jeton (défs vérifiées) : valables pour TOUT
+    // détenteur (jetons transférables — audit user 2026-07-09), plus de gate heroId.
     const self = state.players[playerIdx]
-    if (self.heroId === 'th' && !self.humanControlled && !self.ekDrawUsedThisTurn
+    if (!self.humanControlled && !self.ekDrawUsedThisTurn
         && (self.tokens.electrokinesis ?? 0) >= 4 && self.hand.length <= 2) {
       self.tokens.electrokinesis -= 4
       self.ekDrawUsedThisTurn = true
       drawCards(self, 1, rng)
       log(state, playerIdx, phase, 'Electrokinesis x4 spent: drew 1')
     }
-    // Charged Gem (se, IA) : dépense Main Phase jamais négative (CP et/ou 2 dmg indéf.) —
+    // Charged Gem (IA) : dépense Main Phase jamais négative (CP et/ou 2 dmg indéf.) —
     // auto pour l'IA, bouton pré-armé pour l'humain (UI).
-    if (self.heroId === 'se' && !self.humanControlled && (self.tokens.chargedGem ?? 0) > 0 && phase === 'main1') {
+    if (!self.humanControlled && (self.tokens.chargedGem ?? 0) > 0 && phase === 'main1') {
       const opp2 = state.players[(1 - playerIdx) as 0 | 1]
       const r = se.spendChargedGem(self, rng)
       if (r.cp > 0) grantCp(self, r.cp)

@@ -161,9 +161,7 @@ var Game = (() => {
     "wound",
     "electrokinesis",
     "guardBreak",
-    "combo",
     "webbed",
-    "invisibility",
     "fireMastery",
     "burn",
     "knockdown",
@@ -183,9 +181,7 @@ var Game = (() => {
     wound: 2,
     electrokinesis: 4,
     guardBreak: 2,
-    combo: 1,
     webbed: 1,
-    invisibility: 1,
     fireMastery: 5,
     burn: 1,
     knockdown: 1,
@@ -6275,13 +6271,13 @@ var Game = (() => {
   function playMainPhase(state, playerIdx, phase, policies, rng) {
     {
       const self2 = state.players[playerIdx];
-      if (self2.heroId === "th" && !self2.humanControlled && !self2.ekDrawUsedThisTurn && (self2.tokens.electrokinesis ?? 0) >= 4 && self2.hand.length <= 2) {
+      if (!self2.humanControlled && !self2.ekDrawUsedThisTurn && (self2.tokens.electrokinesis ?? 0) >= 4 && self2.hand.length <= 2) {
         self2.tokens.electrokinesis -= 4;
         self2.ekDrawUsedThisTurn = true;
         drawCards(self2, 1, rng);
         log(state, playerIdx, phase, "Electrokinesis x4 spent: drew 1");
       }
-      if (self2.heroId === "se" && !self2.humanControlled && (self2.tokens.chargedGem ?? 0) > 0 && phase === "main1") {
+      if (!self2.humanControlled && (self2.tokens.chargedGem ?? 0) > 0 && phase === "main1") {
         const opp2 = state.players[1 - playerIdx];
         const r = spendChargedGem(self2, rng);
         if (r.cp > 0) grantCp(self2, r.cp);
