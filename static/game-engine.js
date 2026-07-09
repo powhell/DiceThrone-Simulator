@@ -149,7 +149,51 @@ var Game = (() => {
   }
 
   // src/sim/tokens.ts
-  var TRANSFERABLE_TOKENS = ["dreadful", "grimPursuit", "agility", "timeBomb"];
+  var TRANSFERABLE_TOKENS = [
+    "dreadful",
+    "grimPursuit",
+    "agility",
+    "timeBomb",
+    "feather",
+    "nevermore",
+    "regen2",
+    "regen1",
+    "wound",
+    "electrokinesis",
+    "guardBreak",
+    "combo",
+    "webbed",
+    "invisibility",
+    "fireMastery",
+    "burn",
+    "knockdown",
+    "stun",
+    "disarm",
+    "chargedGem",
+    "sunMarked"
+  ];
+  var TOKEN_CAPS = {
+    dreadful: 5,
+    grimPursuit: 3,
+    agility: 2,
+    feather: 5,
+    nevermore: 1,
+    regen2: 2,
+    regen1: 2,
+    wound: 2,
+    electrokinesis: 4,
+    guardBreak: 2,
+    combo: 1,
+    webbed: 1,
+    invisibility: 1,
+    fireMastery: 5,
+    burn: 1,
+    knockdown: 1,
+    stun: 1,
+    disarm: 1,
+    chargedGem: 1,
+    sunMarked: 1
+  };
   function countToken(p, kind) {
     return kind === "timeBomb" ? p.timeBombs.length : p.tokens[kind];
   }
@@ -6557,7 +6601,10 @@ var Game = (() => {
       if (to.timeBombs.length < TIME_BOMB_STACK_CAP) to.timeBombs.push(pos ?? "0:02");
     } else if (kind === "dreadful") grantDreadful(to, 1);
     else if (kind === "grimPursuit") grantGrimPursuit(to, 1);
-    else grantAgility(to, 1);
+    else if (kind === "agility") grantAgility(to, 1);
+    else if (kind === "regen2" || kind === "regen1") {
+      if ((to.tokens.regen2 ?? 0) + (to.tokens.regen1 ?? 0) < 2) to.tokens[kind] = (to.tokens[kind] ?? 0) + 1;
+    } else to.tokens[kind] = Math.min(TOKEN_CAPS[kind], (to.tokens[kind] ?? 0) + 1);
   }
   function removeTransferable(from, kind) {
     if (kind === "timeBomb") return from.timeBombs.pop();
@@ -6580,10 +6627,10 @@ var Game = (() => {
   function applyRemoveAllTokens(state, playerIdx, action) {
     if (!spendActionCard(state, playerIdx, action.cardId)) return;
     const target = state.players[action.targetIdx];
-    target.tokens.dreadful = 0;
-    target.tokens.grimPursuit = 0;
-    target.tokens.agility = 0;
-    target.timeBombs = [];
+    for (const k of TRANSFERABLE_TOKENS) {
+      if (k === "timeBomb") target.timeBombs = [];
+      else target.tokens[k] = 0;
+    }
     log(state, playerIdx, ctxPhaseless, `What Status Effects?: removed all status tokens from p${action.targetIdx}`);
   }
   function applyMoveHead(state, playerIdx, action) {

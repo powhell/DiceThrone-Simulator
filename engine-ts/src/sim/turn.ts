@@ -1,7 +1,7 @@
 // Pure(ish) turn/phase step functions — see rng.ts for the "RNG threaded as an argument,
 // never Math.random() directly" convention that keeps a (seed, policies) pair reproducible.
 import type { GameState, PlayerState, HeroId, TokenKind, TransferableToken, TimeBombPosition, Phase, WindowAction, WindowContext } from './types.js'
-import { hasHead, TRANSFERABLE_TOKENS, countToken } from './tokens.js'
+import { hasHead, TRANSFERABLE_TOKENS, TOKEN_CAPS, countToken } from './tokens.js'
 import { resolveResponseWindow } from './decision.js'
 import type { HHState } from '../characters/horseman/config.js'
 import type { BWState } from '../characters/black_widow/config.js'
@@ -1424,7 +1424,14 @@ function grantTransferable(to: PlayerState, kind: TransferableToken, pos: TimeBo
   if (kind === 'timeBomb') { if (to.timeBombs.length < bw.TIME_BOMB_STACK_CAP) to.timeBombs.push(pos ?? '0:02') }
   else if (kind === 'dreadful') hh.grantDreadful(to, 1)
   else if (kind === 'grimPursuit') hh.grantGrimPursuit(to, 1)
-  else bw.grantAgility(to, 1)
+  else if (kind === 'agility') bw.grantAgility(to, 1)
+  else if (kind === 'regen2' || kind === 'regen1') {
+    // cap TOTAL Regenerate = 2 (les deux faces confondues, déf vérifiée)
+    if ((to.tokens.regen2 ?? 0) + (to.tokens.regen1 ?? 0) < 2) to.tokens[kind] = (to.tokens[kind] ?? 0) + 1
+  }
+  // générique (user-caught : l'ancien else donnait de l'AGILITY pour tout jeton inconnu) —
+  // le stackCap suit la déf vérifiée du jeton, pas le perso qui reçoit.
+  else to.tokens[kind] = Math.min(TOKEN_CAPS[kind], (to.tokens[kind] ?? 0) + 1)
 }
 function removeTransferable(from: PlayerState, kind: TransferableToken): TimeBombPosition | undefined {
   if (kind === 'timeBomb') return from.timeBombs.pop()
@@ -1447,11 +1454,13 @@ function applyRemoveToken(state: GameState, playerIdx: 0 | 1, action: { cardId: 
 function applyRemoveAllTokens(state: GameState, playerIdx: 0 | 1, action: { cardId: string; targetIdx: 0 | 1 }): void {
   if (!spendActionCard(state, playerIdx, action.cardId)) return
   const target = state.players[action.targetIdx]
-  // covertOps and the Haunted Head are NOT status effects removable this way (verified token defs).
-  target.tokens.dreadful = 0
-  target.tokens.grimPursuit = 0
-  target.tokens.agility = 0
-  target.timeBombs = []
+  // covertOps/shapeShift/hex (Unique, défs vérifiées) et le Haunted Head ne sont PAS retirables
+  // ainsi — l'exclusion vit dans TRANSFERABLE_TOKENS. User-caught : l'ancien code ne vidait que
+  // les 4 jetons de l'ère 2 persos (la régén du Druide survivait à What Status Effects?).
+  for (const k of TRANSFERABLE_TOKENS) {
+    if (k === 'timeBomb') target.timeBombs = []
+    else target.tokens[k] = 0
+  }
   log(state, playerIdx, ctxPhaseless, `What Status Effects?: removed all status tokens from p${action.targetIdx}`)
 }
 function applyMoveHead(state: GameState, playerIdx: 0 | 1, action: { cardId: string; toIdx: 0 | 1 }): void {

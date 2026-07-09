@@ -1,9 +1,25 @@
 import type { Tokens, PlayerState, TransferableToken } from './types.js'
 
 // The status-effect tokens the cross-player cards (Transference!/GTOH/What Status Effects?) act on.
-// covertOps is excluded (verified token def: "may not be transferred or removed"); the Haunted Head
-// has its own card (Rolling Pumpkin!). Time Bomb is here but is positional (PlayerState.timeBombs).
-export const TRANSFERABLE_TOKENS: TransferableToken[] = ['dreadful', 'grimPursuit', 'agility', 'timeBomb']
+// User-caught (What Status Effects? injouable contre la régén du Druide) : l'ancienne liste
+// datait de l'ère 2 persos. Désormais TOUS les jetons de statut, MOINS les exclusions des
+// défs vérifiées (« Unique... may not be removed/transferred ») : covertOps, shapeShift, hex
+// — et head (carte dédiée Rolling Pumpkin!). Time Bomb est positionnel (PlayerState.timeBombs).
+export const TRANSFERABLE_TOKENS: TransferableToken[] = [
+  'dreadful', 'grimPursuit', 'agility', 'timeBomb',
+  'feather', 'nevermore', 'regen2', 'regen1', 'wound', 'electrokinesis', 'guardBreak',
+  'combo', 'webbed', 'invisibility', 'fireMastery', 'burn', 'knockdown', 'stun',
+  'disarm', 'chargedGem', 'sunMarked',
+]
+
+// stackCap de chaque jeton transférable (défs vérifiées des hero.json) — utilisé quand un
+// jeton arrive chez un joueur par Transference! (le cap suit le JETON, pas le perso qui reçoit).
+// regen1/regen2 partagent en plus un cap TOTAL de 2 (géré au point de réception).
+export const TOKEN_CAPS: Record<Exclude<TransferableToken, 'timeBomb'>, number> = {
+  dreadful: 5, grimPursuit: 3, agility: 2, feather: 5, nevermore: 1, regen2: 2, regen1: 2,
+  wound: 2, electrokinesis: 4, guardBreak: 2, combo: 1, webbed: 1, invisibility: 1,
+  fireMastery: 5, burn: 1, knockdown: 1, stun: 1, disarm: 1, chargedGem: 1, sunMarked: 1,
+}
 
 // How many of a transferable token a player holds — timeBomb is positional (array length), the rest
 // are bag counts.
