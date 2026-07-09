@@ -2515,6 +2515,7 @@
   };
   // Résout le tier actif d'une habileté (gère les paliers multiples type Hammered II/III).
   function refUpgradeInfo(name, upgradesInPlay){
+    name = name.replace(/ \(grande\)$/, ''); // les lignes « (grande) suite » partagent l'upgrade de la petite
     const ids = REF_UPGRADE[name];
     const list = Array.isArray(ids) ? ids : (ids ? [ids] : []);
     const active = list.filter(id => upgradesInPlay.includes(id)).pop();
@@ -2527,12 +2528,14 @@
   // Static ability reference (dice pattern -> name/dmg) for the side panel when not choosing.
   const REFERENCE = {
     hh:[ {name:'Cleave',req:'AAA',dmg:'4–7'},{name:'Ride Down',req:'AAABB',dmg:'6 ·+Grim'},
-      {name:'Reap',req:'BBBC',dmg:'3 ·+Dread'},{name:'Sow Despair',req:'suite 4',dmg:'7–9'},
+      {name:'Reap',req:'BBBC',dmg:'3 ·+Dread'},{name:'Sow Despair',req:'suite 4',dmg:'7'},
+      {name:'Sow Despair (grande)',req:'suite 5',dmg:'9'},
       {name:'Horrify',req:'CCCC',dmg:'6 ·+3 Dread'},{name:'Spectral Assault',req:'AAACC',dmg:'8 +jet'},
       {name:'Dreadful Charge',req:'CCCCC',dmg:'14 · ULT'} ],
     fm:[ {name:'Pick Axe',req:'AAA',dmg:'5–7'},{name:'Furnace',req:'BBBB',dmg:'5 +1d6'},
       {name:'Smelting Time',req:'CCCC',dmg:'9 indéf.'},{name:'A Good Haul',req:'ABCC',dmg:'8 ·Mine'},
-      {name:'Armored Up',req:'suite 4',dmg:'7–10'},{name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
+      {name:'Armored Up',req:'suite 4',dmg:'7'},{name:'Armored Up (grande)',req:'suite 5',dmg:'10'},
+      {name:'Final Touches!',req:'CCCCC',dmg:'14 · ULT'} ],
     dr:[ {name:'Ferocity',req:'AAA+',dmg:'4-6 ·4-kind: Wound'},
       {name:'Maul',req:'BBBB',dmg:'2d6 (Bear: reroll)'},
       {name:"Nature's Cure",req:'AACC',dmg:'5 ·+Regen 2'},
