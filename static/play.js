@@ -2674,8 +2674,8 @@
   const usingNet = !!window.AI_WEIGHTS && ai !== G.greedyHighestDamagePolicy;
   const aiNote = document.getElementById('ai-note');
   if (aiNote) aiNote.textContent = usingNet
-    ? 'Adversaire : réseau entraîné par self-play.'
-    : 'Adversaire : IA scriptée (poids entraînés introuvables — ai-weights.js manquant/incompatible).';
+    ? `Adversaire : 🧠 réseau ${window.AI_WEIGHTS_VERSION || '?'} — entraîné par self-play.`
+    : 'Adversaire : ⚠ BOT SCRIPTÉ (poids entraînés introuvables — ai-weights.js manquant/incompatible). Tes victoires ici ne comptent pas contre le réseau.';
   if (AI_HERO === 'nx') {
     addLog(`<span class="t">Départ</span>🐲 <b>Naraxus${BOSS_HARD?' (HARD)':''}</b> — 65 PV. Il joue TOUJOURS en premier. Vole le Trésor du Dragon :`);
     phase='hoard';
