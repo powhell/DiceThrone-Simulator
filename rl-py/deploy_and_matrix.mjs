@@ -18,7 +18,10 @@ console.log('entrainement termine — deploiement')
 
 const W = JSON.parse(fs.readFileSync(path.join(root, 'rl-py/weights/best.json'), 'utf8'))
 const tag = `${new Date().toISOString().slice(0, 10)}-v4-10heros`
-const tail = fs.readFileSync(logf, 'utf8').trim().split('\n').slice(-3).join(' | ')
+// IMPORTANT : purger \r (CRLF Windows) — un \r DANS un commentaire // le termine et le reste
+// devient du code invalide -> ai-weights.js entier plante au parse (bug du 2026-07-09, les
+// parties « vs réseau » de l'user tournaient en fait contre le bot scripté).
+const tail = fs.readFileSync(logf, 'utf8').trim().split('\n').slice(-3).join(' | ').replace(/[\r\n]+/g, ' ')
 fs.writeFileSync(path.join(root, 'static/ai-weights.js'),
   `window.AI_WEIGHTS_VERSION = "${tag}";\n// GENERATED ${tag} — réseau v4 (FEATURE_COUNT ${W.sizes[0]}, les 10 héros dont Duelist/Sun Elf). ${tail.replace(/"/g, "'")}\nwindow.AI_WEIGHTS = ${JSON.stringify(W)};\n`)
 console.log('ai-weights.js deploye (' + tag + ') — lancement matrice')
