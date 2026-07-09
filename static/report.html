@@ -80,8 +80,8 @@ function render(gr){
     if (e.turn!==curTurn) { flush(); curTurn=e.turn; curOwner=e.playerIdx; curAbility=null; curTotal=null; curEvents=[]; }
     let m;
     if ((m=msg.match(/^Chose ability: (.+)$/)) && e.phase==='resolveAttack') { curAbility=m[1]; atk[e.playerIdx].push(m[1]); }
-    else if (/^No ability matched/.test(msg)) { curAbility='— raté (whiff)'; whiffs[e.playerIdx]++; }
-    else if ((m=msg.match(/attack total (\d+) dmg( \(undefendable\))?/))) curTotal = m[1] + (m[2]?' indéf.':'');
+    else if (/^No ability matched/.test(msg)) { curAbility='aucune attaque (jet raté)'; whiffs[e.playerIdx]++; }
+    else if ((m=msg.match(/attack total (\d+) dmg( \(undefendable\))?/))) curTotal = m[1] + (m[2]?' imblocables':' dégâts');
     else if ((m=msg.match(/^Played (?:upgrade )?(.+?) for (\d+) CP/))) { cards[e.playerIdx].push(m[1]); curEvents.push(`${e.playerIdx===meIdx?'tu joues':'IA joue'} ${m[1]}`); }
     else if ((m=msg.match(/^Sold (.+?) \(/))) { sold[e.playerIdx]++; }
     else if (/^Terrorize/.test(msg)) curEvents.push('Terrorize');
@@ -96,44 +96,80 @@ function render(gr){
     return `<tr><td class="tour">T${r.t}</td><td>${who}</td><td>${ab}${r.total?` · <b>${r.total}</b>`:''}</td><td class="muted">${esc(r.events.join(' · '))}</td></tr>`;
   }).join('');
 
-  // ---- erreurs classées par impact (ΔEV structuré x = {evYou, evBest}) ----
+  // ---- décisions de dés comparées au solveur — en PHRASES, avec la main visible et un
+  // verdict de gravité (user : « je ne comprends rien, ça ne me sert à rien pour progresser »).
   const dec = gr.decisions||[];
-  const diceMistakes = dec.filter(r=>!r.agree && (r.kind==='relance'))
-    .map(r=>({ ...r, delta: r.x && r.x.evYou!=null ? +(r.x.evBest - r.x.evYou).toFixed(2)
-      : (()=>{ // vieux format : parse des EV en texte
-          const a=(r.you||'').match(/EV (\d+\.?\d*)/), b=(r.coach||'').match(/EV (\d+\.?\d*)/);
-          return a&&b ? +((+b[1])-(+a[1])).toFixed(2) : null; })() }))
-    .sort((a,b)=>(b.delta??-1)-(a.delta??-1));
+  // Les désaccords existent en double (note « relance » + enregistrement « roll-data » de la
+  // même garde) : on fusionne, en préférant le roll-data qui contient la main complète.
+  const seen = new Set();
+  const diceMistakes = [];
+  for (const r of dec) {
+    if (r.agree || !['relance','roll-data'].includes(r.kind)) continue;
+    const delta = r.x && r.x.evYou!=null && r.x.evBest!=null ? +(r.x.evBest - r.x.evYou).toFixed(2)
+      : (()=>{ const a=(r.you||'').match(/EV (\d+\.?\d*)/), b=(r.coach||'').match(/EV (\d+\.?\d*)/);
+          return a&&b ? +((+b[1])-(+a[1])).toFixed(2) : null; })();
+    const key = r.t + '|' + ((r.x&&r.x.keptYou)||r.you) + '|' + ((r.x&&r.x.keptBest)||r.coach);
+    if (seen.has(key)) { // garde la version la plus riche (celle avec « main [...] »)
+      const prev = diceMistakes.find(m=>m.key===key);
+      if (prev && !/main \[/.test(prev.you||'') && /main \[/.test(r.you||'')) prev.you = r.you;
+      continue;
+    }
+    seen.add(key);
+    diceMistakes.push({ ...r, delta, key });
+  }
+  diceMistakes.sort((a,b)=>(b.delta??-1)-(a.delta??-1));
   const winMistakes = evaluated ? dec.filter(r=>!r.agree && !['relance','roll-data'].includes(r.kind)) : [];
 
-  const mistakeRows = diceMistakes.map(r=>
-    `<tr><td class="tour">T${r.t}</td><td>${r.delta!=null?`<span class="delta">−${r.delta}</span>`:'<span class="muted">?</span>'}</td><td>toi : ${esc(r.you)}<br><span class="muted">réseau/solveur : ${esc(r.coach)}</span></td></tr>`).join('');
+  const gravite = d => d==null ? ['?','muted','impact inconnu (partie d’avant les notes détaillées)']
+    : d < 0.3 ? ['≈ égal','muted','les deux choix se valaient — ce n’est pas une vraie erreur']
+    : d < 1.0 ? ['mineur','delta','un petit morceau de dégâts espérés laissé sur la table']
+    : ['important','delta','une vraie occasion manquée — à retravailler'];
+  const phraseMistake = r => {
+    const hand = ((r.you||'').match(/main \[([\d,]+)\]/)||[])[1];
+    const kYou = r.x && r.x.keptYou!=null ? r.x.keptYou : ((r.you||'').match(/gardé \[([^\]]*)\]/)||[])[1];
+    const kBest = r.x && r.x.keptBest!=null ? r.x.keptBest : '';
+    const stop = kYou==='stop' || /s'arrêter/.test(r.you||'');
+    const [tag, cls, sens] = gravite(r.delta);
+    let txt = hand ? `Tes dés étaient <b>[${hand}]</b>. ` : '';
+    txt += stop ? `Tu as choisi de <b>t'arrêter là</b>` : `Tu as gardé <b>[${esc(kYou||'rien')}]</b>`;
+    txt += kBest==='' && !stop ? ` ; le solveur aurait <b>tout relancé</b>` :
+      kBest && kBest!==kYou ? ` ; le solveur gardait <b>[${esc(kBest)}]</b>` : '';
+    if (r.x && r.x.evYou!=null && r.x.evBest!=null)
+      txt += ` (${r.x.evYou.toFixed(1)} contre ${r.x.evBest.toFixed(1)} points de dégâts espérés)`;
+    txt += `. <span class="muted">${sens}.</span>`;
+    return `<tr><td class="tour">T${r.t}</td><td><span class="${cls}">${r.delta!=null?('−'+r.delta.toFixed(2)+' · '):''}${tag}</span></td><td>${txt}</td></tr>`;
+  };
+  const mistakeRows = diceMistakes.map(phraseMistake).join('');
+  const KIND_FR = { main:'choix de Main Phase', 'habileté':'choix d’attaque', 'défense':'défense', upkeep:'upkeep' };
   const winRows = winMistakes.map(r=>
-    `<tr><td class="tour">T${r.t}</td><td class="muted">${esc(r.kind)}</td><td>toi : ${esc(r.you)}<br><span class="muted">le réseau aurait joué : ${esc(r.coach)}</span></td></tr>`).join('');
+    `<tr><td class="tour">T${r.t}</td><td class="muted">${esc(KIND_FR[r.kind]||r.kind)}</td><td>Tu as joué <b>${esc(r.you)}</b>.<br><span class="muted">Le réseau aurait joué : ${esc(r.coach)}. (Sans chiffre d'impact — le réseau ne note pas ses préférences ; prends-le comme une suggestion, pas un verdict.)</span></td></tr>`).join('');
 
   // ---- stats des deux joueurs ----
   const atkCount = idx => { const c={}; for(const a of atk[idx]) { const k=a.replace(/\s*\([^)]*\)$/,''); c[k]=(c[k]||0)+1; } return Object.entries(c).sort((x,y)=>y[1]-x[1]); };
   const statRow = (label, me, ia) => `<tr><td>${label}</td><td>${me}</td><td>${ia}</td></tr>`;
   const statsRows =
     statRow('Attaques lancées', atk[meIdx].length, atk[aiIdx].length) +
-    statRow('Tours ratés (whiff)', whiffs[meIdx], whiffs[aiIdx]) +
+    statRow("Tours d'attaque ratés (aucune combinaison)", whiffs[meIdx], whiffs[aiIdx]) +
     statRow('Cartes jouées', cards[meIdx].length, cards[aiIdx].length) +
     statRow('Cartes vendues', sold[meIdx], sold[aiIdx]) +
     statRow('Lignes favorites',
       atkCount(meIdx).slice(0,3).map(([k,n])=>`${esc(k)} ×${n}`).join('<br>')||'—',
       atkCount(aiIdx).slice(0,3).map(([k,n])=>`${esc(k)} ×${n}`).join('<br>')||'—');
 
-  // ---- conseils générés ----
+  // ---- conseils générés — cohérents avec le tableau au-dessus (plus de « partie propre »
+  // sous une liste de 5 écarts : si tout est négligeable, on le DIT).
   const lessons = [];
   const totalDelta = diceMistakes.reduce((s,r)=>s+(r.delta||0),0);
-  if (totalDelta >= 2) lessons.push(`Tes écarts de dés ont coûté <b>~${totalDelta.toFixed(1)} points d'espérance</b> sur la partie (≈ ${Math.round(totalDelta/6)} attaque(s) moyenne(s)). La 1ʳᵉ erreur du tableau est celle à retravailler.`);
-  const stops = dec.filter(r=>!r.agree && r.kind==='relance' && /s'arrêter/.test(r.you||''));
-  if (stops.length >= 2) lessons.push(`Tu t'es arrêté trop tôt ${stops.length} fois — quand « s'arrêter » est le plus petit chiffre à l'écran, ta main faite est un lot de consolation, pas un trésor.`);
-  if (whiffs[meIdx] >= 2) lessons.push(`${whiffs[meIdx]} whiffs de ton côté : sur ta DERNIÈRE relance, sécurise une ligne faite plutôt que de continuer la chasse.`);
+  const bigOnes = diceMistakes.filter(r=>(r.delta||0)>=1);
+  if (bigOnes.length) lessons.push(`Une vraie occasion manquée au tour ${bigOnes[0].t} (voir la première ligne du tableau) : c'est la décision à rejouer dans ta tête. Coût total de tes écarts sur la partie : ${totalDelta.toFixed(1)} points de dégâts espérés.`);
+  else if (diceMistakes.length) lessons.push(`Tes ${diceMistakes.length} écart(s) de dés sont tous minuscules (${totalDelta.toFixed(1)} point au total sur la partie) : ce sont des quasi-égalités, pas des erreurs. Ton jeu de dés est solide — la marge de progression est ailleurs (cartes, timing).`);
+  const stops = diceMistakes.filter(r=>/s'arrêter/.test(r.you||'') || (r.x&&r.x.keptYou==='stop'));
+  if (stops.length >= 2) lessons.push(`Tu t'es arrêté trop tôt ${stops.length} fois. La règle simple : quand le coach affiche « s'arrêter » comme le plus PETIT chiffre, relancer est gratuit ou presque — ta main faite reste ton filet de sécurité.`);
+  if (whiffs[meIdx] >= 2) lessons.push(`${whiffs[meIdx]} de tes tours d'attaque n'ont rien produit. Sur ta dernière relance, sécurise une combinaison déjà faite plutôt que de continuer une chasse incertaine.`);
   const kindCount = {};
   for (const r of winMistakes) kindCount[r.kind]=(kindCount[r.kind]||0)+1;
-  for (const [k,n] of Object.entries(kindCount)) if (n>=2) lessons.push(`${n} désaccords répétés en <b>${esc(k)}</b> — relis ces lignes du tableau : c'est un pattern, pas un accident.`);
-  if (!lessons.length) lessons.push(win ? 'Partie propre — aucune erreur récurrente détectée. Rejoue ce matchup pour confirmer que c’est un style, pas de la chance.' : 'Peu d’erreurs détectées — cette défaite ressemble plus à la variance (dés) qu’à des fautes. Revanche mêmes dés pour vérifier.');
+  for (const [k,n] of Object.entries(kindCount)) if (n>=2) lessons.push(`Le réseau aurait joué autrement que toi ${n} fois au même moment du jeu (${esc(KIND_FR[k]||k)}). Relis ces lignes : quand un désaccord se répète, c'est un choix de style à examiner — pas forcément une faute.`);
+  if (!lessons.length) lessons.push(win ? 'Aucun écart détecté : tu as joué cette partie exactement comme le solveur et le réseau l’auraient jouée. Rejoue ce matchup pour confirmer que c’est un style, pas de la chance.' : 'Aucun écart détecté de ton côté : cette défaite vient des dés, pas de tes choix. Le bouton « Revanche — mêmes dés » permet de le vérifier.');
 
   // ---- boutons ----
   const hard = gr.bossHard ? '&hard=1' : '';
@@ -147,9 +183,12 @@ function render(gr){
   <div class="card"><h3>Courbe des PV</h3><canvas id="hpc" width="1040" height="220"></canvas>
     <div class="muted"><span style="color:var(--you)">■</span> ${meName} (toi) · <span style="color:var(--ai)">■</span> ${aiName} (IA)</div></div>
   <div class="grid">
-    <div class="card"><h3>⚠ Tes écarts, classés par impact${evaluated?'':' (dés seulement — rapport partiel)'}</h3>
-      ${diceMistakes.length?`<table><tr><th>Tour</th><th>ΔEV</th><th>Décision</th></tr>${mistakeRows}</table>`:'<div class="muted">Aucun écart de dés — gardes optimales toute la partie. 👌</div>'}
-      ${winRows?`<h3 style="margin-top:12px">Cartes / habiletés / défenses (réseau)</h3><table>${winRows}</table>`:''}</div>
+    <div class="card"><h3>🎲 Tes décisions de dés, comparées au solveur${evaluated?'':' (rapport partiel : seules les décisions de dés sont notées)'}</h3>
+      <p class="muted" style="margin:4px 0 10px">Chaque ligne est un moment où tu as gardé autre chose que le
+      choix optimal du solveur, classé du plus coûteux au moins coûteux. Le chiffre est la différence de
+      dégâts espérés — en dessous de 0,3, les deux choix se valaient.</p>
+      ${diceMistakes.length?`<table><tr><th>Tour</th><th>Impact</th><th>Ce qui s'est passé</th></tr>${mistakeRows}</table>`:'<div class="muted">Aucun écart : toutes tes gardes de dés étaient optimales. 👌</div>'}
+      ${winRows?`<h3 style="margin-top:12px">🃏 Là où le réseau aurait joué autrement (cartes, attaques, défenses)</h3><table>${winRows}</table>`:''}</div>
     <div class="card"><h3>📊 Stats de la partie</h3><table><tr><th></th><th>Toi</th><th>IA</th></tr>${statsRows}</table></div>
   </div>
   <div class="card"><h3>🎓 Comment t'améliorer</h3>${lessons.map(l=>`<div class="lesson">${l}</div>`).join('')}</div>
