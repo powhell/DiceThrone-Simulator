@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mulberry32 } from '../../src/sim/rng.js'
 import type { RNG } from '../../src/sim/rng.js'
 // Le ROUGE de la Phase 2 (cœur de recherche) : ce module n'existe pas encore.
-import { mctsPick, type SearchableNode } from '../../src/sim/search/mcts.js'
+import { mctsPick, mctsSearch, type SearchableNode } from '../../src/sim/search/mcts.js'
 import type { Actor, NodeAction } from '../../src/sim/search/gameNode.js'
 
 // Jeu jouet implémentant l'interface du seam (structurel — ce que GameNode expose). L'arbre est
@@ -95,6 +95,17 @@ describe('mctsPick (Phase 2 — cœur de recherche sur l\'interface du seam)', (
       actions.map(a => (a.kind === 'activateAbility' && a.abilityName === 'good' ? 0.6 : 0.05))
     const pick = mctsPick(root, 0, { ...opts, sims: 6, priors, rng: mulberry32(7) })
     expect(pick).toEqual({ kind: 'activateAbility', abilityName: 'good' })
+  })
+
+  it('mctsSearch expose la distribution de visites (cibles de la tête politique)', () => {
+    const root = new Toy({ t: 'decision', actor: 0, moves: { bad: loss, good: win } })
+    const r = mctsSearch(root, 0, { ...opts, sims: 200, rng: mulberry32(5) })
+    expect(r.action).toEqual({ kind: 'activateAbility', abilityName: 'good' })
+    const total = r.visits.reduce((s, v) => s + v.n, 0)
+    expect(total).toBeGreaterThan(0)
+    const good = r.visits.find(v => v.key === 'activateAbility:good')!
+    const bad = r.visits.find(v => v.key === 'activateAbility:bad')!
+    expect(good.n).toBeGreaterThan(bad.n * 2) // la masse des visites suit le bon coup
   })
 
   it('la valeur corrige un prior trompeur avec assez de budget', () => {

@@ -48,20 +48,29 @@ function makeNode(game: SearchableNode): TreeNode {
 // Choisit le meilleur coup au nœud racine (qui DOIT être une décision de `me`) après `sims`
 // itérations : l'action de l'enfant le plus visité — le critère AlphaZero, plus stable que Q.
 export function mctsPick(root: SearchableNode, me: 0 | 1, opts: MctsOptions): NodeAction {
+  return mctsSearch(root, me, opts).action
+}
+
+// Comme mctsPick, mais expose aussi la DISTRIBUTION DE VISITES par coup — c'est la cible de la
+// tête politique en self-play (Phase 5 : pi = visites normalisées).
+export function mctsSearch(
+  root: SearchableNode, me: 0 | 1, opts: MctsOptions,
+): { action: NodeAction; visits: Array<{ key: string; action: NodeAction; n: number }> } {
   const actor = root.currentActor()
-  if (actor.kind !== 'player') throw new Error('mctsPick : la racine doit être un nœud de décision')
+  if (actor.kind !== 'player') throw new Error('mctsSearch : la racine doit être un nœud de décision')
   const actions = root.legalActions()
-  if (actions.length === 1) return actions[0]
+  if (actions.length === 1) {
+    return { action: actions[0], visits: [{ key: actionKey(actions[0]), action: actions[0], n: 1 }] }
+  }
   const tree = makeNode(root)
   for (let s = 0; s < opts.sims; s++) simulate(tree, me, opts)
-  let best: NodeAction | null = null
-  let bestN = -1
-  for (const a of actions) {
+  const visits = actions.map(a => {
     const child = tree.children.get(actionKey(a))
-    const n = child ? child.n : 0
-    if (n > bestN) { bestN = n; best = a }
-  }
-  return best!
+    return { key: actionKey(a), action: a, n: child ? child.n : 0 }
+  })
+  let best = visits[0]
+  for (const v of visits) if (v.n > best.n) best = v
+  return { action: best.action, visits }
 }
 
 // Une itération : descend l'arbre (PUCT aux décisions, échantillonnage aux nœuds de chance)
