@@ -3,9 +3,12 @@
 // deux côtés : la seule variable est LA RECHERCHE. Parties réelles jouées via le seam GameNode ;
 // info parfaite assumée (Phase 2 « triche » : pas de déterminisation avant la Phase 3).
 //
-// Usage : npx tsx src/sim/search/gate2.ts <gamesPerMatchup=4> <sims=50> <seedBase=5000> <priors=0|1>
+// Usage : npx tsx src/sim/search/gate2.ts <gamesPerMatchup=4> <sims=50> <seedBase=5000> <priors=0|1> <eval=net|rollout>
 // priors=1 : le coup que choisirait value-greedy reçoit ~50 % du prior PUCT (le reste uniforme)
 // — concentre le budget de recherche en attendant la tête politique (Phase 4).
+// eval=rollout : au lieu de noter l'état MI-TOUR (où la sonde du juge peut montrer qu'il est
+// mal calibré), chaque feuille FINIT le tour courant avec value-greedy et note l'état au début
+// du tour suivant — le régime d'entraînement du réseau ; partie finie en route = résultat réel.
 // Paires miroir (même graine, sièges échangés) comme benchStrength. Imprime une ligne RESULT.
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -35,10 +38,10 @@ function policyAgent(policy: Policy): NodeAgent {
   }
 }
 
-function mctsAgent(evaluate: MctsOptions['evaluate'], sims: number, rng: () => number, priors?: MctsOptions['priors']): NodeAgent {
+function mctsAgent(evaluate: MctsOptions['evaluate'], sims: number, rng: () => number, priors: MctsOptions['priors'] | undefined, chanceKids: number, cPuct: number): NodeAgent {
   return {
     pick(node, seat) {
-      return mctsPick(node, seat, { sims, cPuct: 1.5, maxChanceChildren: 6, evaluate, rng, priors })
+      return mctsPick(node, seat, { sims, cPuct, maxChanceChildren: chanceKids, evaluate, rng, priors })
     },
   }
 }
@@ -65,6 +68,9 @@ function main(): void {
   const sims = Number(simsArg ?? 50)
   const seedBase = Number(seedArg ?? 5000)
   const usePriors = Number(priorsArg ?? 0) === 1
+  const evalMode = (process.argv.slice(2)[4] ?? 'net') as 'net' | 'rollout'
+  const chanceKids = Number(process.argv.slice(2)[5] ?? 6)
+  const cPuct = Number(process.argv.slice(2)[6] ?? 1.5)
 
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
   const win: { AI_WEIGHTS?: unknown } = {}
@@ -74,12 +80,30 @@ function main(): void {
 
   const vg = createValueGreedyPolicy(net)
   const policies: [Policy, Policy] = [vg, vg] // hooks non migrés : mêmes choix des deux côtés
-  const evaluate: MctsOptions['evaluate'] = (n: SearchableNode, me: 0 | 1) => {
+  const netEval = (state: ReturnType<GameNode['stateForEval']>, me: 0 | 1): number => {
     // Sortie réseau = tanh dans [-1,1] (network.ts) -> remap [0,1], l'échelle de valeurs MCTS.
     // (Un clamp naïf [0,1] écrasait à 0 toutes les positions perdantes — trouvé au smoke.)
-    const v = forward(net, [encodeState((n as GameNode).stateForEval(), me)])[0]
+    const v = forward(net, [encodeState(state, me)])[0]
     return Math.min(1, Math.max(0, (v + 1) / 2))
   }
+  const evaluate: MctsOptions['evaluate'] = evalMode === 'net'
+    ? (n: SearchableNode, me: 0 | 1) => netEval((n as GameNode).stateForEval(), me)
+    : (n: SearchableNode, me: 0 | 1) => {
+        // rollout : finir le tour courant (décisions = value-greedy, chance = flux du nœud),
+        // noter au début du tour suivant ; terminal en route = résultat réel.
+        let cur = n as GameNode
+        const startTurn = cur.stateForEval().turnNumber
+        for (let guard = 0; guard < 500; guard++) {
+          if (cur.isTerminal()) return (cur.reward(me) + 1) / 2
+          const actor = cur.currentActor()
+          if (actor.kind === 'chance') { cur = cur.continueChance(); continue }
+          if (actor.kind !== 'player') break
+          const st = cur.stateForEval()
+          if (st.turnNumber > startTurn) return netEval(st, me)
+          cur = cur.apply(baseline.pick(cur, actor.idx))
+        }
+        return netEval(cur.stateForEval(), me)
+      }
   const searchRng = mulberry32Stateful(seedBase * 7 + 1)
   // Prior heuristique : le coup que choisirait value-greedy pèse (n-1) contre 1 pour chacun des
   // autres -> ~50 % de la masse. La valeur garde le dernier mot (testé : prior trompeur corrigé).
@@ -94,7 +118,7 @@ function main(): void {
         return actions.map(a => (actionKey(a) === pickKey ? boost : 1))
       }
     : undefined
-  const mcts = mctsAgent(evaluate, sims, searchRng, priors)
+  const mcts = mctsAgent(evaluate, sims, searchRng, priors, chanceKids, cPuct)
   const baseline = policyAgent(vg)
 
   const MATCHUPS: Array<[HeroId, HeroId]> = [['sm', 'th'], ['hh', 'bw'], ['py', 'du'], ['fm', 'rv'], ['dr', 'se']]
@@ -117,7 +141,7 @@ function main(): void {
   const decisive = aWins + bWins
   const winrate = decisive > 0 ? aWins / decisive : 0.5
   const ci = wilson(aWins, decisive)
-  console.log('RESULT ' + JSON.stringify({ sims, priors: usePriors ? 1 : 0, games: aWins + bWins + draws + timeouts, mctsWins: aWins, baselineWins: bWins, nullResults: draws + timeouts, winrate, ci }))
+  console.log('RESULT ' + JSON.stringify({ sims, priors: usePriors ? 1 : 0, eval: evalMode, chanceKids, cPuct, games: aWins + bWins + draws + timeouts, mctsWins: aWins, baselineWins: bWins, nullResults: draws + timeouts, winrate, ci }))
 }
 
 main()

@@ -1,0 +1,16 @@
+... 5/40 parties (288 états mi-tour)
+... 10/40 parties (575 états mi-tour)
+... 15/40 parties (845 états mi-tour)
+... 20/40 parties (1098 états mi-tour)
+... 25/40 parties (1410 états mi-tour)
+... 30/40 parties (1645 états mi-tour)
+... 35/40 parties (1947 états mi-tour)
+... 40/40 parties (2221 états mi-tour)
+
+parties décisives: 40
+MI-TOUR   (ce que MCTS évalue) : n=2221  AUC=0.809
+  calibration: [-1;-0.5) n=272 winrate=9% | [-0.5;-0.2) n=236 winrate=25% | [-0.2;0.2) n=452 winrate=51% | [0.2;0.5) n=351 winrate=60% | [0.5;1.01) n=910 winrate=81%
+DÉBUT DE TOUR (régime d'entraînement) : n=518  AUC=0.812
+  calibration: [-1;-0.5) n=68 winrate=9% | [-0.5;-0.2) n=64 winrate=23% | [-0.2;0.2) n=108 winrate=51% | [0.2;0.5) n=68 winrate=56% | [0.5;1.01) n=210 winrate=80%
+MI-TOUR tours<=20 : AUC=0.809 | tours>20 : AUC=NaN
+PROBE_DONE
