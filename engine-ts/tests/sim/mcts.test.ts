@@ -82,4 +82,27 @@ describe('mctsPick (Phase 2 — cœur de recherche sur l\'interface du seam)', (
     })
     expect(mctsPick(root, 0, opts)).toEqual({ kind: 'activateAbility', abilityName: 'safe' })
   })
+
+  it('des priors informés concentrent la recherche à petit budget', () => {
+    // 8 coups nuls PUIS le gagnant (dernier dans l'ordre d'énumération), budget 6 < 9 coups :
+    // avec des priors uniformes la recherche n'atteint jamais `good` (les égalités PUCT se
+    // départagent par ordre d'énumération) ; un prior qui le favorise doit le faire choisir.
+    const moves: Record<string, Spec> = {}
+    for (let i = 0; i < 8; i++) moves[`meh${i}`] = draw
+    moves.good = win
+    const root = new Toy({ t: 'decision', actor: 0, moves })
+    const priors = (actions: NodeAction[]) =>
+      actions.map(a => (a.kind === 'activateAbility' && a.abilityName === 'good' ? 0.6 : 0.05))
+    const pick = mctsPick(root, 0, { ...opts, sims: 6, priors, rng: mulberry32(7) })
+    expect(pick).toEqual({ kind: 'activateAbility', abilityName: 'good' })
+  })
+
+  it('la valeur corrige un prior trompeur avec assez de budget', () => {
+    // Le prior pousse vers le coup PERDANT ; à 400 sims la valeur doit reprendre le dessus.
+    const root = new Toy({ t: 'decision', actor: 0, moves: { trap: loss, good: win } })
+    const priors = (actions: NodeAction[]) =>
+      actions.map(a => (a.kind === 'activateAbility' && a.abilityName === 'trap' ? 0.9 : 0.1))
+    const pick = mctsPick(root, 0, { ...opts, sims: 400, priors, rng: mulberry32(8) })
+    expect(pick).toEqual({ kind: 'activateAbility', abilityName: 'good' })
+  })
 })

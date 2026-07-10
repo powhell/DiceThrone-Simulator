@@ -28,6 +28,10 @@ export interface MctsOptions {
   maxChanceChildren: number  // issues échantillonnées par nœud de chance (progressive widening v1)
   evaluate: (node: SearchableNode, me: 0 | 1) => number // valeur feuille dans [0,1], point de vue `me`
   rng: RNG                   // hasard de la recherche (échantillonnage des nœuds de chance)
+  // Priors PUCT optionnels (défaut : uniformes). Renvoie un poids >= 0 par action (normalisé
+  // ici). En attendant la tête politique du réseau (Phase 4), un prior heuristique — p.ex.
+  // booster le coup que choisirait value-greedy — concentre le budget sur le plausible.
+  priors?: (actions: NodeAction[], node: SearchableNode) => number[]
 }
 
 interface TreeNode {
@@ -89,20 +93,27 @@ function simulate(node: TreeNode, me: 0 | 1, opts: MctsOptions): number {
       child = node.children.get(String(idx))!
     }
   } else if (actor.kind === 'player') {
-    // Décision : PUCT du point de vue du joueur qui décide, priors uniformes.
+    // Décision : PUCT du point de vue du joueur qui décide.
     const actions = node.game.legalActions()
     const sqrtN = Math.sqrt(node.n)
-    const prior = 1 / actions.length
+    let priors: number[] | null = null
+    if (opts.priors) {
+      const w = opts.priors(actions, node.game)
+      const sum = w.reduce((s, x) => s + Math.max(0, x), 0)
+      if (sum > 0) priors = w.map(x => Math.max(0, x) / sum)
+    }
     let bestScore = -Infinity
     let bestAction: NodeAction = actions[0]
     let bestChild: TreeNode | null = null
-    for (const a of actions) {
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i]
       const k = actionKey(a)
       const c = node.children.get(k)
       const n = c ? c.n : 0
       const qMe = c && c.n > 0 ? c.w / c.n : 0.5 // valeur a priori neutre pour l'inexploré
       const q = actor.idx === me ? qMe : 1 - qMe
-      const u = opts.cPuct * prior * sqrtN / (1 + n)
+      const p = priors ? priors[i] : 1 / actions.length
+      const u = opts.cPuct * p * sqrtN / (1 + n)
       if (q + u > bestScore) { bestScore = q + u; bestAction = a; bestChild = c ?? null }
     }
     if (!bestChild) {
