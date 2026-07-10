@@ -287,6 +287,17 @@ héros. Le test de parité tourne en continu — il vire au rouge dès qu'un hoo
   agent réseau (`createValueGreedyPolicy`). TROUVÉ en branchant la baseline : les poids TS
   `rl/weights/best.json` sont périmés (92 vs 168) ; corrigé plus tard le même jour — le vrai
   réseau courant est `rl-py/weights/best.json` → `static/ai-weights.js` (168, v4-10heros), voir §5.
+- 2026-07-09 (Phase 2 — première mesure, NÉGATIVE mais informative) : MCTS/PUCT implémenté sur le
+  seam (mcts.ts, 6 tests jouets) + gate A/B (gate2.ts : MCTS(net) vs value-greedy(MÊME net), paires
+  miroir, Wilson). 210 parties : 10 sims → 30 % ; 50 sims → 50 % (uniforme) / 55 % (priors informés
+  = coup value-greedy à ~50 % du prior) ; **150 sims → 51,7 % [42,7–60,6] sur 120 parties — la force
+  NE MONTE PLUS avec le budget**. Gate (> 55 %, CI hors de 50 %) PAS passé. Diagnostic dominant :
+  l'ÉVALUATEUR (value-net TD(0)) note mal les états mi-tour, la recherche amplifie ses erreurs.
+  Trouvé en route : sortie réseau = tanh [-1,1] (remap [0,1] requis, sinon positions perdantes
+  écrasées). À faire avant de brûler du CPU : (a) sonder la calibration du juge (corrélation note ↔
+  issue réelle), (b) essayer l'évaluation en fin de tour et les rollouts courts, (c) si le juge est
+  le goulot confirmé → Phases 4-5 (le re-entraînement AVEC recherche est justement le plan).
+  Rapport publié : https://claude.ai/code/artifact/508e00d2-14e2-486e-a7b3-7a14e231a6c7
 - 2026-07-09 (interlude bug user + Phase 1 tranche 1) : (a) Diagnostic « SM n'utilise pas son
   Combo » (IA-vs-humain) via boucle différentielle playTurn-vs-driver : AUCUN Combo dû raté sur
   250+ tours IA (greedy ET réseau, humain passif ET attaquant) ; par contre trouvé+corrigé le bug
