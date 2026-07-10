@@ -1,0 +1,101 @@
+{
+ "date": "2026-07-09T14:03:59.189Z",
+ "games_per_pair": 1,
+ "total_games": 1,
+ "heroes": {
+  "hh": {
+   "decisions": 1,
+   "forced": 0,
+   "realChoices": 1,
+   "agree_best_ev_pct": 100,
+   "agree_max_dmg_pct": 100,
+   "avg_regret_ev": 0,
+   "big_regret_pct": 0,
+   "skipped_alter": 0,
+   "per_ability": {
+    "Spectral Assault (AAACC)": {
+     "avail": 1,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 100,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 10,
+     "avg_ev_when_chosen": 10,
+     "avg_direct_dmg_when_chosen": 8
+    },
+    "Cleave 3A (AAA)": {
+     "avail": 1,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 1.5,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    }
+   }
+  },
+  "bw": {
+   "decisions": 5,
+   "forced": 0,
+   "realChoices": 5,
+   "agree_best_ev_pct": 100,
+   "agree_max_dmg_pct": 100,
+   "avg_regret_ev": 0,
+   "big_regret_pct": 0,
+   "skipped_alter": 0,
+   "per_ability": {
+    "Widow's Gauntlets (BBBAA)": {
+     "avail": 3,
+     "chosen": 3,
+     "chosen_pct_of_decisions": 60,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 6.98,
+     "avg_ev_when_chosen": 6.98,
+     "avg_direct_dmg_when_chosen": 7
+    },
+    "Baton Strike 3B (BBB)": {
+     "avail": 5,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 2.64,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    },
+    "Covert Mission": {
+     "avail": 3,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 1.6,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    },
+    "Vengeance (5-straight)": {
+     "avail": 2,
+     "chosen": 2,
+     "chosen_pct_of_decisions": 40,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 8.65,
+     "avg_ev_when_chosen": 8.65,
+     "avg_direct_dmg_when_chosen": 7
+    },
+    "Hacked (4-straight)": {
+     "avail": 2,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 3.85,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    }
+   }
+  }
+ }
+}

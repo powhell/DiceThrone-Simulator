@@ -1,0 +1,57 @@
+{
+ "date": "2026-07-09T15:35:08.706Z",
+ "games_per_matchup_per_side": 12,
+ "total_games": 432,
+ "thor_winrate_current": 36.8,
+ "thor_winrate_fixed": 39.8,
+ "delta_pts": 3,
+ "thor_avg_damage_current": 44.3,
+ "thor_avg_damage_fixed": 44.1,
+ "per_opponent": {
+  "hh": {
+   "current_wr": 33.3,
+   "fixed_wr": 29.2,
+   "games_per_side": 12
+  },
+  "bw": {
+   "current_wr": 37.5,
+   "fixed_wr": 33.3,
+   "games_per_side": 12
+  },
+  "fm": {
+   "current_wr": 41.7,
+   "fixed_wr": 39.6,
+   "games_per_side": 12
+  },
+  "rv": {
+   "current_wr": 27.1,
+   "fixed_wr": 37.5,
+   "games_per_side": 12
+  },
+  "dr": {
+   "current_wr": 31.3,
+   "fixed_wr": 41.7,
+   "games_per_side": 12
+  },
+  "sm": {
+   "current_wr": 22.9,
+   "fixed_wr": 27.1,
+   "games_per_side": 12
+  },
+  "py": {
+   "current_wr": 58.3,
+   "fixed_wr": 54.2,
+   "games_per_side": 12
+  },
+  "du": {
+   "current_wr": 29.2,
+   "fixed_wr": 41.7,
+   "games_per_side": 12
+  },
+  "se": {
+   "current_wr": 50,
+   "fixed_wr": 54.2,
+   "games_per_side": 12
+  }
+ }
+}

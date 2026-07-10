@@ -1,0 +1,93 @@
+[
+ {
+  "name": "Hammered 3H",
+  "ek0": 5,
+  "ek2": 5,
+  "ek4": 5,
+  "upgraded_ek4": 6
+ },
+ {
+  "name": "Hammered 4H",
+  "ek0": 6,
+  "ek2": 6,
+  "ek4": 6,
+  "upgraded_ek4": 7
+ },
+ {
+  "name": "Hammered 5H",
+  "ek0": 8,
+  "ek2": 8,
+  "ek4": 8,
+  "upgraded_ek4": 9
+ },
+ {
+  "name": "Mighty Summon (HWWT)",
+  "ek0": 5.6,
+  "ek2": 5,
+  "ek4": 3.8,
+  "upgraded_ek4": 4.8
+ },
+ {
+  "name": "Boom Boom! (HHTT)",
+  "ek0": null,
+  "ek2": null,
+  "ek4": null,
+  "upgraded_ek4": 7.2
+ },
+ {
+  "name": "Chain Lightning (HHHTT)",
+  "ek0": 10.458,
+  "ek2": 10.458,
+  "ek4": 10.458,
+  "upgraded_ek4": 12.344
+ },
+ {
+  "name": "Odinforce (HHWWW)",
+  "ek0": 7.846033333333334,
+  "ek2": 9.846033333333333,
+  "ek4": 10.512699999999999,
+  "upgraded_ek4": 11.512699999999999
+ },
+ {
+  "name": "Bottled Lightning (TTTT)",
+  "ek0": 10.4,
+  "ek2": 12.4,
+  "ek4": 13.8,
+  "upgraded_ek4": 15.8
+ },
+ {
+  "name": "Ricochet! (TTT)",
+  "ek0": null,
+  "ek2": null,
+  "ek4": null,
+  "upgraded_ek4": 3
+ },
+ {
+  "name": "Lightning Rod (4-straight)",
+  "ek0": 7.6,
+  "ek2": 7.6,
+  "ek4": 7,
+  "upgraded_ek4": 10
+ },
+ {
+  "name": "Thunder Bolt (5-straight)",
+  "ek0": 12.2,
+  "ek2": 12.2,
+  "ek4": 11,
+  "upgraded_ek4": 13
+ },
+ {
+  "name": "Asgardian Brawn (WWW)",
+  "ek0": null,
+  "ek2": null,
+  "ek4": null,
+  "upgraded_ek4": 4
+ },
+ {
+  "name": "For Asgard! (TTTTT)",
+  "ek0": 18.1,
+  "ek2": 18.1,
+  "ek4": 16.9,
+  "upgraded_ek4": 16.9
+ }
+]

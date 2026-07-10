@@ -1,0 +1,728 @@
+
+##############################################################################
+# PARTIE : TH (joueur 0) vs SM (joueur 1) — seed 3
+# Résultat : SM gagne  ·  8 tours  ·  PV finaux TH -1 / SM 18
+##############################################################################
+
+
+T 1 ===== TH turn — th HP50 CP2 mjolnir:home | vs sm HP50 CP2 (hand 4)
+   T 1 th | income        | Start Player skips their first Income Phase
+   T 1 th | main1         | Played Triple Up! for 2 CP (drew 3)
+   T 1 th | main1         | Mjolnir shuttle (discarded better-d): 1 isolated undefendable dmg
+   T 1 th | roll          | Roll (relances restantes 2): [1,1,4,5,6]
+   T 1 th | roll          | Roll (relances restantes 1): [1,4,5,6,6]
+   T 1 th | roll          | Roll (relances restantes 0): [1,3,4,5,6]
+   T 1 th | roll          | Final dice: 1,3,4,5,6
+   T 1 th | resolveAttack | Chose ability: Lightning Rod (4-straight)
+   T 1 th | resolveAttack | Lightning Rod: opponent has Mjolnir -> 9 dmg
+   T 1 th | resolveAttack | Lightning Rod (4-straight): attack total 9 dmg
+   T 1 sm | defense       | Defensive Ability: Spider-Sense (2 dice)
+   T 1 sm | defense       | Defense dice: 4,2
+   T 1 sm | defense       | Spider-Sense: prevented 0 (no success face), 0 dmg back
+   T 1 th | endOfTurn     | HP: self=50, opp=40
+
+
+T 2 ===== SM turn — sm HP40 CP2 | vs th HP50 CP0 mjolnir:away (hand 4)
+   T 2 sm | income        | +1 CP, drew 1 card (hand=5)
+   T 2 sm | main1         | Web Shooters!: Webbed inflicted (2 isolated undefendable dmg)
+   T 2 sm | main1         | Played Triple Up! for 2 CP (drew 3)
+   T 2 sm | roll          | Roll (relances restantes 2): [3,3,4,4,5]
+   T 2 sm | roll          | Roll (relances restantes 1): [2,4,5,5,6]
+   T 2 sm | roll          | Roll (relances restantes 0): [1,2,4,5,6]
+   T 2 sm | roll          | Final dice: 1,2,4,5,6
+   T 2 sm | resolveAttack | Chose ability: Spider-Reflexes (ABBC)
+   T 2 sm | resolveAttack | Spider-Reflexes: rolled [3,1] -> 4 dmg
+   T 2 sm | resolveAttack | Spider-Reflexes (total <= 5): gained Combo
+   T 2 sm | resolveAttack | Spider-Reflexes (ABBC): attack total 4 dmg
+   T 2 th | defense       | Webbed: incoming attack becomes UNDEFENDABLE, token removed
+   T 2 sm | resolveAttack | Combo spent: additional Offensive Roll Phase
+   T 2 sm | roll          | Roll (relances restantes 2): [4,5,5,6,6]
+   T 2 sm | roll          | Roll (relances restantes 1): [4,6,6,6,6]
+   T 2 sm | roll          | Roll (relances restantes 0): [6,6,6,6,6]
+   T 2 sm | roll          | Final dice: 6,6,6,6,6
+   T 2 sm | resolveAttack | Chose ability: Venom Shockwave (CCCCC)
+   T 2 sm | resolveAttack | Venom Shockwave: gained Invisibility
+   T 2 sm | resolveAttack | Venom Shockwave: Webbed inflicted (2 isolated undefendable dmg)
+   T 2 sm | resolveAttack | Venom Shockwave (CCCCC): attack total 13 dmg (undefendable)
+   T 2 sm | endOfTurn     | HP: self=40, opp=29
+
+
+T 3 ===== TH turn — th HP29 CP0 mjolnir:away [webbed:1] | vs sm HP40 CP0 [invisibility:1] (hand 5)
+   T 3 th | income        | +1 CP, drew 1 card (hand=6)
+   T 3 th | main2         | Get That Outta Here!: removed webbed from p0
+   T 3 th | roll          | Roll (relances restantes 2): [2,3,4,5,6]
+   T 3 th | roll          | Roll (relances restantes 0): [2,3,4,5,6]
+   T 3 th | roll          | Final dice: 2,3,4,5,6
+   T 3 th | resolveAttack | Chose ability: Thunder Bolt (5-straight)
+   T 3 th | resolveAttack | Thunder Bolt: Mjolnir x1 (0 throw = 0 dmg, 1 retrieve = +1 EK)
+   T 3 th | resolveAttack | Thunder Bolt (5-straight): attack total 10 dmg
+   T 3 sm | defense       | Defensive Ability: Spider-Sense (2 dice)
+   T 3 sm | defense       | Spider-Sense: Invisibility spent -> additional Roll Attempt [4,4]
+   T 3 sm | defense       | Defense dice: 4,4
+   T 3 sm | defense       | Spider-Sense: prevented 0 (no success face), 0 dmg back
+   T 3 th | main2         | Mjolnir shuttle (discarded helping-hand): 1 isolated undefendable dmg
+   T 3 th | endOfTurn     | HP: self=29, opp=29
+
+
+T 4 ===== SM turn — sm HP29 CP0 | vs th HP29 CP0 mjolnir:away [electrokinesis:3] (hand 6)
+   T 4 sm | income        | +1 CP, drew 1 card (hand=7)
+   T 4 sm | roll          | Roll (relances restantes 2): [1,1,2,6,6]
+   T 4 sm | roll          | Roll (relances restantes 1): [1,1,3,6,6]
+   T 4 sm | roll          | Roll (relances restantes 0): [1,1,6,6,6]
+   T 4 sm | roll          | Final dice: 1,1,6,6,6
+   T 4 sm | resolveAttack | Chose ability: C-C-C-Combo (AACC)
+   T 4 sm | resolveAttack | C-C-C-Combo (AACC): attack total 5 dmg
+   T 4 th | defense       | Defense dice: 1,5,1
+   T 4 th | defense       | Thunder Wheel: prevented 2, 1 Mjolnir move(s), +0 EK
+   T 4 sm | resolveAttack | C-C-C-Combo: gained Combo
+   T 4 sm | resolveAttack | Combo spent: additional Offensive Roll Phase
+   T 4 sm | roll          | Roll (relances restantes 2): [1,2,2,4,6]
+   T 4 sm | roll          | Roll (relances restantes 1): [1,4,4,5,6]
+   T 4 sm | roll          | Roll (relances restantes 0): [1,4,4,5,6]
+   T 4 sm | roll          | Final dice: 1,4,4,5,6
+   T 4 sm | resolveAttack | Chose ability: Spider-Reflexes (ABBC)
+   T 4 sm | resolveAttack | Spider-Reflexes: rolled [5,5] -> 10 dmg
+   T 4 sm | resolveAttack | Spider-Reflexes (ABBC): attack total 10 dmg
+   T 4 th | defense       | Defense dice: 1,2,1
+   T 4 th | defense       | Thunder Wheel: prevented 0, 1 Mjolnir move(s) (1 dmg back), +0 EK
+   T 4 sm | discard       | Sold 1 card(s) for +1 CP (hand=6)
+   T 4 sm | endOfTurn     | HP: self=28, opp=16
+
+
+T 5 ===== TH turn — th HP16 CP0 mjolnir:away [electrokinesis:4] | vs sm HP28 CP2 (hand 4)
+   T 5 th | income        | +1 CP, drew 1 card (hand=5)
+   T 5 th | main1         | Played upgrade Hammered II for 0 CP
+   T 5 th | roll          | Roll (relances restantes 2): [2,4,4,5,5]
+   T 5 th | roll          | Roll (relances restantes 1): [1,2,4,5,6]
+   T 5 th | roll          | Roll (relances restantes 0): [2,4,5,6,6]
+   T 5 th | roll          | Final dice: 2,4,5,6,6
+   T 5 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T 5 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+0 EK)
+   T 5 th | main2         | Mjolnir shuttle (discarded he-is-worthy): 1 isolated undefendable dmg
+   T 5 th | endOfTurn     | HP: self=18, opp=27
+
+
+T 6 ===== SM turn — sm HP27 CP2 | vs th HP18 CP1 upg:1 mjolnir:away [electrokinesis:4 guardBreak:2] (hand 6)
+   T 6 sm | income        | +1 CP, drew 1 card (hand=7)
+   T 6 sm | main1         | Played upgrade Ensnare II for 2 CP
+   T 6 sm | main1         | Played Double Up! for 1 CP (drew 2)
+   T 6 sm | main1         | Cha-Ching!: +2 CP
+   T 6 sm | main1         | Played upgrade Venom Punch II for 2 CP
+   T 6 sm | roll          | Roll (relances restantes 2): [2,3,3,3,4]
+   T 6 sm | roll          | Roll (relances restantes 1): [2,2,3,4,5]
+   T 6 sm | roll          | Roll (relances restantes 0): [1,2,3,4,5]
+   T 6 sm | roll          | Final dice: 1,2,3,4,5
+   T 6 sm | resolveAttack | Chose ability: Ensnare (5-straight)
+   T 6 sm | resolveAttack | Ensnare (large): drew 1
+   T 6 sm | resolveAttack | Ensnare (5-straight): attack total 9 dmg
+   T 6 sm | main2         | Played Getting Paid! for 0 CP (+2 CP)
+   T 6 sm | roll          | So Wild!: set dice 3,5,3->3,1,3
+   T 6 th | defense       | Defense dice: 3,1,3
+   T 6 th | defense       | Thunder Wheel: prevented 0, 1 Mjolnir move(s), +0 EK
+   T 6 sm | resolveAttack | Ensnare: Webbed inflicted (2 isolated undefendable dmg)
+   T 6 sm | endOfTurn     | HP: self=24, opp=7
+
+
+T 7 ===== TH turn — th HP7 CP1 upg:1 mjolnir:home [electrokinesis:4 guardBreak:2 webbed:1] | vs sm HP24 CP0 upg:2 (hand 3)
+   T 7 th | income        | +1 CP, drew 1 card (hand=4)
+   T 7 th | main1         | Played upgrade Thunder Bolt II for 2 CP
+   T 7 th | roll          | Roll (relances restantes 2): [1,1,3,3,6]
+   T 7 th | roll          | Roll (relances restantes 1): [1,2,3,5,6]
+   T 7 th | roll          | Roll (relances restantes 0): [1,2,3,5,6]
+   T 7 th | roll          | Final dice: 1,2,3,5,6
+   T 7 th | resolveAttack | Chose ability: Hammered 3H
+   T 7 th | resolveAttack | Hammered: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T 7 th | resolveAttack | Hammered 3H: attack total 5 dmg
+   T 7 th | resolveAttack | Guard Break: spent 2, rolls [3,1] — failed
+   T 7 sm | defense       | Defensive Ability: Counterpunch (3 dice)
+   T 7 sm | defense       | Defense dice: 3,2,1
+   T 7 sm | defense       | Counterpunch: prevented 0, 3 dmg back
+   T 7 th | endOfTurn     | HP: self=4, opp=18
+
+
+T 8 ===== SM turn — sm HP18 CP0 upg:2 | vs th HP4 CP0 upg:2 mjolnir:away [electrokinesis:4 webbed:1] (hand 4)
+   T 8 sm | income        | +1 CP, drew 1 card (hand=5)
+   T 8 sm | roll          | Roll (relances restantes 2): [1,1,2,3,4]
+   T 8 sm | roll          | Roll (relances restantes 1): [3,3,6,6,6]
+   T 8 sm | roll          | Roll (relances restantes 0): [2,3,3,6,6]
+   T 8 sm | roll          | Final dice: 2,3,3,6,6
+   T 8 sm | resolveAttack | Chose ability: C-C-C-Combo (AACC)
+   T 8 sm | resolveAttack | C-C-C-Combo (AACC): attack total 5 dmg
+   T 8 th | defense       | Webbed: incoming attack becomes UNDEFENDABLE, token removed
+   T 8 sm | resolveAttack | C-C-C-Combo: gained Combo
+
+##############################################################################
+# PARTIE : TH (joueur 0) vs FM (joueur 1) — seed 2
+# Résultat : TH gagne  ·  15 tours  ·  PV finaux TH 19 / FM -5
+##############################################################################
+
+
+T 1 ===== TH turn — th HP50 CP2 mjolnir:home | vs fm HP50 CP2 (hand 4)
+   T 1 th | income        | Start Player skips their first Income Phase
+   T 1 th | main1         | Vegas Baby!: rolled 6, +3 CP
+   T 1 th | main1         | Played upgrade Thunder Bolt II for 2 CP
+   T 1 th | main1         | Played Triple Up! for 2 CP (drew 3)
+   T 1 fm | main1         | Played Double Up! for 1 CP (drew 2)
+   T 1 th | roll          | Roll (relances restantes 2): [1,2,3,3,6]
+   T 1 th | roll          | Roll (relances restantes 1): [1,2,3,3,5]
+   T 1 th | roll          | Roll (relances restantes 0): [1,2,3,6,6]
+   T 1 th | roll          | Final dice: 1,2,3,6,6
+   T 1 th | resolveAttack | Chose ability: Chain Lightning (HHHTT)
+   T 1 th | resolveAttack | Chain Lightning: rolled [3,2,4] -> 7 dmg + 2 collateral
+   T 1 th | resolveAttack | Chain Lightning (HHHTT): attack total 7 dmg
+   T 1 fm | defense       | Defense dice: 4
+   T 1 fm | defense       | Masterwork: face 4, prevented 0, 0 dmg back
+   T 1 th | endOfTurn     | HP: self=50, opp=41
+
+
+T 2 ===== FM turn — fm HP41 CP1 | vs th HP50 CP1 upg:1 mjolnir:home (hand 5)
+   T 2 fm | upkeep        | The Mines: mined — revealed diamond-ore to The Forge
+   T 2 fm | income        | +1 CP, drew 1 card (hand=6)
+   T 2 fm | main1         | The Forge: placed gold-ore,gold-ore,diamond-ore from hand
+   T 2 fm | main1         | Crafted gold_shield (tier 1 shield)
+   T 2 fm | main1         | Crafted diamond_shield (tier 2 shield)
+   T 2 fm | main1         | Played Getting Paid! for 0 CP (+2 CP)
+   T 2 fm | roll          | Roll (relances restantes 2): [2,2,3,5,6]
+   T 2 fm | roll          | Roll (relances restantes 1): [1,2,4,5,6]
+   T 2 fm | roll          | Roll (relances restantes 0): [2,3,3,5,6]
+   T 2 fm | roll          | Final dice: 2,3,3,5,6
+   T 2 fm | resolveAttack | Chose ability: Pick Axe 3A (AAA)
+   T 2 th | defense       | Defense dice: 3,6,3
+   T 2 th | defense       | Thunder Wheel: prevented 0, 1 Mjolnir move(s) (1 dmg back), +1 EK
+   T 2 fm | endOfTurn     | HP: self=40, opp=45
+
+
+T 3 ===== TH turn — th HP45 CP1 upg:1 mjolnir:away [electrokinesis:1] | vs fm HP40 CP4 (hand 4)
+   T 3 th | income        | +1 CP, drew 1 card (hand=5)
+   T 3 th | main1         | Played upgrade Lightning Rod II for 2 CP
+   T 3 th | roll          | Roll (relances restantes 2): [1,1,2,5,6]
+   T 3 th | roll          | Roll (relances restantes 1): [4,5,5,5,6]
+   T 3 th | roll          | Roll (relances restantes 0): [2,2,4,5,6]
+   T 3 th | roll          | Final dice: 2,2,4,5,6
+   T 3 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T 3 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+1 EK)
+   T 3 th | endOfTurn     | HP: self=47, opp=40
+
+
+T 4 ===== FM turn — fm HP40 CP4 | vs th HP47 CP0 upg:2 mjolnir:home [electrokinesis:2 guardBreak:2] (hand 2)
+   T 4 fm | upkeep        | The Mines: mined — revealed diamond-ore to The Forge
+   T 4 fm | income        | +1 CP, drew 1 card (hand=3)
+   T 4 fm | main2         | Get That Outta Here!: removed guardBreak from p0
+   T 4 fm | roll          | Roll (relances restantes 2): [1,2,4,5,6]
+   T 4 fm | roll          | Roll (relances restantes 1): [1,4,4,6,6]
+   T 4 fm | roll          | Roll (relances restantes 0): [1,4,4,6,6]
+   T 4 fm | roll          | Final dice: 1,4,4,6,6
+   T 4 fm | resolveAttack | Chose ability: A Good Haul (ABCC)
+   T 4 fm | resolveAttack | A Good Haul (ABCC): mined — revealed ultimanium-ore,gold-ore to The Forge
+   T 4 th | defense       | Defense dice: 1,4,4
+   T 4 th | defense       | Thunder Wheel: prevented 4, 0 Mjolnir move(s), +0 EK
+   T 4 fm | main2         | Crafted ultimanium_shield (tier 3 shield)
+   T 4 fm | endOfTurn     | HP: self=37, opp=43
+
+
+T 5 ===== TH turn — th HP43 CP0 upg:2 mjolnir:home [electrokinesis:2 guardBreak:1] | vs fm HP37 CP4 (hand 4)
+   T 5 th | income        | +1 CP, drew 1 card (hand=5)
+   T 5 th | roll          | Roll (relances restantes 2): [1,3,4,5,6]
+   T 5 th | roll          | Roll (relances restantes 1): [3,4,5,6,6]
+   T 5 th | roll          | Roll (relances restantes 0): [3,3,4,5,6]
+   T 5 th | roll          | Final dice: 3,3,4,5,6
+   T 5 fm | roll          | Helping Hand!: rerolled die 3 4->2
+   T 5 th | roll          | He Is Worthy!: set dice 3,3,2,5,6->4,3,2,5,6
+   T 5 th | roll          | Dice after alteration: 4,3,2,5,6
+   T 5 th | resolveAttack | Chose ability: Thunder Bolt (5-straight)
+   T 5 th | resolveAttack | Thunder Bolt: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T 5 th | resolveAttack | Thunder Bolt (5-straight): attack total 12 dmg
+   T 5 th | resolveAttack | Guard Break: spent 1, rolls [4] — attack is UNDEFENDABLE
+   T 5 fm | defense       | Ultimanium Shield: prevented 2 (undefendable attack)
+   T 5 th | endOfTurn     | HP: self=43, opp=26
+
+
+T 6 ===== FM turn — fm HP26 CP3 | vs th HP43 CP0 upg:2 mjolnir:away [electrokinesis:4] (hand 1)
+   T 6 fm | upkeep        | The Mines: mined — revealed diamond-ore to The Forge
+   T 6 fm | income        | +1 CP, drew 1 card (hand=2)
+   T 6 fm | main1         | The Forge: placed gold-ore from hand
+   T 6 fm | main1         | Crafted gold_helmet (tier 1 helmet)
+   T 6 fm | main1         | Crafted diamond_helmet (tier 2 helmet)
+   T 6 fm | roll          | Roll (relances restantes 2): [2,2,3,4,4]
+   T 6 fm | roll          | Roll (relances restantes 1): [2,3,4,4,6]
+   T 6 fm | roll          | Roll (relances restantes 0): [2,2,3,4,4]
+   T 6 fm | roll          | Final dice: 2,2,3,4,4
+   T 6 fm | resolveAttack | Chose ability: Pick Axe 3A (AAA)
+   T 6 th | roll          | Better D!: rerolled 3 dice 1,2,5->2,6,2
+   T 6 th | defense       | Defense dice: 2,6,2
+   T 6 th | defense       | Thunder Wheel: prevented 0, 1 Mjolnir move(s), +1 EK
+   T 6 fm | endOfTurn     | HP: self=26, opp=38
+
+
+T 7 ===== TH turn — th HP38 CP0 upg:2 mjolnir:home [electrokinesis:4] | vs fm HP26 CP4 (hand 3)
+   T 7 th | income        | +1 CP, drew 1 card (hand=4)
+   T 7 th | roll          | Roll (relances restantes 2): [2,2,5,5,6]
+   T 7 th | roll          | Roll (relances restantes 1): [3,3,5,5,5]
+   T 7 th | roll          | Roll (relances restantes 0): [3,3,5,5,5]
+   T 7 th | roll          | Final dice: 3,3,5,5,5
+   T 7 th | resolveAttack | Chose ability: Odinforce (HHWWW)
+   T 7 th | resolveAttack | Odinforce roll [6,3,3,6,6]
+   T 7 th | resolveAttack | Odinforce: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T 7 th | resolveAttack | Odinforce: +3 EK (Thunder)
+   T 7 th | resolveAttack | Odinforce: 5 base + 4 EK
+   T 7 th | resolveAttack | Odinforce (HHWWW): attack total 9 dmg
+   T 7 fm | defense       | Defense dice: 4
+   T 7 fm | defense       | Masterwork: face 4, prevented 4, 2 dmg back (doubled shield)
+   T 7 th | endOfTurn     | HP: self=36, opp=20
+
+
+T 8 ===== FM turn — fm HP20 CP4 | vs th HP36 CP1 upg:2 mjolnir:away [electrokinesis:4] (hand 1)
+   T 8 fm | upkeep        | The Mines: mined — no reveal, +1 CP
+   T 8 fm | income        | +1 CP, drew 1 card (hand=2)
+   T 8 fm | roll          | Roll (relances restantes 2): [1,1,2,3,6]
+   T 8 fm | roll          | Roll (relances restantes 1): [2,2,2,6,6]
+   T 8 fm | roll          | Roll (relances restantes 0): [1,2,6,6,6]
+   T 8 fm | roll          | Twice As Wild!: set 2 dice to [6,6]
+   T 8 fm | roll          | Final dice: 6,6,6,6,6
+   T 8 fm | resolveAttack | Chose ability: Final Touches! (CCCCC)
+   T 8 fm | resolveAttack | Final Touches! (CCCCC): tutored ultimanium-ore to The Forge, deck shuffled
+   T 8 fm | main2         | Crafted ultimanium_helmet (tier 3 helmet)
+   T 8 fm | endOfTurn     | HP: self=20, opp=22
+
+
+T 9 ===== TH turn — th HP22 CP1 upg:2 mjolnir:away [electrokinesis:4] | vs fm HP20 CP3 (hand 4)
+   T 9 th | income        | +1 CP, drew 1 card (hand=5)
+   T 9 th | main1         | Played upgrade Hammered III for 2 CP
+   T 9 th | roll          | Roll (relances restantes 2): [1,1,4,4,6]
+   T 9 th | roll          | Roll (relances restantes 0): [1,1,4,4,6]
+   T 9 th | roll          | Final dice: 1,1,4,4,6
+   T 9 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T 9 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+0 EK)
+   T 9 th | endOfTurn     | HP: self=24, opp=20
+
+
+T10 ===== FM turn — fm HP20 CP3 | vs th HP24 CP0 upg:3 mjolnir:home [electrokinesis:4 guardBreak:2] (hand 1)
+   T10 fm | upkeep        | The Mines: mined — revealed diamond-ore to The Forge
+   T10 fm | income        | +1 CP, drew 1 card (hand=2)
+   T10 fm | roll          | Roll (relances restantes 2): [1,3,4,4,6]
+   T10 fm | roll          | Roll (relances restantes 1): [1,3,4,4,6]
+   T10 fm | roll          | Roll (relances restantes 0): [2,3,4,4,6]
+   T10 fm | roll          | One More Time!: +1 additional Roll Attempt
+   T10 fm | roll          | Roll (relances restantes 0): [1,2,3,3,4]
+   T10 fm | roll          | Final dice: 1,2,3,3,4
+   T10 fm | resolveAttack | Chose ability: Armored Up S (4-straight)
+   T10 fm | resolveAttack | Armored Up S (4-straight): +2 dmg (2 Armor)
+   T10 th | defense       | Defense dice: 5,4,4
+   T10 th | defense       | Thunder Wheel: prevented 6, 0 Mjolnir move(s), +0 EK
+   T10 fm | endOfTurn     | HP: self=17, opp=21
+
+
+T11 ===== TH turn — th HP21 CP0 upg:3 mjolnir:home [electrokinesis:4 guardBreak:2] | vs fm HP17 CP3 (hand 4)
+   T11 th | income        | +1 CP, drew 1 card (hand=5)
+   T11 th | roll          | Roll (relances restantes 2): [1,3,3,4,5]
+   T11 th | roll          | Roll (relances restantes 1): [1,1,3,4,5]
+   T11 th | roll          | Roll (relances restantes 0): [1,1,3,4,5]
+   T11 th | roll          | Final dice: 1,1,3,4,5
+   T11 th | roll          | Tip It!: die 1 1->2
+   T11 th | roll          | Dice after alteration: 2,1,3,4,5
+   T11 th | resolveAttack | Chose ability: Thunder Bolt (5-straight)
+   T11 th | resolveAttack | Thunder Bolt: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T11 th | resolveAttack | Thunder Bolt (5-straight): attack total 12 dmg
+   T11 th | resolveAttack | Guard Break: spent 1, rolls [4] — attack is UNDEFENDABLE
+   T11 fm | defense       | Ultimanium Shield: prevented 2 (undefendable attack)
+   T11 th | endOfTurn     | HP: self=21, opp=6
+
+
+T12 ===== FM turn — fm HP6 CP3 | vs th HP21 CP0 upg:3 mjolnir:away [electrokinesis:4 guardBreak:1] (hand 1)
+   T12 fm | upkeep        | The Mines: mined — revealed gold-ore to The Forge
+   T12 fm | income        | +1 CP, drew 1 card (hand=2)
+   T12 fm | main1         | The Forge: placed gold-ore from hand
+   T12 fm | roll          | Roll (relances restantes 2): [1,1,2,5,6]
+   T12 fm | roll          | Roll (relances restantes 1): [3,3,3,6,6]
+   T12 fm | roll          | Roll (relances restantes 0): [3,4,5,6,6]
+   T12 fm | roll          | Final dice: 3,4,5,6,6
+   T12 fm | resolveAttack | Chose ability: A Good Haul (ABCC)
+   T12 fm | resolveAttack | A Good Haul (ABCC): mined — no reveal, +1 CP
+   T12 th | defense       | Defense dice: 1,4,5
+   T12 th | defense       | Thunder Wheel: prevented 4, 0 Mjolnir move(s), +0 EK
+   T12 fm | endOfTurn     | HP: self=6, opp=17
+
+
+T13 ===== TH turn — th HP17 CP0 upg:3 mjolnir:away [electrokinesis:4 guardBreak:1] | vs fm HP6 CP5 (hand 4)
+   T13 th | income        | +1 CP, drew 1 card (hand=5)
+   T13 th | main1         | Played upgrade Hammered II for 0 CP (upgraded from Hammered III)
+   T13 th | roll          | Roll (relances restantes 2): [1,3,3,4,5]
+   T13 th | roll          | Roll (relances restantes 1): [1,4,5,6,6]
+   T13 th | roll          | Roll (relances restantes 0): [1,4,5,6,6]
+   T13 th | roll          | Final dice: 1,4,5,6,6
+   T13 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T13 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+0 EK)
+   T13 th | endOfTurn     | HP: self=19, opp=6
+
+
+T14 ===== FM turn — fm HP6 CP5 | vs th HP19 CP1 upg:3 mjolnir:home [electrokinesis:4 guardBreak:2] (hand 1)
+   T14 fm | upkeep        | The Mines: mined — revealed gold-ore to The Forge
+   T14 fm | income        | +1 CP, drew 1 card (hand=2)
+   T14 fm | roll          | Roll (relances restantes 2): [1,3,3,3,6]
+   T14 fm | roll          | Roll (relances restantes 1): [1,1,2,2,6]
+   T14 fm | roll          | Roll (relances restantes 0): [3,3,4,5,6]
+   T14 fm | roll          | Final dice: 3,3,4,5,6
+   T14 fm | roll          | Tip It!: die 3 4->5
+   T14 fm | roll          | Dice after alteration: 3,3,5,5,6
+   T14 fm | resolveAttack | No ability matched (Whiff)
+   T14 fm | endOfTurn     | HP: self=6, opp=19
+
+
+T15 ===== TH turn — th HP19 CP1 upg:3 mjolnir:home [electrokinesis:4 guardBreak:2] | vs fm HP6 CP5 (hand 4)
+   T15 th | income        | +1 CP, drew 1 card (hand=5)
+   T15 th | main1         | Played upgrade Chain Lightning II for 2 CP
+   T15 th | roll          | Roll (relances restantes 2): [1,2,4,5,5]
+   T15 th | roll          | Roll (relances restantes 1): [2,4,4,4,5]
+   T15 th | roll          | Roll (relances restantes 0): [1,3,4,4,4]
+   T15 th | roll          | Final dice: 1,3,4,4,4
+   T15 th | resolveAttack | Chose ability: Odinforce (HHWWW)
+   T15 th | resolveAttack | Odinforce roll [2,6,3,1,6]
+   T15 th | resolveAttack | Odinforce: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T15 th | resolveAttack | Odinforce: +2 EK (Thunder)
+   T15 th | resolveAttack | Odinforce: 5 base + 4 EK
+   T15 th | resolveAttack | Odinforce (HHWWW): attack total 9 dmg
+   T15 th | resolveAttack | Guard Break: spent 1, rolls [5] — attack is UNDEFENDABLE
+   T15 fm | defense       | Ultimanium Shield: prevented 2 (undefendable attack)
+
+##############################################################################
+# PARTIE : TH (joueur 0) vs SE (joueur 1) — seed 1
+# Résultat : TH gagne  ·  21 tours  ·  PV finaux TH 8 / SE -5
+##############################################################################
+
+
+T 1 ===== TH turn — th HP50 CP2 mjolnir:home | vs se HP50 CP2 (hand 4)
+   T 1 th | income        | Start Player skips their first Income Phase
+   T 1 th | main1         | Played upgrade Thunder Wheel II for 2 CP
+   T 1 th | main1         | Mjolnir shuttle (discarded power-trip): 1 isolated undefendable dmg
+   T 1 th | main1         | Sold tip-it (+1 CP)
+   T 1 se | main1         | Here Comes the Sun!: Sun Dial +2
+   T 1 th | roll          | Roll (relances restantes 2): [1,1,2,6,6]
+   T 1 th | roll          | Roll (relances restantes 0): [1,1,2,6,6]
+   T 1 th | roll          | Final dice: 1,1,2,6,6
+   T 1 se | roll          | Tip It!: die 4 6->5
+   T 1 th | roll          | Dice after alteration: 1,1,2,5,6
+   T 1 th | resolveAttack | Chose ability: Hammered 3H
+   T 1 th | resolveAttack | Hammered 3H: attack total 4 dmg
+   T 1 se | defense       | Defense dice: 4,6,5
+   T 1 se | defense       | Harness the Light: prevented 0, healed 0, Sun Dial +2
+   T 1 th | endOfTurn     | HP: self=50, opp=45
+
+
+T 2 ===== SE turn — se HP45 CP0 | vs th HP50 CP1 upg:1 mjolnir:away (hand 2)
+   T 2 se | upkeep        | Sun Dial (DUSK): +1 (now 5) — FLIPS to DAWN
+   T 2 se | income        | +1 CP, drew 1 card (hand=3)
+   T 2 se | main1         | Sold six-it (+1 CP)
+   T 2 se | main1         | Played upgrade Scorching Staff II for 2 CP
+   T 2 se | roll          | Roll (relances restantes 2): [1,1,5,6,6]
+   T 2 se | roll          | Roll (relances restantes 1): [1,1,3,3,5]
+   T 2 se | roll          | Roll (relances restantes 0): [1,1,2,3,3]
+   T 2 se | roll          | Final dice: 1,1,2,3,3
+   T 2 se | resolveAttack | Chose ability: Light Staff 5A (AAAAA)
+   T 2 se | resolveAttack | Sun Dial (DAWN): +5 dmg, dial -4 (now 1)
+   T 2 se | resolveAttack | Light Staff 5A (AAAAA): attack total 12 dmg
+   T 2 th | defense       | Defense dice: 4,4,4,1
+   T 2 th | defense       | Thunder Wheel II: prevented 6, 0 Mjolnir move(s), +0 EK
+   T 2 th | defense       | Not This Time!: prevented 6 dmg
+   T 2 se | endOfTurn     | HP: self=45, opp=50
+
+
+T 3 ===== TH turn — th HP50 CP0 upg:1 mjolnir:away | vs se HP45 CP0 upg:1 (hand 0)
+   T 3 th | income        | +1 CP, drew 1 card (hand=1)
+   T 3 th | main1         | Sold lightning-rod-ii (+1 CP)
+   T 3 th | roll          | Roll (relances restantes 2): [1,2,2,5,6]
+   T 3 th | roll          | Roll (relances restantes 1): [1,2,5,6,6]
+   T 3 th | roll          | Roll (relances restantes 0): [2,4,4,5,6]
+   T 3 th | roll          | Final dice: 2,4,4,5,6
+   T 3 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T 3 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+1 EK)
+   T 3 th | endOfTurn     | HP: self=52, opp=45
+
+
+T 4 ===== SE turn — se HP45 CP0 upg:1 | vs th HP52 CP2 upg:1 mjolnir:home [electrokinesis:1 guardBreak:2] (hand 1)
+   T 4 se | income        | +1 CP, drew 1 card (hand=2)
+   T 4 se | roll          | Roll (relances restantes 2): [1,1,1,2,2]
+   T 4 se | roll          | Roll (relances restantes 1): [1,4,4,4,5]
+   T 4 se | roll          | Roll (relances restantes 0): [1,4,4,4,5]
+   T 4 se | roll          | Final dice: 1,4,4,4,5
+   T 4 se | resolveAttack | Chose ability: Scorching Staff (ABBB)
+   T 4 se | resolveAttack | Scorching Staff II: bonus roll [2,5]
+   T 4 se | resolveAttack | Scorching Staff (Charge): Sun Dial +1 (now 2)
+   T 4 se | resolveAttack | Scorching Staff (ABBB): attack total 7 dmg
+   T 4 th | defense       | Defense dice: 2,6,6,6
+   T 4 th | defense       | Thunder Wheel II: prevented 0, 0 Mjolnir move(s), +3 EK
+   T 4 se | endOfTurn     | HP: self=42, opp=45
+
+
+T 5 ===== TH turn — th HP45 CP2 upg:1 mjolnir:home [electrokinesis:4 guardBreak:2] | vs se HP42 CP1 upg:1 (hand 0)
+   T 5 th | income        | +1 CP, drew 1 card (hand=1)
+   T 5 th | main1         | Electrokinesis x4 spent: drew 1
+   T 5 th | roll          | Roll (relances restantes 2): [1,1,2,2,6]
+   T 5 th | roll          | Roll (relances restantes 1): [1,2,2,5,6]
+   T 5 th | roll          | Roll (relances restantes 0): [1,2,5,5,6]
+   T 5 th | roll          | Final dice: 1,2,5,5,6
+   T 5 se | roll          | Helping Hand!: rerolled die 3 5->2
+   T 5 th | roll          | Dice after alteration: 1,2,2,5,6
+   T 5 th | resolveAttack | Chose ability: Hammered 3H
+   T 5 th | resolveAttack | Hammered: Mjolnir thrown (1 dmg)
+   T 5 th | resolveAttack | Hammered 3H: attack total 4 dmg
+   T 5 se | defense       | Defense dice: 1,1,3
+   T 5 se | defense       | Harness the Light: prevented 0, healed 3
+   T 5 th | endOfTurn     | HP: self=45, opp=40
+
+
+T 6 ===== SE turn — se HP40 CP0 upg:1 | vs th HP45 CP3 upg:1 mjolnir:away [guardBreak:2] (hand 1)
+   T 6 se | income        | +1 CP, drew 1 card (hand=2)
+   T 6 se | main1         | Played Getting Paid! for 0 CP (+2 CP)
+   T 6 se | roll          | Roll (relances restantes 2): [2,2,4,6,6]
+   T 6 se | roll          | Roll (relances restantes 1): [4,5,6,6,6]
+   T 6 se | roll          | Roll (relances restantes 0): [2,3,6,6,6]
+   T 6 se | roll          | So Wild!: set 1 dice to [6]
+   T 6 se | roll          | Final dice: 3,6,6,6,6
+   T 6 se | resolveAttack | Chose ability: Solar Burst (CCCC)
+   T 6 se | resolveAttack | Solar Burst: Sun Dial +2 (now 4)
+   T 6 se | resolveAttack | Solar Burst: gained Charged Gem
+   T 6 se | resolveAttack | Sun Dial (DAWN): +4 dmg, dial -4 — FLIPS to DUSK (now 0)
+   T 6 se | resolveAttack | Solar Burst (CCCC): attack total 12 dmg
+   T 6 th | main2         | Time to Hammer!: Retrieve Mjolnir, +1 CP, +2 EK
+   T 6 th | defense       | Defense dice: 2,2,2,6
+   T 6 th | defense       | Thunder Wheel II: prevented 0, 1 Mjolnir move(s) (1 dmg back), +1 EK
+   T 6 se | endOfTurn     | HP: self=39, opp=33
+
+
+T 7 ===== TH turn — th HP33 CP4 upg:1 mjolnir:away [electrokinesis:3 guardBreak:2] | vs se HP39 CP1 upg:1 [chargedGem:1] (hand 1)
+   T 7 th | income        | +1 CP, drew 1 card (hand=2)
+   T 7 th | main2         | Transference!: moved chargedGem from p1 to p0
+   T 7 th | roll          | Roll (relances restantes 2): [1,1,1,2,6]
+   T 7 th | roll          | Roll (relances restantes 1): [1,2,3,5,5]
+   T 7 th | roll          | Roll (relances restantes 0): [2,3,5,5,6]
+   T 7 th | roll          | Final dice: 2,3,5,5,6
+   T 7 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T 7 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+1 EK)
+   T 7 th | main2         | Electrokinesis x4 spent: drew 1
+   T 7 th | endOfTurn     | HP: self=35, opp=39
+
+
+T 8 ===== SE turn — se HP39 CP1 upg:1 | vs th HP35 CP3 upg:1 mjolnir:home [guardBreak:2 chargedGem:1] (hand 0)
+   T 8 se | upkeep        | Sun Dial (DUSK): +1 (now 1)
+   T 8 se | income        | +1 CP, drew 1 card (hand=1)
+   T 8 se | main2         | What Status Effects?: removed all status tokens from p0
+   T 8 se | roll          | Roll (relances restantes 2): [2,3,3,4,5]
+   T 8 se | roll          | Roll (relances restantes 1): [2,3,4,4,5]
+   T 8 se | roll          | Roll (relances restantes 0): [2,3,4,5,5]
+   T 8 se | roll          | Final dice: 2,3,4,5,5
+   T 8 se | resolveAttack | Chose ability: Ray of Light (4-straight)
+   T 8 se | resolveAttack | Ray of Light: Sun Dial +1 (now 2)
+   T 8 se | resolveAttack | Ray of Light (4-straight): attack total 7 dmg
+   T 8 th | defense       | Defense dice: 5,1,2,4
+   T 8 th | defense       | Thunder Wheel II: prevented 4, 1 Mjolnir move(s) (1 dmg back), +0 EK
+   T 8 se | endOfTurn     | HP: self=35, opp=32
+
+
+T 9 ===== TH turn — th HP32 CP3 upg:1 mjolnir:away | vs se HP35 CP0 upg:1 (hand 2)
+   T 9 th | income        | +1 CP, drew 1 card (hand=3)
+   T 9 th | roll          | Roll (relances restantes 2): [1,2,3,4,6]
+   T 9 th | roll          | Roll (relances restantes 1): [1,2,3,4,4]
+   T 9 th | roll          | Roll (relances restantes 0): [1,2,3,3,4]
+   T 9 th | roll          | Final dice: 1,2,3,3,4
+   T 9 th | resolveAttack | Chose ability: Lightning Rod (4-straight)
+   T 9 th | resolveAttack | Lightning Rod: opponent has Mjolnir -> 9 dmg
+   T 9 th | resolveAttack | Lightning Rod (4-straight): attack total 9 dmg
+   T 9 se | defense       | Defense dice: 3,4,1
+   T 9 se | defense       | Harness the Light: prevented 0, healed 2
+   T 9 th | endOfTurn     | HP: self=32, opp=28
+
+
+T10 ===== SE turn — se HP28 CP0 upg:1 | vs th HP32 CP4 upg:1 mjolnir:away (hand 0)
+   T10 se | upkeep        | Sun Dial (DUSK): +1 (now 3)
+   T10 se | income        | +1 CP, drew 1 card (hand=1)
+   T10 se | roll          | Roll (relances restantes 2): [1,4,4,4,6]
+   T10 se | roll          | Roll (relances restantes 1): [1,4,4,4,5]
+   T10 se | roll          | Roll (relances restantes 0): [1,4,4,4,5]
+   T10 se | roll          | Final dice: 1,4,4,4,5
+   T10 se | resolveAttack | Chose ability: Ray Absorption (BBBB)
+   T10 se | resolveAttack | Ray Absorption: Sun Dial +2 (+1 heal excès) — FLIPS to DAWN (now 5)
+   T10 se | resolveAttack | Ray Absorption: gained Charged Gem
+   T10 se | resolveAttack | Ray Absorption: healed 2
+   T10 se | endOfTurn     | HP: self=31, opp=32
+
+
+T11 ===== TH turn — th HP32 CP4 upg:1 mjolnir:away | vs se HP31 CP1 upg:1 [chargedGem:1] (hand 3)
+   T11 th | income        | +1 CP, drew 1 card (hand=4)
+   T11 th | roll          | Roll (relances restantes 2): [1,2,2,4,5]
+   T11 th | roll          | Roll (relances restantes 1): [1,1,2,4,6]
+   T11 th | roll          | Roll (relances restantes 0): [2,2,4,5,6]
+   T11 th | roll          | He Is Worthy!: set 1 dice to [4]
+   T11 th | roll          | Final dice: 2,2,4,4,5
+   T11 th | resolveAttack | Chose ability: Odinforce (HHWWW)
+   T11 th | resolveAttack | Odinforce roll [1,4,3,5,2]
+   T11 th | resolveAttack | Odinforce: Mjolnir x1 (0 throw = 0 dmg, 1 retrieve = +1 EK)
+   T11 th | resolveAttack | Odinforce: +1 CP (2+ Worthy)
+   T11 th | resolveAttack | Odinforce: 5 base + 1 EK
+   T11 th | resolveAttack | Odinforce (HHWWW): attack total 6 dmg
+   T11 se | defense       | Defense dice: 1,6,6
+   T11 se | defense       | Harness the Light: prevented 0, healed 1, Sun Dial +0 (+1 heal excès)
+   T11 th | endOfTurn     | HP: self=32, opp=27
+
+
+T12 ===== SE turn — se HP27 CP1 upg:1 [chargedGem:1] | vs th HP32 CP5 upg:1 mjolnir:home [electrokinesis:1] (hand 1)
+   T12 se | income        | +1 CP, drew 1 card (hand=2)
+   T12 se | main1         | Charged Gem: rolled 1 -> +1 CP
+   T12 se | roll          | Roll (relances restantes 2): [1,3,4,4,6]
+   T12 se | roll          | Roll (relances restantes 1): [1,3,4,4,5]
+   T12 se | roll          | Roll (relances restantes 0): [1,2,4,4,5]
+   T12 se | roll          | Final dice: 1,2,4,4,5
+   T12 se | resolveAttack | Chose ability: Scorching Staff (ABBB)
+   T12 se | resolveAttack | Scorching Staff II: bonus roll [6,4]
+   T12 se | resolveAttack | Scorching Staff (Charge): Sun Dial +0 (+1 heal excès) (now 5)
+   T12 se | resolveAttack | Scorching Staff (Sun Power): gained Charged Gem
+   T12 se | resolveAttack | Scorching Staff (Sun Power): Sun Dial +0 (+2 heal excès) (now 5)
+   T12 se | resolveAttack | Sun Dial (DAWN): +5 dmg, dial -4 (now 1)
+   T12 se | resolveAttack | Scorching Staff (ABBB): attack total 10 dmg
+   T12 th | defense       | Defense dice: 4,1,1,4
+   T12 th | defense       | Thunder Wheel II: prevented 4, 1 Mjolnir move(s) (1 dmg back), +0 EK
+   T12 se | endOfTurn     | HP: self=29, opp=26
+
+
+T13 ===== TH turn — th HP26 CP5 upg:1 mjolnir:away [electrokinesis:1] | vs se HP29 CP3 upg:1 [chargedGem:1] (hand 3)
+   T13 th | income        | +1 CP, drew 1 card (hand=4)
+   T13 th | main1         | Played upgrade Chain Lightning II for 2 CP
+   T13 th | roll          | Roll (relances restantes 2): [1,1,2,4,4]
+   T13 th | roll          | Roll (relances restantes 1): [1,1,2,3,4]
+   T13 th | roll          | Roll (relances restantes 0): [1,2,3,4,5]
+   T13 th | roll          | Final dice: 1,2,3,4,5
+   T13 th | resolveAttack | Chose ability: Thunder Bolt (5-straight)
+   T13 th | resolveAttack | Thunder Bolt: Mjolnir x1 (0 throw = 0 dmg, 1 retrieve = +1 EK)
+   T13 th | resolveAttack | Thunder Bolt (5-straight): attack total 10 dmg
+   T13 se | roll          | Better D!: rerolled 3 dice 4,5,4->5,6,1
+   T13 se | defense       | Defense dice: 5,6,1
+   T13 se | defense       | Harness the Light: prevented 0, healed 1, Sun Dial +1
+   T13 th | endOfTurn     | HP: self=26, opp=20
+
+
+T14 ===== SE turn — se HP20 CP3 upg:1 [chargedGem:1] | vs th HP26 CP4 upg:2 mjolnir:home [electrokinesis:4] (hand 1)
+   T14 se | income        | +1 CP, drew 1 card (hand=2)
+   T14 se | main1         | Charged Gem: rolled 6 -> +1 CP + 2 isolated undefendable dmg
+   T14 se | roll          | Roll (relances restantes 2): [1,4,4,5,6]
+   T14 se | roll          | Roll (relances restantes 1): [1,1,3,5,6]
+   T14 se | roll          | Roll (relances restantes 0): [1,3,4,4,6]
+   T14 se | roll          | Twice As Wild!: set 2 dice to [4,4]
+   T14 se | roll          | Final dice: 4,4,4,4,6
+   T14 se | resolveAttack | Chose ability: Ray Absorption (BBBB)
+   T14 se | resolveAttack | Ray Absorption: Sun Dial +3 (now 5)
+   T14 se | resolveAttack | Ray Absorption: gained Charged Gem
+   T14 se | resolveAttack | Ray Absorption: healed 2
+   T14 se | endOfTurn     | HP: self=22, opp=24
+
+
+T15 ===== TH turn — th HP24 CP4 upg:2 mjolnir:home [electrokinesis:4] | vs se HP22 CP2 upg:1 [chargedGem:1] (hand 3)
+   T15 th | income        | +1 CP, drew 1 card (hand=4)
+   T15 th | roll          | Roll (relances restantes 2): [1,3,5,5,6]
+   T15 th | roll          | Roll (relances restantes 1): [3,3,5,5,5]
+   T15 th | roll          | Roll (relances restantes 0): [3,3,5,5,5]
+   T15 th | roll          | Final dice: 3,3,5,5,5
+   T15 th | resolveAttack | Chose ability: Odinforce (HHWWW)
+   T15 th | resolveAttack | Odinforce roll [2,6,5,1,2]
+   T15 th | resolveAttack | Odinforce: Mjolnir x1 (1 throw = 1 dmg, 0 retrieve = +0 EK)
+   T15 th | resolveAttack | Odinforce: +1 EK (Thunder)
+   T15 th | resolveAttack | Odinforce: 5 base + 4 EK
+   T15 th | resolveAttack | Odinforce (HHWWW): attack total 9 dmg
+   T15 se | defense       | Defense dice: 5,1,5
+   T15 se | defense       | Harness the Light: prevented 0, healed 1, Sun Dial +0 (+1 heal excès)
+   T15 th | endOfTurn     | HP: self=24, opp=14
+
+
+T16 ===== SE turn — se HP14 CP2 upg:1 [chargedGem:1] | vs th HP24 CP5 upg:2 mjolnir:away [electrokinesis:4] (hand 1)
+   T16 se | income        | +1 CP, drew 1 card (hand=2)
+   T16 se | main1         | Charged Gem: rolled 6 -> +1 CP + 2 isolated undefendable dmg
+   T16 se | roll          | Roll (relances restantes 2): [3,3,4,6,6]
+   T16 se | roll          | Roll (relances restantes 1): [2,3,3,4,4]
+   T16 se | roll          | Roll (relances restantes 0): [1,2,3,4,6]
+   T16 se | roll          | Final dice: 1,2,3,4,6
+   T16 se | resolveAttack | Chose ability: Ray of Light (4-straight)
+   T16 se | resolveAttack | Ray of Light: Sun Dial +0 (+1 heal excès) (now 5)
+   T16 se | resolveAttack | Sun Dial (DAWN): +5 dmg, dial -4 (now 1)
+   T16 se | resolveAttack | Ray of Light (4-straight): attack total 12 dmg
+   T16 th | defense       | Defense dice: 4,1,4,4
+   T16 th | defense       | Thunder Wheel II: prevented 6, 0 Mjolnir move(s), +0 EK
+   T16 th | defense       | Indomitable Will!: attack is not lethal — no effect
+   T16 se | endOfTurn     | HP: self=15, opp=16
+
+
+T17 ===== TH turn — th HP16 CP3 upg:2 mjolnir:away [electrokinesis:4] | vs se HP15 CP4 upg:1 (hand 3)
+   T17 th | income        | +1 CP, drew 1 card (hand=4)
+   T17 th | main1         | Played upgrade Bottled Lightning II for 2 CP
+   T17 th | roll          | Roll (relances restantes 2): [1,1,1,2,6]
+   T17 th | roll          | Roll (relances restantes 1): [2,3,4,6,6]
+   T17 th | roll          | Roll (relances restantes 0): [2,3,3,6,6]
+   T17 th | roll          | Final dice: 2,3,3,6,6
+   T17 th | resolveAttack | Chose ability: Chain Lightning (HHHTT)
+   T17 th | resolveAttack | Chain Lightning: rolled [1,4,1,5] -> 9 dmg + 3 collateral
+   T17 th | resolveAttack | Chain Lightning (HHHTT): attack total 9 dmg
+   T17 se | defense       | Defense dice: 6,2,4
+   T17 se | defense       | Harness the Light: prevented 0, healed 1, Sun Dial +1
+   T17 th | endOfTurn     | HP: self=16, opp=4
+
+
+T18 ===== SE turn — se HP4 CP4 upg:1 | vs th HP16 CP2 upg:3 mjolnir:away [electrokinesis:4] (hand 2)
+   T18 se | income        | +1 CP, drew 1 card (hand=3)
+   T18 se | main1         | Played Triple Up! for 2 CP (drew 3)
+   T18 se | main1         | Played upgrade Light Staff II for 1 CP
+   T18 se | roll          | Roll (relances restantes 2): [3,4,4,4,6]
+   T18 se | roll          | Roll (relances restantes 1): [4,4,4,4,5]
+   T18 se | roll          | Roll (relances restantes 0): [4,4,4,4,5]
+   T18 se | roll          | Final dice: 4,4,4,4,5
+   T18 se | resolveAttack | Chose ability: Ray Absorption (BBBB)
+   T18 se | resolveAttack | Ray Absorption: Sun Dial +3 (now 5)
+   T18 se | resolveAttack | Ray Absorption: gained Charged Gem
+   T18 se | resolveAttack | Ray Absorption: healed 2
+   T18 se | endOfTurn     | HP: self=6, opp=16
+
+
+T19 ===== TH turn — th HP16 CP2 upg:3 mjolnir:away [electrokinesis:4] | vs se HP6 CP2 upg:2 [chargedGem:1] (hand 3)
+   T19 th | income        | +1 CP, drew 1 card (hand=4)
+   T19 th | main1         | Played upgrade Hammered III for 2 CP
+   T19 th | roll          | Roll (relances restantes 2): [2,3,5,5,6]
+   T19 th | roll          | Roll (relances restantes 1): [1,2,5,5,6]
+   T19 th | roll          | Roll (relances restantes 0): [1,2,5,5,6]
+   T19 th | roll          | Final dice: 1,2,5,5,6
+   T19 th | resolveAttack | Chose ability: Mighty Summon (HWWT)
+   T19 th | resolveAttack | Mighty Summon: +2 Guard Break, Heal 2, Retrieve -> 3 collateral (+0 EK)
+   T19 th | endOfTurn     | HP: self=18, opp=6
+
+
+T20 ===== SE turn — se HP6 CP2 upg:2 [chargedGem:1] | vs th HP18 CP1 upg:4 mjolnir:home [electrokinesis:4 guardBreak:2] (hand 4)
+   T20 se | income        | +1 CP, drew 1 card (hand=5)
+   T20 se | main1         | Charged Gem: rolled 6 -> +1 CP + 2 isolated undefendable dmg
+   T20 se | main1         | Played upgrade Sunbeam II for 2 CP
+   T20 se | main2         | Transference!: moved guardBreak from p0 to p1
+   T20 se | roll          | Roll (relances restantes 2): [3,3,4,4,6]
+   T20 se | roll          | Roll (relances restantes 1): [1,3,4,4,5]
+   T20 se | roll          | Roll (relances restantes 0): [1,3,4,4,5]
+   T20 se | roll          | Final dice: 1,3,4,4,5
+   T20 se | resolveAttack | Chose ability: Scorching Staff (ABBB)
+   T20 se | resolveAttack | Scorching Staff II: bonus roll [5,1]
+   T20 se | resolveAttack | Scorching Staff (Charge): Sun Dial +0 (+1 heal excès) (now 5)
+   T20 se | resolveAttack | Sun Dial (DAWN): +5 dmg, dial -4 (now 1)
+   T20 se | resolveAttack | Scorching Staff (ABBB): attack total 12 dmg
+   T20 se | resolveAttack | Guard Break: spent 1, rolls [1] — failed
+   T20 th | defense       | Defense dice: 5,5,2,2
+   T20 th | defense       | Thunder Wheel II: prevented 4, 1 Mjolnir move(s) (1 dmg back), +0 EK
+   T20 se | endOfTurn     | HP: self=3, opp=8
+
+
+T21 ===== TH turn — th HP8 CP1 upg:4 mjolnir:away [electrokinesis:4 guardBreak:1] | vs se HP3 CP0 upg:3 (hand 3)
+   T21 th | income        | +1 CP, drew 1 card (hand=4)
+   T21 th | roll          | Roll (relances restantes 2): [1,1,2,2,5]
+   T21 th | roll          | Roll (relances restantes 1): [1,2,3,5,6]
+   T21 th | roll          | Roll (relances restantes 0): [1,2,3,4,5]
+   T21 th | roll          | Try, Try Again!: rerolled 2 dice
+   T21 th | roll          | Final dice: 3,3,4,4,5
+   T21 th | resolveAttack | Chose ability: Odinforce (HHWWW)
+   T21 th | resolveAttack | Odinforce roll [1,3,6,3,6]
+   T21 th | resolveAttack | Odinforce: Mjolnir x1 (0 throw = 0 dmg, 1 retrieve = +0 EK)
+   T21 th | resolveAttack | Odinforce: +2 EK (Thunder)
+   T21 th | resolveAttack | Odinforce: 5 base + 4 EK
+   T21 th | resolveAttack | Odinforce (HHWWW): attack total 9 dmg
+   T21 th | resolveAttack | Guard Break: spent 1, rolls [6] — failed
+   T21 se | defense       | Defense dice: 4,2,4
+   T21 se | defense       | Harness the Light: prevented 0, healed 1, Sun Dial +1

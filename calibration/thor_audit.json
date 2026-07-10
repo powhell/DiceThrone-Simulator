@@ -1,0 +1,230 @@
+{
+ "date": "2026-07-09T14:33:51.550Z",
+ "games_per_matchup_per_side": 15,
+ "total_games": 270,
+ "thor_winrate_vs_field": 36.3,
+ "decisions": 964,
+ "forced": 0,
+ "realChoices": 964,
+ "agree_best_ev": 743,
+ "agree_best_ev_pct": 77.1,
+ "agree_max_dmg_pct": 96.3,
+ "avg_regret_ev": 0.473,
+ "big_regret_choices": 158,
+ "big_regret_pct": 16.4,
+ "skipped_alter": 39,
+ "per_ability": {
+  "Hammered 3H": {
+   "avail": 332,
+   "chosen": 15,
+   "chosen_pct_of_decisions": 1.6,
+   "pick_rate_when_avail": 4.5,
+   "was_best_ev_when_avail_pct": 0,
+   "avg_ev_when_avail": 2.23,
+   "avg_ev_when_chosen": 2.77,
+   "avg_direct_dmg_when_chosen": 4.27
+  },
+  "Chain Lightning (HHHTT)": {
+   "avail": 151,
+   "chosen": 146,
+   "chosen_pct_of_decisions": 15.1,
+   "pick_rate_when_avail": 96.7,
+   "was_best_ev_when_avail_pct": 100,
+   "avg_ev_when_avail": 8.66,
+   "avg_ev_when_chosen": 8.64,
+   "avg_direct_dmg_when_chosen": 8.38
+  },
+  "Mighty Summon (HWWT)": {
+   "avail": 366,
+   "chosen": 60,
+   "chosen_pct_of_decisions": 6.2,
+   "pick_rate_when_avail": 16.4,
+   "was_best_ev_when_avail_pct": 51.4,
+   "avg_ev_when_avail": 6.9,
+   "avg_ev_when_chosen": 7.01,
+   "avg_direct_dmg_when_chosen": 0
+  },
+  "Lightning Rod (4-straight)": {
+   "avail": 625,
+   "chosen": 357,
+   "chosen_pct_of_decisions": 37,
+   "pick_rate_when_avail": 57.1,
+   "was_best_ev_when_avail_pct": 31.2,
+   "avg_ev_when_avail": 6.31,
+   "avg_ev_when_chosen": 6.27,
+   "avg_direct_dmg_when_chosen": 8.59
+  },
+  "Thunder Bolt (5-straight)": {
+   "avail": 252,
+   "chosen": 245,
+   "chosen_pct_of_decisions": 25.4,
+   "pick_rate_when_avail": 97.2,
+   "was_best_ev_when_avail_pct": 94.8,
+   "avg_ev_when_avail": 9.83,
+   "avg_ev_when_chosen": 9.85,
+   "avg_direct_dmg_when_chosen": 10.82
+  },
+  "Odinforce (HHWWW)": {
+   "avail": 172,
+   "chosen": 93,
+   "chosen_pct_of_decisions": 9.6,
+   "pick_rate_when_avail": 54.1,
+   "was_best_ev_when_avail_pct": 85.5,
+   "avg_ev_when_avail": 7.28,
+   "avg_ev_when_chosen": 7.37,
+   "avg_direct_dmg_when_chosen": 5.26
+  },
+  "Hammered 4H": {
+   "avail": 58,
+   "chosen": 5,
+   "chosen_pct_of_decisions": 0.5,
+   "pick_rate_when_avail": 8.6,
+   "was_best_ev_when_avail_pct": 0,
+   "avg_ev_when_avail": 3.68,
+   "avg_ev_when_chosen": 3.66,
+   "avg_direct_dmg_when_chosen": 5.4
+  },
+  "Asgardian Brawn (WWW)": {
+   "avail": 212,
+   "chosen": 7,
+   "chosen_pct_of_decisions": 0.7,
+   "pick_rate_when_avail": 3.3,
+   "was_best_ev_when_avail_pct": 3.8,
+   "avg_ev_when_avail": 4,
+   "avg_ev_when_chosen": 4,
+   "avg_direct_dmg_when_chosen": 0
+  },
+  "Bottled Lightning (TTTT)": {
+   "avail": 36,
+   "chosen": 9,
+   "chosen_pct_of_decisions": 0.9,
+   "pick_rate_when_avail": 25,
+   "was_best_ev_when_avail_pct": 25,
+   "avg_ev_when_avail": 9.75,
+   "avg_ev_when_chosen": 11.84,
+   "avg_direct_dmg_when_chosen": 10.56
+  },
+  "For Asgard! (TTTTT)": {
+   "avail": 27,
+   "chosen": 27,
+   "chosen_pct_of_decisions": 2.8,
+   "pick_rate_when_avail": 100,
+   "was_best_ev_when_avail_pct": 100,
+   "avg_ev_when_avail": 17.7,
+   "avg_ev_when_chosen": 17.7,
+   "avg_direct_dmg_when_chosen": 14
+  },
+  "Boom Boom! (HHTT)": {
+   "avail": 20,
+   "chosen": 0,
+   "chosen_pct_of_decisions": 0,
+   "pick_rate_when_avail": 0,
+   "was_best_ev_when_avail_pct": 0,
+   "avg_ev_when_avail": 4.56,
+   "avg_ev_when_chosen": null,
+   "avg_direct_dmg_when_chosen": null
+  },
+  "Ricochet! (TTT)": {
+   "avail": 13,
+   "chosen": 0,
+   "chosen_pct_of_decisions": 0,
+   "pick_rate_when_avail": 0,
+   "was_best_ev_when_avail_pct": 0,
+   "avg_ev_when_avail": 4.11,
+   "avg_ev_when_chosen": null,
+   "avg_direct_dmg_when_chosen": null
+  }
+ },
+ "outcome": {
+  "hh": {
+   "p0": {
+    "w": 9,
+    "n": 15
+   },
+   "p1": {
+    "w": 1,
+    "n": 15
+   }
+  },
+  "bw": {
+   "p0": {
+    "w": 5,
+    "n": 15
+   },
+   "p1": {
+    "w": 6.5,
+    "n": 15
+   }
+  },
+  "fm": {
+   "p0": {
+    "w": 7.5,
+    "n": 15
+   },
+   "p1": {
+    "w": 4,
+    "n": 15
+   }
+  },
+  "rv": {
+   "p0": {
+    "w": 6,
+    "n": 15
+   },
+   "p1": {
+    "w": 3,
+    "n": 15
+   }
+  },
+  "dr": {
+   "p0": {
+    "w": 5,
+    "n": 15
+   },
+   "p1": {
+    "w": 4,
+    "n": 15
+   }
+  },
+  "sm": {
+   "p0": {
+    "w": 5.5,
+    "n": 15
+   },
+   "p1": {
+    "w": 1,
+    "n": 15
+   }
+  },
+  "py": {
+   "p0": {
+    "w": 11,
+    "n": 15
+   },
+   "p1": {
+    "w": 5.5,
+    "n": 15
+   }
+  },
+  "du": {
+   "p0": {
+    "w": 5,
+    "n": 15
+   },
+   "p1": {
+    "w": 4,
+    "n": 15
+   }
+  },
+  "se": {
+   "p0": {
+    "w": 8,
+    "n": 15
+   },
+   "p1": {
+    "w": 7,
+    "n": 15
+   }
+  }
+ }
+}

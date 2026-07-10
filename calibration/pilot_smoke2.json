@@ -1,0 +1,129 @@
+{
+ "date": "2026-07-09T14:13:07.075Z",
+ "games_per_pair": 1,
+ "total_games": 1,
+ "heroes": {
+  "th": {
+   "decisions": 3,
+   "forced": 0,
+   "realChoices": 3,
+   "agree_best_ev_pct": 100,
+   "agree_max_dmg_pct": 100,
+   "avg_regret_ev": 0,
+   "big_regret_pct": 0,
+   "skipped_alter": 0,
+   "ek_high_decisions": 1,
+   "ek_high_casher_available": 0,
+   "ek_cash_rate_pct": null,
+   "ek_avg_ev_left_when_not_cashed": null,
+   "per_ability": {
+    "Hammered 4H": {
+     "avail": 1,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 3.5,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    },
+    "Lightning Rod (4-straight)": {
+     "avail": 2,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 33.3,
+     "pick_rate_when_avail": 50,
+     "was_best_ev_when_avail_pct": 50,
+     "avg_ev_when_avail": 7.27,
+     "avg_ev_when_chosen": 7.5,
+     "avg_direct_dmg_when_chosen": 9
+    },
+    "Hammered 3H": {
+     "avail": 2,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 2.01,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    },
+    "Thunder Bolt (5-straight)": {
+     "avail": 1,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 33.3,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 9.83,
+     "avg_ev_when_chosen": 9.83,
+     "avg_direct_dmg_when_chosen": 10
+    },
+    "Chain Lightning (HHHTT)": {
+     "avail": 1,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 33.3,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 10.33,
+     "avg_ev_when_chosen": 10.33,
+     "avg_direct_dmg_when_chosen": 9
+    }
+   }
+  },
+  "se": {
+   "decisions": 4,
+   "forced": 0,
+   "realChoices": 4,
+   "agree_best_ev_pct": 50,
+   "agree_max_dmg_pct": 75,
+   "avg_regret_ev": 0.325,
+   "big_regret_pct": 0,
+   "skipped_alter": 0,
+   "ek_high_decisions": 0,
+   "ek_high_casher_available": 0,
+   "ek_cash_rate_pct": null,
+   "ek_avg_ev_left_when_not_cashed": null,
+   "per_ability": {
+    "Ray Absorption (BBBB)": {
+     "avail": 2,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 25,
+     "pick_rate_when_avail": 50,
+     "was_best_ev_when_avail_pct": 100,
+     "avg_ev_when_avail": 6.5,
+     "avg_ev_when_chosen": 6.6,
+     "avg_direct_dmg_when_chosen": 0
+    },
+    "Scorching Staff (ABBB)": {
+     "avail": 3,
+     "chosen": 1,
+     "chosen_pct_of_decisions": 25,
+     "pick_rate_when_avail": 33.3,
+     "was_best_ev_when_avail_pct": 33.3,
+     "avg_ev_when_avail": 5.8,
+     "avg_ev_when_chosen": 5.93,
+     "avg_direct_dmg_when_chosen": 5
+    },
+    "Ray of Light (4-straight)": {
+     "avail": 2,
+     "chosen": 2,
+     "chosen_pct_of_decisions": 50,
+     "pick_rate_when_avail": 100,
+     "was_best_ev_when_avail_pct": 50,
+     "avg_ev_when_avail": 6.57,
+     "avg_ev_when_chosen": 6.57,
+     "avg_direct_dmg_when_chosen": 7
+    },
+    "Light Staff 3A (AAA)": {
+     "avail": 1,
+     "chosen": 0,
+     "chosen_pct_of_decisions": 0,
+     "pick_rate_when_avail": 0,
+     "was_best_ev_when_avail_pct": 0,
+     "avg_ev_when_avail": 4.2,
+     "avg_ev_when_chosen": null,
+     "avg_direct_dmg_when_chosen": null
+    }
+   }
+  }
+ }
+}

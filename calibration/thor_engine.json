@@ -1,0 +1,31 @@
+{
+ "date": "2026-07-09T17:38:46.539Z",
+ "games": 90,
+ "offensive_rolls_per_game": 7.22,
+ "whiffs_per_game": 0.39,
+ "whiff_rate_pct": 5.4,
+ "attacks_per_game": 6.83,
+ "mjolnir_throws_per_game": 3.03,
+ "he_is_worthy_per_game": 0.78,
+ "upgrades_posed_per_game": 3.23,
+ "avg_upgrades_in_play_end": 3,
+ "upgrade_frequency_pct": {
+  "thunder-wheel-ii": 52,
+  "lightning-rod-ii": 33,
+  "hammered-ii": 36,
+  "mighty-summon-ii": 10,
+  "odinforce-ii": 34,
+  "thunder-bolt-ii": 33,
+  "chain-lightning-ii": 47,
+  "hammered-iii": 34,
+  "bottled-lightning-ii": 20
+ },
+ "tempo_cards_per_game": {
+  "Power Trip!": 0.11,
+  "Stormbreak!": 0.01,
+  "Time to Hammer!": 0.16,
+  "Invulnerability!": 0.03,
+  "Indomitable Will!": 0.11
+ },
+ "turns_per_game": 14.62
+}

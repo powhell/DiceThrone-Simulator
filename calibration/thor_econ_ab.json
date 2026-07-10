@@ -1,0 +1,52 @@
+{
+ "date": "2026-07-09T18:30:46.845Z",
+ "games_per_matchup_per_side": 10,
+ "total_games": 360,
+ "winrate_current": 38.1,
+ "winrate_econ_fixed": 41.7,
+ "delta_pts": 3.6,
+ "avg_damage_current": 44.3,
+ "avg_damage_fixed": 44,
+ "avg_upgrades_current": 3.05,
+ "avg_upgrades_fixed": 3.22,
+ "avg_cp_left_current": 1.2,
+ "avg_cp_left_fixed": 1.4,
+ "per_opponent": {
+  "hh": {
+   "current": 30,
+   "fixed": 30
+  },
+  "bw": {
+   "current": 40,
+   "fixed": 30
+  },
+  "fm": {
+   "current": 45,
+   "fixed": 53
+  },
+  "rv": {
+   "current": 28,
+   "fixed": 50
+  },
+  "dr": {
+   "current": 28,
+   "fixed": 38
+  },
+  "sm": {
+   "current": 28,
+   "fixed": 35
+  },
+  "py": {
+   "current": 55,
+   "fixed": 60
+  },
+  "du": {
+   "current": 30,
+   "fixed": 40
+  },
+  "se": {
+   "current": 60,
+   "fixed": 40
+  }
+ }
+}

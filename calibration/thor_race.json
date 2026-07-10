@@ -1,0 +1,76 @@
+{
+ "date": "2026-07-09T16:11:31.192Z",
+ "games": 180,
+ "winrate": 41.4,
+ "dmg_dealt_net": 45.08,
+ "dmg_taken": 47.11,
+ "dmg_opp_prevented_from_thor": 5.32,
+ "thor_gross_offense": 50.4,
+ "dmg_thor_prevented_defense": 15.23,
+ "counter_dmg_taken_by_thor": 5.36,
+ "counter_dmg_by_thor": 1.58,
+ "ultimate_per_game": 0.28,
+ "ek_attacks_per_game": 1.14,
+ "avg_ek_cashed_per_ek_attack": 3.33,
+ "big_ek_attacks_per_game": 0.88,
+ "gb_spent_per_game": 2.2,
+ "gb_success_per_game": 0.68,
+ "turns_per_game": 15.07,
+ "opp_hp_remaining_in_thor_losses": 11.5,
+ "per_opponent": {
+  "hh": {
+   "winrate": 53,
+   "dealt": 48.8,
+   "taken": 46.4,
+   "oppPrevented": 3.5
+  },
+  "bw": {
+   "winrate": 35,
+   "dealt": 42.5,
+   "taken": 46.2,
+   "oppPrevented": 5.5
+  },
+  "fm": {
+   "winrate": 33,
+   "dealt": 44.5,
+   "taken": 47.9,
+   "oppPrevented": 10.4
+  },
+  "rv": {
+   "winrate": 30,
+   "dealt": 43.5,
+   "taken": 48,
+   "oppPrevented": 6.5
+  },
+  "dr": {
+   "winrate": 20,
+   "dealt": 42.3,
+   "taken": 50,
+   "oppPrevented": 7.8
+  },
+  "sm": {
+   "winrate": 33,
+   "dealt": 41.5,
+   "taken": 49.2,
+   "oppPrevented": 1.8
+  },
+  "py": {
+   "winrate": 65,
+   "dealt": 48.5,
+   "taken": 46.5,
+   "oppPrevented": 1.5
+  },
+  "du": {
+   "winrate": 45,
+   "dealt": 46.3,
+   "taken": 47.9,
+   "oppPrevented": 8.1
+  },
+  "se": {
+   "winrate": 60,
+   "dealt": 48,
+   "taken": 41.9,
+   "oppPrevented": 2.8
+  }
+ }
+}
