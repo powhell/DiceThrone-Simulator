@@ -165,12 +165,18 @@ mesuré**. Le solveur de dés exact reste tel quel (optimal).
 
 ## 5. État courant
 
-- **Phase 1 EN COURS (tranche 1 FAITE 2026-07-09).** `engine-ts/src/sim/search/gameNode.ts` :
-  machinerie rejeu-par-script généralisée (sonde sur clone + matérialisation) + PREMIER hook
-  exposé `activateAbility` + pilote générique `playMatchViaGameNode`. **Parité prouvée** :
-  `tests/sim/gameNode.parity.test.ts`, 9/9 verts (sm-th / hh-bw / py-du × 3 graines — couvre
-  Combo 2ᵉ ORP, Knockdown, hooks HH/BW délégués). Prochaine action : migrer les hooks §5b un à
-  un (fenêtres `decide`, cartes, nœuds de chance des dés, hooks héros), parité verte à chaque pas.
+- **Phase 1 EN COURS (tranches 1-3 FAITES 2026-07-09).** `engine-ts/src/sim/search/gameNode.ts` :
+  - T1 : rejeu-par-script (sonde sur clone + matérialisation), hook `activateAbility`, pilote
+    `playMatchViaGameNode`. T2 : fenêtres `decide` (les 2 joueurs), script unifié multi-hooks,
+    `actionKey` stable. T3 : **nœuds de CHANCE** — le hasard entre deux décisions = un segment ;
+    nœud = {base, script, BANDE de tirages figée, flux de continuation} ; `sampleChance(rng)`
+    re-échantillonne le suffixe (MCTS branche), `continueChance()` suit le flux original (chemin
+    parité). Zéro modif du moteur (on contrôle l'objet rng injecté, pas les sites d'appel).
+  - **Parité prouvée** : `tests/sim/gameNode.parity.test.ts`, 11/11 (9 duels × graines + 2 tests
+    d'exposition). Durée stable ~150 s (sondes dominées par le DP des dés, en cache).
+  - Reste : hooks héros bespoke §5b (chooseAttackModifierCards, chooseRollManipulationCards,
+    chooseCardsToDiscard, hooks HH/BW/FM/RV/TH/DU/SM…), élargir la parité aux 10 héros, puis
+    Phase 2 (MCTS sur ce seam).
 - La métrique du projet = `benchStrength` (`engine-ts/src/sim/bench.ts`) : `{winrate, ci}` Wilson
   95 % sur parties décisives, paires miroir, draws/timeouts comptés à part.
 - Baseline à battre = l'actuel value-greedy 24/12 (reste en place comme adversaire de référence,
