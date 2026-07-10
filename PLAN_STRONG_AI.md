@@ -268,6 +268,25 @@ exactement les décisions du moteur, ni plus ni moins (rien cassé/oublié en in
 important + le plus impactant sur la force), puis les nœuds de chance des dés, puis les hooks par
 héros. Le test de parité tourne en continu — il vire au rouge dès qu'un hook migré diverge.
 
+## 5d. Phase 4 — état et design (2026-07-10)
+
+**Tranche 1 FAITE** : `featuresV5.ts` (layout stable, caps figés + registres append-only,
+marges testées, FEATURE_COUNT_V5=223). v4 coexiste pour le réseau déployé.
+
+**Tranche 2 (à faire) — réseau 2 têtes, côté rl-py :**
+- Contrat d'architecture à ÉTENDRE (train.py ↔ network.ts, « must never drift ») : tronc MLP
+  partagé + tête valeur (tanh, 1) + tête politique (logits, ACTION_SLOTS). JSON v2 :
+  `{sizes, trunk:[...], valueHead, policyHead}` ; `network.ts` gagne `forward2()` (valeur +
+  logits) ; le mode `parity` de train.py couvre les DEUX têtes.
+- **Espace d'actions** (la tête politique cible un vecteur fixe) : registre haché —
+  `actionKey(a)` (déjà stable, gameNode.ts) → bucket dans ACTION_SLOTS=256 (hash FNV). La
+  politique aux nœuds = softmax des logits RESTREINT aux buckets des coups légaux (les
+  collisions sont bénignes : deux coups légaux dans le même bucket partagent un prior).
+- **Format d'expérience v2** (genWorker → train.py) : features v5 + cible valeur (résultat) +
+  cible politique (distribution des visites MCTS sur les buckets des coups légaux au nœud).
+- **Rouge tranche 2** : parité TS↔torch des 2 têtes sur un bundle aléatoire ; puis (gate Phase 4,
+  plan §3) le 2-têtes égale/bat l'évaluateur valeur-seule à budget de recherche égal.
+
 ## 6. Journal (append à chaque session)
 
 - 2026-07-09 : plan créé après constat que l'existant est structurellement faible (réseau minuscule,
