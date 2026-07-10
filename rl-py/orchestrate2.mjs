@@ -13,6 +13,10 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const engine = path.join(here, '..', 'engine-ts')
 const py = path.join(here, 'venv', 'Scripts', 'python.exe')
+// Node >= 20 sur Windows : spawn('npx.cmd') sans shell => EINVAL. On invoque node directement
+// sur le CLI de tsx installé dans engine-ts.
+const tsxCli = path.join(engine, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+const tsx = (args) => [process.execPath, [tsxCli, ...args]]
 
 const [genArg, wArg, gArg, sArg, ggArg] = process.argv.slice(2)
 const gen = Number(genArg ?? 0)
@@ -44,11 +48,12 @@ const t0 = Date.now()
 console.log(`=== génération ${gen} -> ${gen + 1} : ${workers} workers × ${gamesPerWorker} parties à ${sims} sims`)
 
 // 1. self-play en parallèle
-await Promise.all(Array.from({ length: workers }, (_, i) =>
-  run('npx.cmd', ['tsx', 'src/sim/search/selfplay2.ts', netN,
+await Promise.all(Array.from({ length: workers }, (_, i) => {
+  const [cmd, args] = tsx(['src/sim/search/selfplay2.ts', netN,
     path.join(here, 'exp2', `gen${gen}_w${i}.dtx2`),
-    String(gamesPerWorker), String(sims), String(1000 * (gen + 1) + i * 100)],
-    engine, `selfplay w${i}`)))
+    String(gamesPerWorker), String(sims), String(1000 * (gen + 1) + i * 100)])
+  return run(cmd, args, engine, `selfplay w${i}`)
+}))
 console.log(`self-play fini (${((Date.now() - t0) / 60000).toFixed(1)} min)`)
 
 // 2. entraînement
@@ -58,13 +63,17 @@ await run(py, ['train.py', 'train2', '--net', netN,
 
 // 2b. parité (le contrat ne doit jamais dériver)
 await run(py, ['train.py', 'parity2', '--net', netN1, '--out', path.join(here, 'exp2', 'parity_gate.json'), '--n', '4'], here, 'parity2-gen')
-await run('npx.cmd', ['tsx', 'src/sim/rl/checkParity2.ts', netN1, path.join(here, 'exp2', 'parity_gate.json')], engine, 'checkParity2')
+{
+  const [cmd, args] = tsx(['src/sim/rl/checkParity2.ts', netN1, path.join(here, 'exp2', 'parity_gate.json')])
+  await run(cmd, args, engine, 'checkParity2')
+}
 
 // 3. gate genN+1 vs genN (workers en parallèle, graines distinctes)
-const gateOuts = await Promise.all(Array.from({ length: workers }, (_, i) =>
-  run('npx.cmd', ['tsx', 'src/sim/search/gate3.ts', netN1, netN,
-    String(gateGames), String(sims), String(9000 * (gen + 1) + i * 50)],
-    engine, `gate w${i}`)))
+const gateOuts = await Promise.all(Array.from({ length: workers }, (_, i) => {
+  const [cmd, args] = tsx(['src/sim/search/gate3.ts', netN1, netN,
+    String(gateGames), String(sims), String(9000 * (gen + 1) + i * 50)])
+  return run(cmd, args, engine, `gate w${i}`)
+}))
 let aW = 0, bW = 0, nu = 0
 for (const out of gateOuts) {
   const m = out.match(/RESULT (\{.*\})/)
