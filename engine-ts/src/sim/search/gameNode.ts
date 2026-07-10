@@ -5,26 +5,39 @@
 // Mécanique : REJEU DÉTERMINISTE PAR SCRIPT (décision §2b option B, généralisée depuis le pont
 // défense d'interactive.ts). Un nœud = { snapshot d'état au début du tour, graine rng, script
 // des décisions déjà prises ce tour }. Pour connaître la PROCHAINE décision, on SONDE : rejeu
-// du tour sur un CLONE avec une policy qui rejoue le script puis capture le premier appel non
-// scripté (le clone est jeté). apply(action) ajoute au script ; quand le tour rejoue sans
+// du tour sur un CLONE avec des policies qui rejouent le script puis capturent le premier appel
+// non scripté (le clone est jeté). apply(action) ajoute au script ; quand le tour rejoue sans
 // capture, il est matérialisé pour de vrai et on passe au tour suivant.
 //
-// Phase 1, tranche 1 : SEUL le hook `chooseAbility` (activateAbility — le plus important, §5b)
-// est exposé comme point de décision. Tout le reste (cartes, défense, dés=rng interne, hooks
-// héros) reste délégué aux policies injectées. Les tranches suivantes migrent les hooks un à
-// un — le test de parité (tests/sim/gameNode.parity.test.ts) doit rester vert à chaque pas.
-import type { AbilityCandidate, GameState, HeroId } from '../types.js'
+// Hooks exposés (migration §5b, un à la fois, parité verte à chaque pas) :
+//   tranche 1 — `chooseAbility` (activateAbility, le plus important) ;
+//   tranche 2 — `decide` (fenêtres unifiées mainPhase/defense/offensiveRoll/defenseRoll,
+//               pour les DEUX joueurs — le défenseur décide pendant le tour de l'attaquant).
+// Tout le reste (dés=rng interne, hooks héros bespoke) reste délégué aux policies injectées.
+import type { AbilityCandidate, DecisionRequest, GameState, HeroId, WindowAction } from '../types.js'
 import type { Policy } from '../policy.js'
 import { mulberry32Stateful } from '../rng.js'
 import { playTurn } from '../turn.js'
 import { createInitialGameState, MAX_TURNS, type MatchResult } from '../match.js'
 
-export type NodeAction = { kind: 'activateAbility'; abilityName: string }
+export type NodeAction =
+  | { kind: 'activateAbility'; abilityName: string }
+  | { kind: 'window'; action: WindowAction }
 
 // Clé texte stable d'un coup : identité des enfants dans l'arbre MCTS, plus tard index de la
-// tête politique (Phase 4).
+// tête politique (Phase 4). Sérialisation à clés triées : deux objets égaux -> même clé, quel
+// que soit l'ordre d'insertion des propriétés au site de construction.
 export function actionKey(a: NodeAction): string {
-  return `${a.kind}:${a.abilityName}`
+  if (a.kind === 'activateAbility') return `activateAbility:${a.abilityName}`
+  return `window:${stableStringify(a.action)}`
+}
+
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v)
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`
+  const o = v as Record<string, unknown>
+  const keys = Object.keys(o).filter(k => o[k] !== undefined).sort()
+  return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(',')}}`
 }
 
 export type Actor =
@@ -32,26 +45,27 @@ export type Actor =
   | { kind: 'terminal' }
   // { kind: 'chance' } arrive avec la migration des nœuds de dés (tranche suivante)
 
-// La décision en attente, exposée pour le pilote de parité (délègue à Policy.chooseAbility) et
-// pour le futur MCTS (candidates -> features). L'Action reste opaque pour la recherche.
-export interface PendingDecision {
-  hook: 'activateAbility'
-  playerIdx: 0 | 1
-  candidates: AbilityCandidate[]
-  state: GameState // état du CLONE au moment de la décision (lecture seule)
-}
+// La décision en attente, exposée pour le pilote de parité (délègue au même hook de Policy) et
+// pour le futur MCTS (contexte -> features). L'Action reste opaque pour la recherche.
+export type PendingDecision =
+  | { hook: 'activateAbility'; playerIdx: 0 | 1; candidates: AbilityCandidate[]; state: GameState }
+  | { hook: 'decide'; playerIdx: 0 | 1; request: DecisionRequest; state: GameState }
+
+// Une entrée de script = une décision déjà prise ce tour, dans l'ordre EXACT des appels du
+// moteur (déterministe : même état + même rng + mêmes réponses => même séquence d'appels).
+type ScriptEntry =
+  | { hook: 'activateAbility'; playerIdx: 0 | 1; abilityName: string }
+  | { hook: 'decide'; playerIdx: 0 | 1; action: WindowAction }
 
 interface Probe {
-  // capture du premier appel non scripté pendant le rejeu-sonde (null = le tour rejoue
-  // entièrement avec le script → prêt à matérialiser)
-  captured: PendingDecision | null
+  captured: PendingDecision | null // null = le tour rejoue entièrement avec le script
 }
 
 export class GameNode {
   private constructor(
     private base: GameState,       // état RÉEL au début du tour courant
     private rngState: number,      // état rng au début du tour courant
-    private script: NodeAction[],  // décisions déjà prises ce tour (hooks exposés)
+    private script: ScriptEntry[], // décisions déjà prises ce tour (hooks exposés)
     private policies: [Policy, Policy], // décisions non migrées (délégation)
     private pending: PendingDecision | null, // sondé paresseusement, figé par nœud
   ) {}
@@ -65,13 +79,17 @@ export class GameNode {
   }
 
   currentActor(): Actor {
-    if (this.base.gameOver || this.base.turnNumber >= MAX_TURNS) return { kind: 'terminal' }
+    if (this.isTerminal()) return { kind: 'terminal' }
     return { kind: 'player', idx: this.pending!.playerIdx }
   }
 
   legalActions(): NodeAction[] {
     if (this.isTerminal()) return []
-    return this.pending!.candidates.map(c => ({ kind: 'activateAbility', abilityName: c.name }))
+    const d = this.pending!
+    if (d.hook === 'activateAbility') {
+      return d.candidates.map(c => ({ kind: 'activateAbility', abilityName: c.name }))
+    }
+    return d.request.options.map(o => ({ kind: 'window', action: o }))
   }
 
   pendingDecision(): PendingDecision | null {
@@ -79,7 +97,13 @@ export class GameNode {
   }
 
   apply(action: NodeAction): GameNode {
-    const next = new GameNode(this.base, this.rngState, [...this.script, action], this.policies, null)
+    const d = this.pending
+    if (!d) throw new Error('apply() sur un nœud terminal')
+    const entry: ScriptEntry = action.kind === 'activateAbility'
+      ? { hook: 'activateAbility', playerIdx: d.playerIdx, abilityName: action.abilityName }
+      : { hook: 'decide', playerIdx: d.playerIdx, action: action.action }
+    if (entry.hook !== d.hook) throw new Error(`action ${action.kind} incompatible avec la décision en attente (${d.hook})`)
+    const next = new GameNode(this.base, this.rngState, [...this.script, entry], this.policies, null)
     next.advanceToDecisionOrEnd()
     return next
   }
@@ -104,74 +128,77 @@ export class GameNode {
 
   // --- interne : sonde le tour courant ; matérialise les tours qui n'ont plus de décision ---
 
-  // Rejoue le tour courant sur un clone avec le script ; capture la 1re décision non scriptée.
-  private probeTurn(): Probe {
-    const probe: Probe = { captured: null }
-    const clone = structuredClone(this.base) as GameState
+  // Rejoue le tour courant sur `state` avec le script. En mode sonde (probe fourni), capture la
+  // première décision non scriptée puis laisse la délégation finir le tour (état jeté). En mode
+  // matérialisation (probe absent), le script couvre tout — la sonde l'a prouvé.
+  private replayTurn(state: GameState, probe: Probe | null): number {
     const rng = mulberry32Stateful(0)
     rng.state = this.rngState
-    const activeIdx = clone.activePlayerIdx
-    clone.turnNumber += 1
-    playTurn(clone, activeIdx, rng, this.policiesWithInterceptor(activeIdx, probe))
-    return probe
+    const activeIdx = state.activePlayerIdx
+    state.turnNumber += 1
+    const cursor = { i: 0 }
+    const policies: [Policy, Policy] = [
+      this.interceptor(0, cursor, probe),
+      this.interceptor(1, cursor, probe),
+    ]
+    playTurn(state, activeIdx, rng, policies)
+    state.activePlayerIdx = (1 - activeIdx) as 0 | 1
+    return rng.state
   }
 
-  // Le joueur actif reçoit un chooseAbility qui rejoue le script puis capture ; les décisions
-  // capturées sont ensuite répondues par la policy déléguée pour finir le rejeu du clone.
-  private policiesWithInterceptor(activeIdx: 0 | 1, probe: Probe): [Policy, Policy] {
-    let i = 0
+  // Wrappe les hooks EXPOSÉS de la policy du siège `idx` : rejoue le script (curseur PARTAGÉ
+  // entre les deux sièges — l'ordre des appels du moteur est global au tour), puis capture ou
+  // délègue. Une entrée de script qui ne correspond pas à l'appel courant = divergence de rejeu
+  // (bug) -> on jette, le déterminisme est le contrat central du seam.
+  private interceptor(idx: 0 | 1, cursor: { i: number }, probe: Probe | null): Policy {
     const script = this.script
-    const delegate = this.policies[activeIdx]
-    const intercepted: Policy = {
+    const delegate = this.policies[idx]
+    const takeEntry = (hook: ScriptEntry['hook'], playerIdx: 0 | 1): ScriptEntry | null => {
+      if (cursor.i >= script.length) return null
+      const e = script[cursor.i]
+      if (e.hook !== hook || e.playerIdx !== playerIdx) {
+        throw new Error(`rejeu divergent : script[${cursor.i}] = ${e.hook}/p${e.playerIdx}, appel = ${hook}/p${playerIdx}`)
+      }
+      cursor.i++
+      return e
+    }
+    return {
       ...delegate,
       chooseAbility(state, playerIdx, candidates) {
-        if (i < script.length) return script[i++].abilityName
-        if (!probe.captured) {
+        const e = takeEntry('activateAbility', playerIdx)
+        if (e) return (e as Extract<ScriptEntry, { hook: 'activateAbility' }>).abilityName
+        if (probe && !probe.captured) {
           // état FIGÉ au moment de la décision : le rejeu-sonde continue de muter le clone
-          // après la capture, or le consommateur (policy réseau, futures features MCTS) doit
-          // voir l'état tel qu'il est quand la décision se pose.
+          // après la capture, or le consommateur (policy réseau, features MCTS) doit voir
+          // l'état tel qu'il est quand la décision se pose.
           probe.captured = { hook: 'activateAbility', playerIdx, candidates, state: structuredClone(state) }
         }
-        i++
         return delegate.chooseAbility(state, playerIdx, candidates)
       },
+      decide(state, playerIdx, request) {
+        const e = takeEntry('decide', playerIdx)
+        if (e) return (e as Extract<ScriptEntry, { hook: 'decide' }>).action
+        if (probe && !probe.captured) {
+          probe.captured = { hook: 'decide', playerIdx, request, state: structuredClone(state) }
+        }
+        return delegate.decide(state, playerIdx, request)
+      },
     }
-    return activeIdx === 0 ? [intercepted, this.policies[1]] : [this.policies[0], intercepted]
   }
 
-  // Matérialise le tour courant POUR DE VRAI (le script couvre toutes ses décisions), passe au
-  // tour suivant, et enchaîne tant que des tours entiers se jouent sans décision exposée.
+  // Matérialise les tours entiers qui se jouent sans décision exposée ; s'arrête à la première
+  // décision à prendre (pending) ou à la fin de partie.
   private advanceToDecisionOrEnd(): void {
     for (;;) {
-      if (this.base.gameOver || this.base.turnNumber >= MAX_TURNS) return
-      const probe = this.probeTurn()
+      if (this.isTerminal()) return
+      const probe: Probe = { captured: null }
+      const clone = structuredClone(this.base) as GameState
+      this.replayTurn(clone, probe)
       if (probe.captured) { this.pending = probe.captured; return }
       // Tour sans décision restante : rejeu réel (même graine que la sonde → même résultat).
-      const rng = mulberry32Stateful(0)
-      rng.state = this.rngState
-      const activeIdx = this.base.activePlayerIdx
-      this.base.turnNumber += 1
-      playTurn(this.base, activeIdx, rng, this.replayPolicies(activeIdx))
-      this.base.activePlayerIdx = (1 - activeIdx) as 0 | 1
-      this.rngState = rng.state
+      this.rngState = this.replayTurn(this.base, null)
       this.script = []
     }
-  }
-
-  // Policies du rejeu réel : le script répond aux hooks exposés (il les couvre tous, la sonde
-  // l'a prouvé) ; au-delà, délégation (jamais atteinte pour les hooks exposés).
-  private replayPolicies(activeIdx: 0 | 1): [Policy, Policy] {
-    let i = 0
-    const script = this.script
-    const delegate = this.policies[activeIdx]
-    const replaying: Policy = {
-      ...delegate,
-      chooseAbility(state, playerIdx, candidates) {
-        if (i < script.length) return script[i++].abilityName
-        return delegate.chooseAbility(state, playerIdx, candidates)
-      },
-    }
-    return activeIdx === 0 ? [replaying, this.policies[1]] : [this.policies[0], replaying]
   }
 }
 
@@ -183,10 +210,15 @@ export function playMatchViaGameNode(
 ): MatchResult {
   let node = GameNode.root(heroA, heroB, seed, policies)
   let guard = 0
-  while (!node.isTerminal() && guard++ < 10_000) {
+  while (!node.isTerminal() && guard++ < 100_000) {
     const d = node.pendingDecision()!
-    const name = policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates)
-    node = node.apply({ kind: 'activateAbility', abilityName: name })
+    if (d.hook === 'activateAbility') {
+      const name = policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates)
+      node = node.apply({ kind: 'activateAbility', abilityName: name })
+    } else {
+      const action = policies[d.playerIdx].decide(d.state, d.playerIdx, d.request)
+      node = node.apply({ kind: 'window', action })
+    }
   }
   const s = node.finalState()
   return { winner: s.winner, turns: s.turnNumber, finalState: s }
