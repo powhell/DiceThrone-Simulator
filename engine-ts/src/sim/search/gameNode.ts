@@ -201,6 +201,14 @@ export class GameNode {
     return this.base
   }
 
+  // L'état à donner à un évaluateur (réseau valeur) pour CE nœud : l'état au point de décision
+  // pour un nœud joueur, le début du segment pour un nœud de chance (le hasard n'a pas encore
+  // parlé), l'état final pour un terminal. Lecture seule.
+  stateForEval(): GameState {
+    if (this.kind === 'decision') return this.pendingDecision()!.state
+    return this.finalState()
+  }
+
   // --- interne ---------------------------------------------------------------------------
 
   private childFrom(adv: Advance): GameNode {
