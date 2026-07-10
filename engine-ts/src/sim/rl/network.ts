@@ -146,3 +146,43 @@ export function averageNetworks(nets: Network[]): Network {
   }))
   return { sizes, layers }
 }
+
+// ---- v2 : réseau 2 TÊTES (Phase 4 du PLAN_STRONG_AI) ---------------------------------------
+// Tronc MLP partagé (tanh à chaque couche), tête VALEUR (tanh, scalaire [-1,1] — même sémantique
+// que le v1) et tête POLITIQUE (logits BRUTS sur ACTION_SLOTS buckets ; le softmax se fait chez
+// le consommateur, restreint aux coups légaux). Contrat JSON v2 avec rl-py/train.py — comme le
+// v1, ne doit JAMAIS dériver (parité vérifiée par le mode parity2 de train.py + checkParity2).
+export interface Network2 {
+  v: 2
+  featDim: number
+  actionSlots: number
+  trunk: Layer[]
+  valueHead: Layer
+  policyHead: Layer
+}
+
+export function fromJSON2(json: string): Network2 {
+  const parsed = JSON.parse(json) as Network2
+  if (parsed.v !== 2) throw new Error(`fromJSON2 : version ${(parsed as { v?: unknown }).v} != 2`)
+  return parsed
+}
+
+function affine(layer: Layer, a: number[]): number[] {
+  const out: number[] = []
+  for (let i = 0; i < layer.W.length; i++) {
+    let z = layer.b[i]
+    const row = layer.W[i]
+    for (let j = 0; j < row.length; j++) z += row[j] * a[j]
+    out.push(z)
+  }
+  return out
+}
+
+export function forward2(net: Network2, input: number[]): { value: number; logits: number[] } {
+  if (input.length !== net.featDim) throw new Error(`forward2 : entrée ${input.length} != featDim ${net.featDim}`)
+  let a = input
+  for (const layer of net.trunk) a = affine(layer, a).map(tanh)
+  const value = tanh(affine(net.valueHead, a)[0])
+  const logits = affine(net.policyHead, a) // BRUTS — pas d'activation
+  return { value, logits }
+}
