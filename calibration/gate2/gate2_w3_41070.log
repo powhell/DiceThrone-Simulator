@@ -1,0 +1,11 @@
+game sm-th seed=41070 mctsSeat=0 -> MCTS (231s)
+game sm-th seed=41070 mctsSeat=1 -> baseline (320s)
+game hh-bw seed=41071 mctsSeat=0 -> baseline (782s)
+game hh-bw seed=41071 mctsSeat=1 -> baseline (1082s)
+game py-du seed=41072 mctsSeat=0 -> null (1422s)
+game py-du seed=41072 mctsSeat=1 -> baseline (1751s)
+game fm-rv seed=41073 mctsSeat=0 -> MCTS (1995s)
+game fm-rv seed=41073 mctsSeat=1 -> baseline (2131s)
+game dr-se seed=41074 mctsSeat=0 -> MCTS (2427s)
+game dr-se seed=41074 mctsSeat=1 -> baseline (2592s)
+RESULT {"sims":150,"priors":1,"eval":"net","chanceKids":6,"cPuct":0.7,"games":10,"mctsWins":3,"baselineWins":6,"nullResults":1,"winrate":0.3333333333333333,"ci":[0.12058159868274293,0.6458026525009102]}

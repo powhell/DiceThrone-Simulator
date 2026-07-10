@@ -287,6 +287,16 @@ héros. Le test de parité tourne en continu — il vire au rouge dès qu'un hoo
   agent réseau (`createValueGreedyPolicy`). TROUVÉ en branchant la baseline : les poids TS
   `rl/weights/best.json` sont périmés (92 vs 168) ; corrigé plus tard le même jour — le vrai
   réseau courant est `rl-py/weights/best.json` → `static/ai-weights.js` (168, v4-10heros), voir §5.
+- 2026-07-10 (nuit — Phase 2 CLOSE, verdict définitif sur 570 parties) : sonde du juge (AUC 0,81
+  mi-tour ET début de tour, calibration monotone 9 %→81 % — hypothèse « juge mal calibré » réfutée) ;
+  balayage réglages (issues de chance 2/6, cPuct 0,7/1,5) ; meilleure config (6 issues, cPuct 0,7,
+  priors) confirmée sur 3 vagues = **145-124 sur 269 décisives = 53,9 % [47,9-59,8] — gate NON passé**
+  (le pic 71 % vague 1 = winner's curse, non répliqué). CONCLUSION STRUCTURELLE : la baseline est
+  déjà « même juge + 1 coup » ; la recherche seule sur un réseau figé ne la dépasse pas — le levier
+  est la BOUCLE (résultat AlphaZero classique). **Décision : cap sur Phases 4-5** ; le MCTS et le
+  banc restent les fondations (la recherche pilotera le self-play, le banc arbitre le gating).
+  Réviser la promesse du §3 Phase 2 : « la recherche est le levier » → « recherche + réseau
+  ré-entraîné est le levier ». Rapport : artifact 508e00d2 (mis à jour).
 - 2026-07-09 (Phase 2 — première mesure, NÉGATIVE mais informative) : MCTS/PUCT implémenté sur le
   seam (mcts.ts, 6 tests jouets) + gate A/B (gate2.ts : MCTS(net) vs value-greedy(MÊME net), paires
   miroir, Wilson). 210 parties : 10 sims → 30 % ; 50 sims → 50 % (uniforme) / 55 % (priors informés
