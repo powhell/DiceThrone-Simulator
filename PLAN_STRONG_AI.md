@@ -172,11 +172,13 @@ mesuré**. Le solveur de dés exact reste tel quel (optimal).
     nœud = {base, script, BANDE de tirages figée, flux de continuation} ; `sampleChance(rng)`
     re-échantillonne le suffixe (MCTS branche), `continueChance()` suit le flux original (chemin
     parité). Zéro modif du moteur (on contrôle l'objet rng injecté, pas les sites d'appel).
-  - **Parité prouvée** : `tests/sim/gameNode.parity.test.ts`, 11/11 (9 duels × graines + 2 tests
-    d'exposition). Durée stable ~150 s (sondes dominées par le DP des dés, en cache).
-  - Reste : hooks héros bespoke §5b (chooseAttackModifierCards, chooseRollManipulationCards,
-    chooseCardsToDiscard, hooks HH/BW/FM/RV/TH/DU/SM…), élargir la parité aux 10 héros, puis
-    Phase 2 (MCTS sur ce seam).
+  - **Parité prouvée sur les 10 héros** : `tests/sim/gameNode.parity.test.ts`, 17/17 (5 duels
+    couvrant les 10 héros × 3 graines + 2 tests d'exposition, ~275 s ; sondes dominées par le DP
+    des dés, en cache).
+  - Reste (backlog, PAS bloquant pour la Phase 2 — les hooks non migrés restent délégués aux
+    policies et la parité tient) : hooks héros bespoke §5b (chooseAttackModifierCards,
+    chooseRollManipulationCards, chooseCardsToDiscard, hooks HH/BW/FM/RV/TH/DU/SM…) — à migrer
+    quand MCTS voudra chercher CES décisions-là. Prochaine action : **Phase 2, MCTS sur ce seam**.
 - La métrique du projet = `benchStrength` (`engine-ts/src/sim/bench.ts`) : `{winrate, ci}` Wilson
   95 % sur parties décisives, paires miroir, draws/timeouts comptés à part.
 - Baseline à battre = l'actuel value-greedy 24/12 (reste en place comme adversaire de référence,

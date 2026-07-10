@@ -27,7 +27,8 @@ function stateKey(n: GameNode): string {
 // logs prouve aussi l'égalité des états rng). Vert = le seam ré-expose exactement les décisions
 // du moteur, ni plus ni moins.
 describe('GameNode — parité avec playTurn (Phase 1)', () => {
-  const DUELS: Array<[HeroId, HeroId]> = [['sm', 'th'], ['hh', 'bw'], ['py', 'du']]
+  // Les 10 héros couverts (chacun apparaît dans au moins un duel).
+  const DUELS: Array<[HeroId, HeroId]> = [['sm', 'th'], ['hh', 'bw'], ['py', 'du'], ['fm', 'rv'], ['dr', 'se']]
   const SEEDS = [1, 2, 3]
 
   // Tranche 2 : les fenêtres `decide` (mainPhase/defense/offensiveRoll/defenseRoll, les DEUX
