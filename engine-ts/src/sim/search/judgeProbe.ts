@@ -73,6 +73,8 @@ function main(): void {
       if (st.turnNumber !== lastTurnSeen) { pendingStart.push({ v0, turn: st.turnNumber }); lastTurnSeen = st.turnNumber }
       if (d.hook === 'activateAbility') {
         node = node.apply({ kind: 'activateAbility', abilityName: vg.chooseAbility(st, d.playerIdx, d.candidates) })
+      } else if (d.hook === 'discard') {
+        node = node.apply({ kind: 'sellCard', cardId: d.hand[0] })
       } else {
         node = node.apply({ kind: 'window', action: vg.decide(st, d.playerIdx, d.request) })
       }

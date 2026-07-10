@@ -28,12 +28,14 @@ import { createInitialGameState, MAX_TURNS, type MatchResult } from '../match.js
 export type NodeAction =
   | { kind: 'activateAbility'; abilityName: string }
   | { kind: 'window'; action: WindowAction }
+  | { kind: 'sellCard'; cardId: string } // Discard Phase (tranche 5) : une vente à la fois
 
 // Clé texte stable d'un coup : identité des enfants dans l'arbre MCTS, plus tard index de la
 // tête politique (Phase 4). Sérialisation à clés triées : deux objets égaux -> même clé, quel
 // que soit l'ordre d'insertion des propriétés au site de construction.
 export function actionKey(a: NodeAction): string {
   if (a.kind === 'activateAbility') return `activateAbility:${a.abilityName}`
+  if (a.kind === 'sellCard') return `sellCard:${a.cardId}`
   return `window:${stableStringify(a.action)}`
 }
 
@@ -55,12 +57,17 @@ export type Actor =
 export type PendingDecision =
   | { hook: 'activateAbility'; playerIdx: 0 | 1; candidates: AbilityCandidate[]; state: GameState }
   | { hook: 'decide'; playerIdx: 0 | 1; request: DecisionRequest; state: GameState }
+  // Discard Phase décomposée : `hand` = cartes encore vendables (les ventes déjà scriptées sont
+  // retirées), `mustSell` = ventes restantes obligatoires. `state.hand` reste la main COMPLÈTE
+  // (le moteur ne retire les cartes qu'après le retour du hook).
+  | { hook: 'discard'; playerIdx: 0 | 1; hand: string[]; mustSell: number; maxHandSize: number; state: GameState }
 
 // Une entrée de script = une décision déjà prise ce tour, dans l'ordre EXACT des appels du
 // moteur (déterministe : même état + même rng + mêmes réponses => même séquence d'appels).
 type ScriptEntry =
   | { hook: 'activateAbility'; playerIdx: 0 | 1; abilityName: string }
   | { hook: 'decide'; playerIdx: 0 | 1; action: WindowAction }
+  | { hook: 'discard'; playerIdx: 0 | 1; cardId: string }
 
 // Source rng contrôlée : rejoue `tape` (les tirages déjà FIGÉS du préfixe du tour), puis tire
 // du flux de continuation. C'est le point d'injection des nœuds de chance : re-échantillonner
@@ -166,6 +173,10 @@ export class GameNode {
     if (d.hook === 'activateAbility') {
       return d.candidates.map(c => ({ kind: 'activateAbility', abilityName: c.name }))
     }
+    if (d.hook === 'discard') {
+      // dédupliqué par carte : vendre l'une ou l'autre copie d'une même carte est équivalent
+      return [...new Set(d.hand)].map(cardId => ({ kind: 'sellCard', cardId }))
+    }
     return d.request.options.map(o => ({ kind: 'window', action: o }))
   }
 
@@ -175,7 +186,9 @@ export class GameNode {
     const adv = this.originalAdvance as Extract<Advance, { kind: 'decision' }>
     const entry: ScriptEntry = action.kind === 'activateAbility'
       ? { hook: 'activateAbility', playerIdx: d.playerIdx, abilityName: action.abilityName }
-      : { hook: 'decide', playerIdx: d.playerIdx, action: action.action }
+      : action.kind === 'sellCard'
+        ? { hook: 'discard', playerIdx: d.playerIdx, cardId: action.cardId }
+        : { hook: 'decide', playerIdx: d.playerIdx, action: action.action }
     if (entry.hook !== d.hook) throw new Error(`action ${action.kind} incompatible avec la décision en attente (${d.hook})`)
     return GameNode.make(
       adv.base, [...adv.script, entry], adv.capture.tape, adv.capture.contState, this.policies,
@@ -318,6 +331,38 @@ export class GameNode {
         capture({ hook: 'decide', playerIdx, request, state: structuredClone(state) })
         return delegate.decide(state, playerIdx, request)
       },
+      // Hook one-shot (rend la liste complète) décomposé en sous-décisions séquentielles : une
+      // entrée de script PAR carte vendue. Seules les ventes OBLIGATOIRES (dépassement de main)
+      // sont des décisions ; pas de vente volontaire pour l'instant.
+      chooseCardsToDiscard(state, playerIdx, maxHandSize) {
+        const hand = state.players[playerIdx].hand
+        const overflow = hand.length - maxHandSize
+        if (overflow <= 0) return []
+        const pool = [...hand]
+        const selected: string[] = []
+        for (let k = 0; k < overflow; k++) {
+          const e = takeEntry('discard', playerIdx)
+          if (e) {
+            const cardId = (e as Extract<ScriptEntry, { hook: 'discard' }>).cardId
+            const i = pool.indexOf(cardId)
+            if (i < 0) throw new Error(`rejeu divergent : vente scriptée de ${cardId} absent de la main`)
+            pool.splice(i, 1)
+            selected.push(cardId)
+            continue
+          }
+          capture({
+            hook: 'discard', playerIdx, hand: pool.slice(), mustSell: overflow - k, maxHandSize,
+            state: structuredClone(state),
+          })
+          // complète le rejeu-sonde avec le choix délégué (clone jeté) — en filtrant ce qui est
+          // déjà vendu, puis premiers de la main si le délégué n'en donne pas assez.
+          const rest = delegate.chooseCardsToDiscard(state, playerIdx, maxHandSize)
+            .filter(id => { const i = pool.indexOf(id); if (i >= 0) { pool.splice(i, 1); return true } return false })
+          while (selected.length + rest.length < overflow && pool.length) rest.push(pool.shift()!)
+          return [...selected, ...rest.slice(0, overflow - selected.length)]
+        }
+        return selected
+      },
     }
   }
 }
@@ -344,6 +389,13 @@ export function playMatchViaGameNode(
     if (d.hook === 'activateAbility') {
       const name = policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates)
       node = node.apply({ kind: 'activateAbility', abilityName: name })
+    } else if (d.hook === 'discard') {
+      // le même choix que la policy ferait dans playTurn : sa liste complète, prise dans
+      // l'ordre — l'élément courant est le (overflow - mustSell)-ième.
+      const full = policies[d.playerIdx].chooseCardsToDiscard(d.state, d.playerIdx, d.maxHandSize)
+      const overflow = d.state.players[d.playerIdx].hand.length - d.maxHandSize
+      const cardId = full[overflow - d.mustSell] ?? d.hand[0]
+      node = node.apply({ kind: 'sellCard', cardId })
     } else {
       const action = policies[d.playerIdx].decide(d.state, d.playerIdx, d.request)
       node = node.apply({ kind: 'window', action })

@@ -105,6 +105,21 @@ for (let round = round0; round < round0 + rounds; round++) {
     winrate: Number(winrate.toFixed(3)), promoted,
     minutes: Number(((Date.now() - t0) / 60000).toFixed(1)),
   }
+  // Jalon BASELINE une ronde sur deux : le champion courant vs value-greedy (la vraie métrique
+  // de progrès — le gate interne ne mesure que candidat-vs-champion).
+  if (round % 2 === 1) {
+    const outs2 = await Promise.all(Array.from({ length: Math.min(workers, 4) }, (_, i) => {
+      const [cmd, args] = tsx(['src/sim/search/gate3.ts', champPath, 'vg',
+        String(gateGames), String(sims), String(70_000 + round * 1000 + i * 50)])
+      return run(cmd, args, engine, `baseline r${round}w${i}`)
+    }))
+    let vW = 0, vL = 0, vN = 0
+    for (const out of outs2) {
+      const m = out.match(/RESULT (\{.*\})/)
+      if (m) { const r = JSON.parse(m[1]); vW += r.aWins; vL += r.bWins; vN += r.nulls }
+    }
+    entry.baseline = { championWins: vW, vgWins: vL, nulls: vN, winrate: Number(((vW + vL) ? vW / (vW + vL) : 0.5).toFixed(3)) }
+  }
   log(entry)
   console.log('ROUND_RESULT ' + JSON.stringify(entry))
 }

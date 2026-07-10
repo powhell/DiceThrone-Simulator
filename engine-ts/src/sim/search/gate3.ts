@@ -55,6 +55,11 @@ function vgAgent(): { agent: NodeAgent; policy: Policy } {
       if (d.hook === 'activateAbility') {
         return { kind: 'activateAbility', abilityName: vg.chooseAbility(d.state, seat, d.candidates) }
       }
+      if (d.hook === 'discard') {
+        const full = vg.chooseCardsToDiscard(d.state, seat, d.maxHandSize)
+        const overflow = d.state.players[seat].hand.length - d.maxHandSize
+        return { kind: 'sellCard', cardId: full[overflow - d.mustSell] ?? d.hand[0] }
+      }
       return { kind: 'window', action: vg.decide(d.state, seat, d.request) }
     },
   }

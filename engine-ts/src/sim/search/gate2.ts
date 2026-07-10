@@ -33,6 +33,11 @@ function policyAgent(policy: Policy): NodeAgent {
       if (d.hook === 'activateAbility') {
         return { kind: 'activateAbility', abilityName: policy.chooseAbility(d.state, seat, d.candidates) }
       }
+      if (d.hook === 'discard') {
+        const full = policy.chooseCardsToDiscard(d.state, seat, d.maxHandSize)
+        const overflow = d.state.players[seat].hand.length - d.maxHandSize
+        return { kind: 'sellCard', cardId: full[overflow - d.mustSell] ?? d.hand[0] }
+      }
       return { kind: 'window', action: policy.decide(d.state, seat, d.request) }
     },
   }
@@ -110,7 +115,7 @@ function main(): void {
   const priors: MctsOptions['priors'] | undefined = usePriors
     ? (actions, nodeS) => {
         const d = (nodeS as GameNode).pendingDecision()
-        if (!d || actions.length <= 1) return actions.map(() => 1)
+        if (!d || actions.length <= 1 || d.hook === 'discard') return actions.map(() => 1)
         const pickKey = d.hook === 'activateAbility'
           ? actionKey({ kind: 'activateAbility', abilityName: vg.chooseAbility(d.state, d.playerIdx, d.candidates) })
           : actionKey({ kind: 'window', action: vg.decide(d.state, d.playerIdx, d.request) })

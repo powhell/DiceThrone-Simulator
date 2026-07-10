@@ -42,10 +42,31 @@ describe('GameNode — parité avec playTurn (Phase 1)', () => {
     while (!node.isTerminal() && guard++ < 2000 && !sawDecide) {
       const d = node.pendingDecision()!
       if (d.hook === 'decide') { sawDecide = true; break }
+      if (d.hook === 'discard') { node = node.apply({ kind: 'sellCard', cardId: d.hand[0] }); continue }
       const name = policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates)
       node = node.apply({ kind: 'activateAbility', abilityName: name })
     }
     expect(sawDecide).toBe(true)
+  })
+
+  // Tranche 5 : chooseCardsToDiscard (vente en Discard Phase) exposé comme nœud de décision.
+  // hh-bw avec greedy finit par dépasser la taille de main max -> une partie DOIT traverser au
+  // moins un nœud 'discard'.
+  it('expose la vente en Discard Phase comme nœud de décision (tranche 5)', () => {
+    const policies: [Policy, Policy] = [greedyHighestDamagePolicy, greedyHighestDamagePolicy]
+    let node = GameNode.root('hh', 'bw', 1, policies)
+    let guard = 0
+    while (!node.isTerminal() && guard++ < 4000) {
+      if (node.currentActor().kind === 'chance') { node = node.continueChance(); continue }
+      const d = node.pendingDecision()!
+      if (d.hook === 'discard') return // trouvé
+      if (d.hook === 'activateAbility') {
+        node = node.apply({ kind: 'activateAbility', abilityName: policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates) })
+      } else {
+        node = node.apply({ kind: 'window', action: policies[d.playerIdx].decide(d.state, d.playerIdx, d.request) })
+      }
+    }
+    throw new Error('partie terminée sans nœud discard')
   })
 
   // Tranche 3 : les dés = nœuds de CHANCE explicites. Entre deux décisions, si le moteur a
@@ -72,6 +93,8 @@ describe('GameNode — parité avec playTurn (Phase 1)', () => {
       if (d.hook === 'activateAbility') {
         const name = policies[d.playerIdx].chooseAbility(d.state, d.playerIdx, d.candidates)
         node = node.apply({ kind: 'activateAbility', abilityName: name })
+      } else if (d.hook === 'discard') {
+        node = node.apply({ kind: 'sellCard', cardId: d.hand[0] })
       } else {
         const action = policies[d.playerIdx].decide(d.state, d.playerIdx, d.request)
         node = node.apply({ kind: 'window', action })
