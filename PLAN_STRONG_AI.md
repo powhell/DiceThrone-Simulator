@@ -312,6 +312,16 @@ marges testées, FEATURE_COUNT_V5=223). v4 coexiste pour le réseau déployé.
   agent réseau (`createValueGreedyPolicy`). TROUVÉ en branchant la baseline : les poids TS
   `rl/weights/best.json` sont périmés (92 vs 168) ; corrigé plus tard le même jour — le vrai
   réseau courant est `rl-py/weights/best.json` → `static/ai-weights.js` (168, v4-10heros), voir §5.
+- 2026-07-10 (matin — Phases 4-5 : la BOUCLE EST FERMÉE) : featuresV5 (layout stable, marges
+  testées) ; réseau 2 têtes (contrat JSON v2 TS↔PyTorch, parité 1,6e-7, train2 CUDA) ;
+  actionSpace (256 buckets FNV sur actionKey) ; mctsSearch (visites = cibles politique) ;
+  selfplay2 (priors = tête politique, température, DTX2) ; gate3 (arbitre de génération) ;
+  orchestrate2 (1 gen = 1 commande) ; chain2 (gating > 50 % + tampon de rejeu 3 rondes,
+  relançable). **Pilote gen0→1 validé de bout en bout (64 min à 3 workers)** ; gen1 40,7 % vs
+  gen0 = attendu (30 parties d'un réseau aléatoire). Fixes plomberie Windows : spawn EINVAL
+  (node direct sur tsx/cli.mjs), tsx en devDependency. Chaîne de jour 4 rondes en cours ;
+  passage à 12 workers cette nuit (budget standing). Le rouge Phase 5 à surveiller : la courbe
+  des rondes MONTE (winrate gate + jalon vs value-greedy baseline).
 - 2026-07-10 (nuit — Phase 2 CLOSE, verdict définitif sur 570 parties) : sonde du juge (AUC 0,81
   mi-tour ET début de tour, calibration monotone 9 %→81 % — hypothèse « juge mal calibré » réfutée) ;
   balayage réglages (issues de chance 2/6, cPuct 0,7/1,5) ; meilleure config (6 issues, cPuct 0,7,
