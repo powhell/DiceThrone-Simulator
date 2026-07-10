@@ -162,6 +162,12 @@ mesuré**. Le solveur de dés exact reste tel quel (optimal).
   précédent `interactive.ts`.
 - **Budget de recherche / taille du réseau :** **paramétrés, non figés.** Calibrés par la mesure en
   Phases 2 et 4 respectivement — on ne devine pas maintenant.
+- **Atelier d'entraînement Phase 4-5 (tranché 2026-07-10, user) :** **rl-py/PyTorch** (le pipeline
+  qui a produit ai-weights.js), pas le trainer TS — la vitesse d'itération sera le facteur limitant
+  de la boucle. Le moteur TS joue les parties (self-play via GameNode/MCTS), Python apprend ;
+  pont fichiers JSON comme aujourd'hui.
+- **Budget machine (user 2026-07-10) :** nuits à 12 processus = budget standing, garde-fou
+  Core Temp 85 °C (max observé 64 °C). Voir [[feedback_resource_usage]].
 
 ## 5. État courant
 
