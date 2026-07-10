@@ -116,9 +116,12 @@ hypothétique ; on ne le généralise pas tant que rien ne varie.)
 Discipline **tdd** : chaque phase démarre par un test qui échoue, et doit **battre la précédente,
 mesuré**. Le solveur de dés exact reste tel quel (optimal).
 
-- **Phase 0 — Cadre & métrique** *(en cours)* : ce plan + un banc de force (winrate vs greedy ET
-  vs le réseau actuel, N parties, intervalle de confiance). **Rouge :** le banc n'existe pas encore
-  comme fonction appelable renvoyant `{winrate, ci}`.
+- **Phase 0 — Cadre & métrique** *(FAIT 2026-07-09)* : ce plan + un banc de force (winrate vs
+  greedy ET vs le réseau actuel, N parties, intervalle de confiance). **Rouge :** le banc n'existe
+  pas encore comme fonction appelable renvoyant `{winrate, ci}`. → **Vert :**
+  `benchStrength(polA, polB, opts)` dans `engine-ts/src/sim/bench.ts` (+ `wilson()` exporté),
+  6 tests dans `tests/sim/bench.test.ts`. Paires miroir (même graine, sièges échangés) → banc
+  exactement symétrique, variance réduite. ⚠️ Poids réseau périmés, voir §5.
 - **Phase 1 — `GameNode` (le seam).** Migrer TOUS les points de décision (§5b) derrière l'interface
   §2b, via rejeu-par-script généralisé depuis `interactive.ts`.
   **Rouge (test de parité) :** un pilote générique qui joue une partie ENTIÈRE via
@@ -162,10 +165,21 @@ mesuré**. Le solveur de dés exact reste tel quel (optimal).
 
 ## 5. État courant
 
-- **Phase 0 → 1.** Prochaine action concrète : figer la métrique de force (banc de réf, Phase 0),
-  puis écrire le **test de parité** de la Phase 1 (rouge) avant de coder le `GameNode`.
+- **Phase 1 EN COURS (tranche 1 FAITE 2026-07-09).** `engine-ts/src/sim/search/gameNode.ts` :
+  machinerie rejeu-par-script généralisée (sonde sur clone + matérialisation) + PREMIER hook
+  exposé `activateAbility` + pilote générique `playMatchViaGameNode`. **Parité prouvée** :
+  `tests/sim/gameNode.parity.test.ts`, 9/9 verts (sm-th / hh-bw / py-du × 3 graines — couvre
+  Combo 2ᵉ ORP, Knockdown, hooks HH/BW délégués). Prochaine action : migrer les hooks §5b un à
+  un (fenêtres `decide`, cartes, nœuds de chance des dés, hooks héros), parité verte à chaque pas.
+- La métrique du projet = `benchStrength` (`engine-ts/src/sim/bench.ts`) : `{winrate, ci}` Wilson
+  95 % sur parties décisives, paires miroir, draws/timeouts comptés à part.
 - Baseline à battre = l'actuel value-greedy 24/12 (reste en place comme adversaire de référence,
-  pas comme produit).
+  pas comme produit). **Précision (2026-07-09, corrigée le même jour) : les poids TS
+  (`engine-ts/src/sim/rl/weights/*.json`, 92 entrées) sont périmés vs FEATURE_COUNT=168 — MAIS le
+  réseau courant réel est celui du pipeline Python : `rl-py/weights/best.json` →
+  `static/ai-weights.js` (sizes [168,256,128,1], tag 2026-07-09-v4-10heros). C'est LUI le
+  « réseau actuel » de la Phase 2 (chargeable via `fromJSON` + `createValueGreedyPolicy`,
+  vérifié). Les poids TS 92 peuvent être supprimés/archivés.**
 - **Outillage en place :** skills `tdd`, `codebase-design`, `diagnosing-bugs`, `handoff` dans
   `.claude/skills/` — à utiliser (chaque phase = rouge d'abord ; le vocab deep-module ci-dessus).
 
@@ -257,3 +271,19 @@ héros. Le test de parité tourne en continu — il vire au rouge dès qu'un hoo
   refonte UX de l'UI de jeu (user n'aime pas l'interface actuelle — APRÈS le réseau, via
   `prototype`/`artifact-design`). Plan jugé PRÊT à exécuter phases 0-1-2 ; phases 3-5 = direction
   juste, détail à concevoir quand leur prédécesseur est vert (délibéré, pas un manque).
+- 2026-07-09 (Phase 0 FAITE, tdd) : banc de force `benchStrength` + `wilson` dans
+  `engine-ts/src/sim/bench.ts`, 6 tests verts (`tests/sim/bench.test.ts`). Le test de symétrie
+  (rouge) a attrapé un vrai défaut : l'alternance de sièges NON appariée d'evalNets.ts (graine
+  différente par siège) ne garantit pas bench(B,A) = miroir de bench(A,B) → corrigé en paires
+  miroir (même graine, sièges échangés), qui réduit aussi la variance. Fumée : le banc accepte un
+  agent réseau (`createValueGreedyPolicy`). TROUVÉ en branchant la baseline : les poids TS
+  `rl/weights/best.json` sont périmés (92 vs 168) ; corrigé plus tard le même jour — le vrai
+  réseau courant est `rl-py/weights/best.json` → `static/ai-weights.js` (168, v4-10heros), voir §5.
+- 2026-07-09 (interlude bug user + Phase 1 tranche 1) : (a) Diagnostic « SM n'utilise pas son
+  Combo » (IA-vs-humain) via boucle différentielle playTurn-vs-driver : AUCUN Combo dû raté sur
+  250+ tours IA (greedy ET réseau, humain passif ET attaquant) ; par contre trouvé+corrigé le bug
+  INVERSE — `resolveAiAttack` ne posait jamais `gameOver` (pas de `checkGameOver`), l'IA
+  « combotait un cadavre » ; fix interactive.ts + garde dans `aiComboPending` + test de régression ;
+  play.js logue désormais POURQUOI un Combo détenu n'est pas dépensable (règle : ORP sans Attaque).
+  (b) Phase 1 tranche 1 : `gameNode.ts` (rejeu-par-script, sonde/matérialisation), hook
+  `activateAbility` exposé, parité 9/9. 355 tests + 9 parité + 6 banc verts.
