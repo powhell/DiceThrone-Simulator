@@ -2081,6 +2081,15 @@
         renderAll();
         return setTimeout(()=>enterAiRoll(c.dice), 700);
       }
+    } else {
+      // Jeton détenu mais non dépensable : dire POURQUOI (règle du jeton), sinon ça ressemble
+      // à un bug ("l'IA n'utilise pas son Combo" — user 2026-07-09, diagnostiqué : jamais un
+      // raté moteur sur 250+ tours testés ; les cas restants sont la règle elle-même).
+      const aiC = g.state.players[g.aiIdx];
+      if (aiC.heroId === 'sm' && (aiC.tokens.combo||0) > 0) {
+        if (aiC.comboSpentThisTurn) log(`👊 Combo : déjà dépensé ce tour (1×/tour).`);
+        else if (aiC.smAttackedThisPhase !== true) log(`👊 Combo non dépensable : la phase de jet de l'IA n'a <b>pas produit d'Attaque</b> (raté ou habileté utilitaire) — règle du jeton.`);
+      }
     }
     $('turntag').textContent = `L'IA (${aiHero.name}) termine son tour…`;
     setTimeout(()=>{

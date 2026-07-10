@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mulberry32 } from '../../src/sim/rng.js'
+import { mulberry32, mulberry32Stateful } from '../../src/sim/rng.js'
 import { greedyHighestDamagePolicy } from '../../src/sim/policy.js'
 import type { Policy } from '../../src/sim/policy.js'
 import { createValueGreedyPolicy } from '../../src/sim/rl/valueGreedyPolicy.js'
@@ -9,7 +9,10 @@ import { STARTING_HP } from '../../src/sim/data/config.js'
 import {
   newHumanGame, beginHumanTurn, humanMainOptions,
   rollOffense, matchedAbilities, humanAttack, endHumanTurn, runAiTurn,
+  runAiTurnUpToAlter, finishAiAlter, nextDefenseDecision, chooseDefense,
+  resolveAiAttack, aiComboPending,
 } from '../../src/sim/interactive.js'
+import type { WindowAction } from '../../src/sim/types.js'
 
 // Drives a full human-vs-AI game the way the UI will: human turn (roll once, keep all, attack with
 // the highest-damage matched ability) then AI turn, until the game ends.
@@ -65,5 +68,35 @@ describe('interactive driver (human vs AI, sync)', () => {
     const opts = humanMainOptions(g, 'main1')
     expect(opts.length).toBeGreaterThanOrEqual(1)
     expect(opts.some(o => o.kind === 'pass')).toBe(true)
+  })
+
+  // Combo (sm) post-mortem : si la 1re attaque de l'IA TUE l'humain, la partie est finie —
+  // pas de 2e Offensive Roll Phase. Le driver ne posait jamais gameOver après resolveAiAttack
+  // (playTurn le fait via checkGameOver), donc aiComboPending restait vrai et l'IA « combotait
+  // un cadavre » (trouvé par la boucle différentielle du diagnostic 2026-07-09).
+  it('ne dépense pas le Combo quand la première attaque a déjà tué l\'humain', () => {
+    // Graines balayées jusqu'à une attaque SM qui touche (>0 dégât) un humain à 1 PV.
+    for (let seed = 0; seed < 40; seed++) {
+      const rng = mulberry32Stateful(seed)
+      const g = newHumanGame('th', 'sm', greedyHighestDamagePolicy, rng, true)
+      const ai = g.state.players[g.aiIdx]
+      g.state.players[g.humanIdx].hp = 1
+      ai.tokens.combo = 1
+      const r0 = runAiTurnUpToAlter(g)
+      expect(r0.done).toBe(false)
+      finishAiAlter(g)
+      for (let k = 0; k < 50; k++) {
+        const p = nextDefenseDecision(g)
+        if (!p) break
+        chooseDefense(g, { kind: 'pass' } as WindowAction)
+      }
+      resolveAiAttack(g)
+      if (g.state.players[g.humanIdx].hp > 0) continue // whiff/0 dégât : pas le scénario visé
+      // L'humain est mort : le driver doit le savoir (gameOver) et ne pas offrir le Combo.
+      expect(g.state.gameOver).toBe(true)
+      expect(aiComboPending(g)).toBe(false)
+      return
+    }
+    throw new Error('aucune graine <40 ne produit une attaque SM létale — élargir le balayage')
   })
 })

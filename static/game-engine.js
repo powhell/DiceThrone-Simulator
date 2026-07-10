@@ -9081,8 +9081,10 @@ var Game = (() => {
     const d = g.def;
     if (!d) return;
     resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, void 0, d.roarDiscard)));
+    checkGameOver(g.state);
   }
   function aiComboPending(g) {
+    if (g.state.gameOver) return false;
     const ai = g.state.players[g.aiIdx];
     return ai.heroId === "sm" && (ai.tokens.combo ?? 0) > 0 && !ai.comboSpentThisTurn && ai.smAttackedThisPhase === true;
   }

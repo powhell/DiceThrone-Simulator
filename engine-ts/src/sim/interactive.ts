@@ -608,6 +608,10 @@ export function resolveAiAttack(g: HumanGame): void {
   const d = g.def
   if (!d) return
   resolveAbilityPhase(g.state, g.aiIdx, d.finalDice, g.rng, order(g, g.ai, defensePolicy(d.script, undefined, d.roarDiscard)))
+  // Miroir de playTurn (checkGameOver après resolveAbilityPhase) : sans lui, gameOver restait
+  // faux après une attaque létale -> aiComboPending offrait une 2e ORP contre un humain déjà
+  // mort (trouvé par boucle différentielle playTurn-vs-driver, 2026-07-09).
+  checkGameOver(g.state)
 }
 
 // Spider-Man Combo (interactif) : après que la 1re attaque a résolu, l'IA doit-elle dépenser son
@@ -616,6 +620,7 @@ export function resolveAiAttack(g: HumanGame): void {
 // un humain (user-caught 2026-07-09). smAttackedThisPhase est reposé true par resolveAiAttack si
 // une attaque est vraiment partie.
 export function aiComboPending(g: HumanGame): boolean {
+  if (g.state.gameOver) return false // partie finie (attaque létale) : pas de 2e ORP
   const ai = g.state.players[g.aiIdx]
   return ai.heroId === 'sm' && (ai.tokens.combo ?? 0) > 0 && !ai.comboSpentThisTurn && ai.smAttackedThisPhase === true
 }
