@@ -6,24 +6,179 @@
   "cpIncomePerTurn": null,
   "source": "VERIFIED against photos of the physical board/leaflet/cards in characters/Black_Widow/{board,leaflet,cards}/, cross-checked on static/verify.html. 2026-07-01. Fixed two real bugs found in the pre-existing (guide-derived) engine code during this pass: Widow's Gauntlets dice pattern was encoded backwards (AAABB instead of the correct BBBAA), and Agility was applying its damage-halving unconditionally instead of requiring a 1-3 roll (leaflet: 'Spend & roll 1-3 to avoid 1/2 damage'). Also corrected Grapple's base damage (6, was 5) and added its conditional CP gain, and fixed Vengeance's rider dice to use BW's A/B/C symbol classification instead of raw face value.",
   "tokens": [
-    { "id": "covertOps", "name": "Covert Ops", "startingCount": 3, "stackCap": 3, "description": "Unique Status Effect. Spend once per turn during your Main Phase to either (a) put an Ability Upgrade from your hand into play, or (b) look at the top 3 cards of your deck — if none are Ability Upgrades you may reveal them and search your deck for one to add to hand (then shuffle), otherwise put them back in any order. May not be transferred or removed by any means." },
-    { "id": "agility", "name": "Agility", "startingCount": 0, "stackCap": 2, "description": "Positive Status Effect. Spend & roll 1 die when receiving damage: on 1-3, prevent 1/2 incoming dmg (rounded up); on 4-6, no effect (wasted), unless Elude! is played on a 5-6 result, which instead ignores all incoming dmg." },
-    { "id": "timeBomb", "name": "Time Bomb", "startingCount": 0, "stackCap": 2, "description": "Negative Status Effect inflicted on opponents. Starts on the 0:02 side (0:01 if the inflictor has >=6 Ability Upgrades in play). Each Upkeep Phase the afflicted player rolls 1 die: 1-5 advances the token (0:02->0:01, or 0:01-> detonate for 4 undefendable dmg and remove); 6 defuses it (removed, no dmg)." }
+    {
+      "id": "covertOps",
+      "name": "Covert Ops",
+      "startingCount": 3,
+      "stackCap": 3,
+      "description": "Unique Status Effect. Spend once per turn during your Main Phase to either (a) put an Ability Upgrade from your hand into play, or (b) look at the top 3 cards of your deck — if none are Ability Upgrades you may reveal them and search your deck for one to add to hand (then shuffle), otherwise put them back in any order. May not be transferred or removed by any means."
+    },
+    {
+      "id": "agility",
+      "name": "Agility",
+      "startingCount": 0,
+      "stackCap": 2,
+      "description": "Positive Status Effect. Spend & roll 1 die when receiving damage: on 1-3, prevent 1/2 incoming dmg (rounded up); on 4-6, no effect (wasted), unless Elude! is played on a 5-6 result, which instead ignores all incoming dmg."
+    },
+    {
+      "id": "timeBomb",
+      "name": "Time Bomb",
+      "startingCount": 0,
+      "stackCap": 2,
+      "description": "Negative Status Effect inflicted on opponents. Starts on the 0:02 side (0:01 if the inflictor has >=6 Ability Upgrades in play). Each Upkeep Phase the afflicted player rolls 1 die: 1-5 advances the token (0:02->0:01, or 0:01-> detonate for 4 undefendable dmg and remove); 6 defuses it (removed, no dmg)."
+    }
   ],
   "flags": [],
   "abilities": [
-    { "id": "baton_strike_3b", "boardName": "Baton Strike 3B (BBB)", "dicePattern": "BBB", "baseDamage": 5.0, "defendable": true, "upgradedBy": { "upgradeId": "baton-strike-ii", "baseDamage": 6.0 }, "verified": true },
-    { "id": "baton_strike_4b", "boardName": "Baton Strike 4B (BBBB)", "dicePattern": "BBBB", "baseDamage": 6.0, "defendable": true, "upgradedBy": { "upgradeId": "baton-strike-ii", "baseDamage": 7.0 }, "verified": true },
-    { "id": "baton_strike_5b", "boardName": "Baton Strike 5B (BBBBB)", "dicePattern": "BBBBB", "baseDamage": 7.0, "defendable": true, "upgradedBy": { "upgradeId": "baton-strike-ii", "baseDamage": 8.0 }, "verified": true },
-    { "id": "infiltrate", "boardName": "Infiltrate (AABC)", "dicePattern": "AABC", "baseDamage": 0.0, "defendable": true, "tokensGrantedToSelf": { "agility": 1 }, "tokensInflictedOnOpponent": { "timeBomb": 1 }, "advancesAllTimeBombsInPlay": true, "notes": "Text order (verified): 'Gain Agility. Advance all Time Bomb tokens. Then inflict Time Bomb.' — the newly-inflicted TB is NOT advanced this turn. Infiltrate II reverses the order ('inflict, then advance'), so its newly-inflicted TB IS advanced the same turn. Advance-all-in-play not yet wired in turn.ts (TODO(user)).", "verified": true },
-    { "id": "widows_gauntlets", "boardName": "Widow's Gauntlets (BBBAA)", "dicePattern": "BBBAA", "baseDamage": 6.0, "defendable": true, "cpGain": 1, "bonusDamagePerUpgrade": 1, "upgradedBy": { "upgradeId": "widows-gauntlets-ii", "baseDamage": 7.0 }, "notes": "Dice pattern is 3 Batons + 2 Espionage. An earlier draft of this engine had it backwards (3 Espionage + 2 Batons) — corrected 2026-07-01 after cross-checking the base board photo twice against the Widow's Gauntlets II card photo. Widow's Gauntlets II also bumps its own base dmg 6->7 (on top of unlocking Covert Mission).", "verified": true },
-    { "id": "hacked", "boardName": "Hacked (4-straight)", "dicePattern": "Small Straight (4 consecutive)", "baseDamage": 5.0, "defendable": true, "tokensInflictedOnOpponent": { "timeBomb": 1 }, "thresholdBonus": { "upgradesAtLeast": 3, "bonusDamage": 2.0 }, "upgradedBy": { "upgradeId": "hacked-ii", "baseDamage": 6.0 }, "notes": "Hacked II bumps base dmg 5->6; the existing >=3-upgrades +2 threshold bonus still applies on top, matching the printed \"deal 8 dmg instead\".", "verified": true },
-    { "id": "grapple", "boardName": "Grapple (CCCC)", "dicePattern": "CCCC", "baseDamage": 6.0, "defendable": false, "tokensGrantedToSelf": { "agility": 1 }, "bonusDamagePerUpgrade": 1, "cpGainIfUpgradesAtLeast": { "upgradesAtLeast": 2, "cpGain": 1 }, "upgradedBy": { "upgradeId": "grapple-ii", "baseDamage": 7.0, "cpGain": 1 }, "notes": "Undefendable. Base damage is 6 (an earlier draft had 5.0 — corrected 2026-07-01). Grapple II makes the CP gain unconditional instead of requiring >=2 upgrades, and also bumps its own base dmg 6->7 (on top of unlocking Recon).", "verified": true },
-    { "id": "vengeance", "boardName": "Vengeance (5-straight)", "dicePattern": "Large Straight (5 consecutive)", "baseDamage": 7.0, "defendable": true, "tokensGrantedToSelf": { "agility": 1 }, "bonusRoll": { "diceCount": "4 (5 with Vengeance II)", "perSymbolDamage": { "B": 1 } }, "notes": "Rider (verified): roll 4 dice (5 with Vengeance II), +1 dmg per Batons(B). On any Espionage(A) rolled, inflict 1 Time Bomb (boolean, not scaled by count). On a Widow-pair (>=2 C), gain 1 Covert Ops. An earlier draft checked raw face===1 for TB and awarded dmg for every other face, and didn't model the Covert Ops gain at all — all fixed in hero/bw.rules.ts's resolveVengeanceRider.", "verified": true },
-    { "id": "widows_bite", "boardName": "Widow's Bite (CCCCC)", "dicePattern": "CCCCC", "baseDamage": 10.0, "defendable": false, "tokensInflictedOnOpponent": { "timeBomb": 1 }, "searchUpgradesIntoPlay": 2, "notes": "Ultimate. Confirmed undefendable: 'Dice may be altered to prevent an Ultimate. Otherwise, no action of any kind may be performed by any opponent until the ability fully completes' — identical convention to HH's Dreadful Charge. Deck search into play not yet wired (TODO(user), needs deck/hand modeling).", "verified": true }
+    {
+      "id": "baton_strike_3b",
+      "boardName": "Baton Strike 3B (BBB)",
+      "dicePattern": "BBB",
+      "baseDamage": 5.0,
+      "defendable": true,
+      "upgradedBy": {
+        "upgradeId": "baton-strike-ii",
+        "baseDamage": 6.0
+      },
+      "verified": true
+    },
+    {
+      "id": "baton_strike_4b",
+      "boardName": "Baton Strike 4B (BBBB)",
+      "dicePattern": "BBBB",
+      "baseDamage": 6.0,
+      "defendable": true,
+      "upgradedBy": {
+        "upgradeId": "baton-strike-ii",
+        "baseDamage": 7.0
+      },
+      "verified": true
+    },
+    {
+      "id": "baton_strike_5b",
+      "boardName": "Baton Strike 5B (BBBBB)",
+      "dicePattern": "BBBBB",
+      "baseDamage": 7.0,
+      "defendable": true,
+      "upgradedBy": {
+        "upgradeId": "baton-strike-ii",
+        "baseDamage": 8.0
+      },
+      "verified": true
+    },
+    {
+      "id": "infiltrate",
+      "boardName": "Infiltrate (AABC)",
+      "dicePattern": "AABC",
+      "baseDamage": 0.0,
+      "defendable": true,
+      "tokensGrantedToSelf": {
+        "agility": 1
+      },
+      "tokensInflictedOnOpponent": {
+        "timeBomb": 1
+      },
+      "advancesAllTimeBombsInPlay": true,
+      "notes": "Text order (verified): 'Gain Agility. Advance all Time Bomb tokens. Then inflict Time Bomb.' — the newly-inflicted TB is NOT advanced this turn. Infiltrate II reverses the order ('inflict, then advance'), so its newly-inflicted TB IS advanced the same turn. Advance-all-in-play not yet wired in turn.ts (TODO(user)).",
+      "verified": true
+    },
+    {
+      "id": "widows_gauntlets",
+      "boardName": "Widow's Gauntlets (BBBAA)",
+      "dicePattern": "BBBAA",
+      "baseDamage": 6.0,
+      "defendable": true,
+      "cpGain": 1,
+      "bonusDamagePerUpgrade": 1,
+      "upgradedBy": {
+        "upgradeId": "widows-gauntlets-ii",
+        "baseDamage": 7.0
+      },
+      "notes": "Dice pattern is 3 Batons + 2 Espionage. An earlier draft of this engine had it backwards (3 Espionage + 2 Batons) — corrected 2026-07-01 after cross-checking the base board photo twice against the Widow's Gauntlets II card photo. Widow's Gauntlets II also bumps its own base dmg 6->7 (on top of unlocking Covert Mission).",
+      "verified": true
+    },
+    {
+      "id": "hacked",
+      "boardName": "Hacked (4-straight)",
+      "dicePattern": "Small Straight (4 consecutive)",
+      "baseDamage": 5.0,
+      "defendable": true,
+      "tokensInflictedOnOpponent": {
+        "timeBomb": 1
+      },
+      "thresholdBonus": {
+        "upgradesAtLeast": 3,
+        "bonusDamage": 2.0
+      },
+      "upgradedBy": {
+        "upgradeId": "hacked-ii",
+        "baseDamage": 6.0
+      },
+      "notes": "Hacked II bumps base dmg 5->6; the existing >=3-upgrades +2 threshold bonus still applies on top, matching the printed \"deal 8 dmg instead\".",
+      "verified": true
+    },
+    {
+      "id": "grapple",
+      "boardName": "Grapple (CCCC)",
+      "dicePattern": "CCCC",
+      "baseDamage": 6.0,
+      "defendable": false,
+      "tokensGrantedToSelf": {
+        "agility": 1
+      },
+      "bonusDamagePerUpgrade": 1,
+      "cpGainIfUpgradesAtLeast": {
+        "upgradesAtLeast": 2,
+        "cpGain": 1
+      },
+      "upgradedBy": {
+        "upgradeId": "grapple-ii",
+        "baseDamage": 7.0,
+        "cpGain": 1
+      },
+      "notes": "Undefendable. Base damage is 6 (an earlier draft had 5.0 — corrected 2026-07-01). Grapple II makes the CP gain unconditional instead of requiring >=2 upgrades, and also bumps its own base dmg 6->7 (on top of unlocking Recon).",
+      "verified": true
+    },
+    {
+      "id": "vengeance",
+      "boardName": "Vengeance (5-straight)",
+      "dicePattern": "Large Straight (5 consecutive)",
+      "baseDamage": 7.0,
+      "defendable": true,
+      "tokensGrantedToSelf": {
+        "agility": 1
+      },
+      "bonusRoll": {
+        "diceCount": "4 (5 with Vengeance II)",
+        "perSymbolDamage": {
+          "B": 1
+        }
+      },
+      "notes": "Rider (verified): roll 4 dice (5 with Vengeance II), +1 dmg per Batons(B). On any Espionage(A) rolled, inflict 1 Time Bomb (boolean, not scaled by count). On a Widow-pair (>=2 C), gain 1 Covert Ops. An earlier draft checked raw face===1 for TB and awarded dmg for every other face, and didn't model the Covert Ops gain at all — all fixed in hero/bw.rules.ts's resolveVengeanceRider.",
+      "verified": true
+    },
+    {
+      "id": "widows_bite",
+      "boardName": "Widow's Bite (CCCCC)",
+      "dicePattern": "CCCCC",
+      "baseDamage": 10.0,
+      "defendable": false,
+      "tokensInflictedOnOpponent": {
+        "timeBomb": 1
+      },
+      "searchUpgradesIntoPlay": 2,
+      "notes": "Ultimate. Confirmed undefendable: 'Dice may be altered to prevent an Ultimate. Otherwise, no action of any kind may be performed by any opponent until the ability fully completes' — identical convention to HH's Dreadful Charge. Deck search into play not yet wired (TODO(user), needs deck/hand modeling).",
+      "verified": true
+    }
   ],
   "passives": [
-    { "id": "red_room_training", "name": "Red Room Training", "trigger": "Passive (always active)", "text": "Begin the game with 3 Covert Ops. You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.", "verified": true }
+    {
+      "id": "red_room_training",
+      "name": "Red Room Training",
+      "trigger": "Passive (always active)",
+      "text": "Begin the game with 3 Covert Ops. You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.",
+      "verified": true
+    }
   ],
   "defense": {
     "name": "Sabotage",
@@ -32,19 +187,206 @@
     "verified": true
   },
   "cards": [
-    { "id": "baton-strike-ii", "name": "Baton Strike II", "kind": "upgrade", "cpCost": 1, "upgradeSlot": "baton_strike", "text": "Deal 6/7/8 dmg for 3/4/5 Batons (up from 5/6/7). When this card is played, force an opponent to reveal their hand to you.", "effect": null, "verified": true },
-    { "id": "widows-gauntlets-ii", "name": "Widow's Gauntlets II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "widows_gauntlets", "text": "Gain 1 CP. Deal 7 dmg. Add 1 dmg per Ability Upgrade you have in play.", "effect": null, "altAbility": { "id": "covert-mission", "boardName": "Covert Mission", "dicePattern": "AABB", "baseDamage": 0, "defendable": true, "tokensInflictedOnOpponent": { "timeBomb": 1 }, "notes": "Inflict Time Bomb on up to two different chosen opponents (engine is 1v1, so modeled as inflicting on the single opponent).", "verified": true }, "verified": true },
-    { "id": "red-room-training-ii", "name": "Red Room Training II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "red_room_training", "text": "Whenever you play an Ability Upgrade card, draw 1 (excluding this card). You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.", "effect": null, "verified": true },
-    { "id": "grapple-ii", "name": "Grapple II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "grapple", "text": "Gain 1 CP and Agility. Deal 7 undefendable dmg. Add 1 dmg per Ability Upgrade you have in play.", "effect": null, "altAbility": { "id": "recon", "boardName": "Recon", "dicePattern": "CCC", "baseDamage": 0, "defendable": true, "tokensGrantedToSelf": { "agility": 1 }, "searchUpgradesIntoPlay": 1, "notes": "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck.", "verified": true }, "verified": true },
-    { "id": "hacked-ii", "name": "Hacked II", "kind": "upgrade", "cpCost": 1, "upgradeSlot": "hacked", "text": "Small Straight. A chosen opponent is inflicted with Time Bomb. Deal 6 dmg. If you have at least 3 Ability Upgrades in play, deal 8 dmg instead.", "effect": null, "verified": true },
-    { "id": "sabotage-ii", "name": "Sabotage II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "sabotage", "text": "Defense Roll 4. Deal 1xBatons dmg. Prevent 1xEspionage dmg. On Widow-Widow, inflict Time Bomb. If you have at least 4 Ability Upgrades in play, you may re-roll any of these dice.", "effect": null, "verified": true },
-    { "id": "infiltrate-ii", "name": "Infiltrate II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "infiltrate", "text": "Gain Agility. Inflict Time Bomb. Then advance all Time Bomb tokens.", "effect": null, "altAbility": { "id": "spy-game", "boardName": "Spy Game", "dicePattern": "AABCC", "baseDamage": 6, "defendable": false, "tokensGrantedToSelf": { "covertOps": 1, "agility": 1 }, "notes": "Gain Covert Ops & Agility. Deal 6 undefendable dmg.", "verified": true }, "verified": true },
-    { "id": "vengeance-ii", "name": "Vengeance II", "kind": "upgrade", "cpCost": 2, "upgradeSlot": "vengeance", "text": "Large Straight. Gain Agility. Deal 7 dmg & roll 5: Add 1xBatons dmg. On Espionage, inflict Time Bomb. On Widow-Widow, gain Covert Ops.", "effect": null, "altAbility": { "id": "subvert", "boardName": "Subvert", "dicePattern": "ABBB", "baseDamage": 0, "defendable": true, "tokensGrantedToSelf": { "covertOps": 1, "agility": 1 }, "notes": "Gain Covert Ops & Agility.", "verified": true }, "verified": true },
-    { "id": "recoil", "name": "Recoil!", "kind": "action", "cpCost": 0, "actionTiming": "rollPhase", "text": "Roll Phase Action. Play only after being Attacked. Roll 2 dice: On Espionage, gain 1 CP. On Widow, prevent 1/2 incoming dmg (rounded up).", "effect": null, "verified": true },
-    { "id": "subversion", "name": "Subversion!", "kind": "action", "cpCost": 1, "actionTiming": "rollPhase", "text": "Roll Phase Action, Attack Modifier. Add 2 dmg. Add an additional 1 dmg for each Ability Upgrade played this turn.", "effect": { "damage": 2 }, "verified": true },
-    { "id": "assemble", "name": "Assemble!", "kind": "action", "cpCost": 1, "actionTiming": "instant", "text": "Instant Action. Gain 2 Agility.", "effect": { "tokensGrantedToSelf": { "agility": 2 } }, "verified": true },
-    { "id": "elude", "name": "Elude!", "kind": "action", "cpCost": 1, "actionTiming": "rollPhase", "text": "Roll Phase Action. If the outcome of an Agility die roll is 5-6, you may play this card to ignore all incoming dmg (this card can be played after your dice have been rolled).", "effect": null, "verified": true },
-    { "id": "undercover-mission", "name": "Undercover Mission!", "kind": "action", "cpCost": 2, "actionTiming": "mainPhase", "text": "Main Phase Action. A chosen opponent gains Time Bomb. If you have at least 4 Ability Upgrades in play, gain Agility.", "effect": { "tokensInflictedOnOpponent": { "timeBomb": 1 } }, "verified": true },
-    { "id": "cunning", "name": "Cunning!", "kind": "action", "cpCost": 2, "actionTiming": "mainPhase", "text": "Main Phase Action. Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and then add them to your hand. Put all remaining cards back in any order.", "effect": null, "verified": true }
+    {
+      "id": "baton-strike-ii",
+      "name": "Baton Strike II",
+      "kind": "upgrade",
+      "cpCost": 1,
+      "upgradeSlot": "baton_strike",
+      "text": "Deal 6/7/8 dmg for 3/4/5 Batons (up from 5/6/7). When this card is played, force an opponent to reveal their hand to you.",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "widows-gauntlets-ii",
+      "name": "Widow's Gauntlets II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "widows_gauntlets",
+      "text": "Gain 1 CP. Deal 7 dmg. Add 1 dmg per Ability Upgrade you have in play.",
+      "effect": null,
+      "altAbility": {
+        "id": "covert-mission",
+        "boardName": "Covert Mission",
+        "dicePattern": "AABB",
+        "baseDamage": 0,
+        "defendable": true,
+        "tokensInflictedOnOpponent": {
+          "timeBomb": 1
+        },
+        "notes": "Inflict Time Bomb on up to two different chosen opponents (engine is 1v1, so modeled as inflicting on the single opponent).",
+        "verified": true
+      },
+      "verified": true
+    },
+    {
+      "id": "red-room-training-ii",
+      "name": "Red Room Training II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "red_room_training",
+      "text": "Whenever you play an Ability Upgrade card, draw 1 (excluding this card). You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "grapple-ii",
+      "name": "Grapple II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "grapple",
+      "text": "Gain 1 CP and Agility. Deal 7 undefendable dmg. Add 1 dmg per Ability Upgrade you have in play.",
+      "effect": null,
+      "altAbility": {
+        "id": "recon",
+        "boardName": "Recon",
+        "dicePattern": "CCC",
+        "baseDamage": 0,
+        "defendable": true,
+        "tokensGrantedToSelf": {
+          "agility": 1
+        },
+        "searchUpgradesIntoPlay": 1,
+        "notes": "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck. RULING USER (2026-07-10): une upgrade mise en jeu par Recon/Widow's Bite DECLENCHE la pioche de Red Room Training II ('put into play' compte comme jouee).",
+        "verified": true
+      },
+      "verified": true
+    },
+    {
+      "id": "hacked-ii",
+      "name": "Hacked II",
+      "kind": "upgrade",
+      "cpCost": 1,
+      "upgradeSlot": "hacked",
+      "text": "Small Straight. A chosen opponent is inflicted with Time Bomb. Deal 6 dmg. If you have at least 3 Ability Upgrades in play, deal 8 dmg instead.",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "sabotage-ii",
+      "name": "Sabotage II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "sabotage",
+      "text": "Defense Roll 4. Deal 1xBatons dmg. Prevent 1xEspionage dmg. On Widow-Widow, inflict Time Bomb. If you have at least 4 Ability Upgrades in play, you may re-roll any of these dice.",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "infiltrate-ii",
+      "name": "Infiltrate II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "infiltrate",
+      "text": "Gain Agility. Inflict Time Bomb. Then advance all Time Bomb tokens.",
+      "effect": null,
+      "altAbility": {
+        "id": "spy-game",
+        "boardName": "Spy Game",
+        "dicePattern": "AABCC",
+        "baseDamage": 6,
+        "defendable": false,
+        "tokensGrantedToSelf": {
+          "covertOps": 1,
+          "agility": 1
+        },
+        "notes": "Gain Covert Ops & Agility. Deal 6 undefendable dmg.",
+        "verified": true
+      },
+      "verified": true
+    },
+    {
+      "id": "vengeance-ii",
+      "name": "Vengeance II",
+      "kind": "upgrade",
+      "cpCost": 2,
+      "upgradeSlot": "vengeance",
+      "text": "Large Straight. Gain Agility. Deal 7 dmg & roll 5: Add 1xBatons dmg. On Espionage, inflict Time Bomb. On Widow-Widow, gain Covert Ops.",
+      "effect": null,
+      "altAbility": {
+        "id": "subvert",
+        "boardName": "Subvert",
+        "dicePattern": "ABBB",
+        "baseDamage": 0,
+        "defendable": true,
+        "tokensGrantedToSelf": {
+          "covertOps": 1,
+          "agility": 1
+        },
+        "notes": "Gain Covert Ops & Agility.",
+        "verified": true
+      },
+      "verified": true
+    },
+    {
+      "id": "recoil",
+      "name": "Recoil!",
+      "kind": "action",
+      "cpCost": 0,
+      "actionTiming": "rollPhase",
+      "text": "Roll Phase Action. Play only after being Attacked. Roll 2 dice: On Espionage, gain 1 CP. On Widow, prevent 1/2 incoming dmg (rounded up).",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "subversion",
+      "name": "Subversion!",
+      "kind": "action",
+      "cpCost": 1,
+      "actionTiming": "rollPhase",
+      "text": "Roll Phase Action, Attack Modifier. Add 2 dmg. Add an additional 1 dmg for each Ability Upgrade played this turn.",
+      "effect": {
+        "damage": 2
+      },
+      "verified": true
+    },
+    {
+      "id": "assemble",
+      "name": "Assemble!",
+      "kind": "action",
+      "cpCost": 1,
+      "actionTiming": "instant",
+      "text": "Instant Action. Gain 2 Agility.",
+      "effect": {
+        "tokensGrantedToSelf": {
+          "agility": 2
+        }
+      },
+      "verified": true
+    },
+    {
+      "id": "elude",
+      "name": "Elude!",
+      "kind": "action",
+      "cpCost": 1,
+      "actionTiming": "rollPhase",
+      "text": "Roll Phase Action. If the outcome of an Agility die roll is 5-6, you may play this card to ignore all incoming dmg (this card can be played after your dice have been rolled).",
+      "effect": null,
+      "verified": true
+    },
+    {
+      "id": "undercover-mission",
+      "name": "Undercover Mission!",
+      "kind": "action",
+      "cpCost": 2,
+      "actionTiming": "mainPhase",
+      "text": "Main Phase Action. A chosen opponent gains Time Bomb. If you have at least 4 Ability Upgrades in play, gain Agility.",
+      "effect": {
+        "tokensInflictedOnOpponent": {
+          "timeBomb": 1
+        }
+      },
+      "verified": true
+    },
+    {
+      "id": "cunning",
+      "name": "Cunning!",
+      "kind": "action",
+      "cpCost": 2,
+      "actionTiming": "mainPhase",
+      "text": "Main Phase Action. Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and then add them to your hand. Put all remaining cards back in any order.",
+      "effect": null,
+      "verified": true
+    }
   ]
 }

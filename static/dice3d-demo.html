@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Démo — dés 3D physiques</title>
+<style>
+  body{margin:0; background:#131019; color:#ece6f2; font:14px/1.5 "Segoe UI",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px}
+  h1{font-family:Cambria,Georgia,serif; font-size:22px; margin:0}
+  h1 small{color:#9a90ac; font-weight:400; font-size:13px; margin-left:10px}
+  #tray3d{width:min(960px,96vw); height:430px; border-radius:16px; overflow:hidden;
+    border:1px solid #45356a; box-shadow:0 14px 40px #00000066}
+  .row{display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center}
+  button{border-radius:11px; border:1px solid #352c47; background:#241d30; color:#ece6f2;
+    font:600 14px "Segoe UI",system-ui; padding:11px 20px; cursor:pointer}
+  button.primary{background:linear-gradient(180deg,#e8853a,#c96a24); border-color:#8a4a18; color:#1c0f04; font-weight:700}
+  button:disabled{opacity:.5; cursor:default}
+  #out{color:#9a90ac; font-size:13px; min-height:20px}
+  select{background:#241d30; color:#ece6f2; border:1px solid #352c47; border-radius:8px; padding:9px 12px; font:600 13px "Segoe UI"}
+</style>
+</head>
+<body>
+  <h1>🎲 Dés 3D physiques <small>démo autonome — le moteur décide, la physique raconte</small></h1>
+  <div id="tray3d"></div>
+  <div class="row">
+    <select id="hero"><option value="hh">Dé Headless Horseman (violet)</option><option value="bw">Dé Black Widow (noir)</option></select>
+    <button class="primary" id="b-rand">🎲 Lancer (valeurs aléatoires)</button>
+    <button id="b-straight">Lancer forcé : 2-3-4-5-6</button>
+    <button id="b-scares">Lancer forcé : 6-6-6-6-6</button>
+  </div>
+  <div id="out"></div>
+  <script src="dice3d.js"></script>
+  <script>
+    let tray = Dice3D.mount(document.getElementById('tray3d'), { hero: 'hh' })
+    const out = document.getElementById('out')
+    const btns = [...document.querySelectorAll('button')]
+    document.getElementById('hero').onchange = (e) => {
+      tray.dispose()
+      tray = Dice3D.mount(document.getElementById('tray3d'), { hero: e.target.value })
+      out.textContent = ''
+    }
+    async function go(values){
+      btns.forEach(b => b.disabled = true)
+      out.textContent = 'Le moteur a décidé : ' + values.join(' · ') + ' — la physique lance…'
+      await tray.roll(values)
+      out.textContent = 'Résultat affiché : ' + values.join(' · ') + ' ✓ (exactement ce que le moteur a décidé)'
+      btns.forEach(b => b.disabled = false)
+    }
+    document.getElementById('b-rand').onclick = () => go(Array.from({length:5}, () => 1 + Math.floor(Math.random()*6)))
+    document.getElementById('b-straight').onclick = () => go([2,3,4,5,6])
+    document.getElementById('b-scares').onclick = () => go([6,6,6,6,6])
+  </script>
+</body>
+</html>

@@ -87,9 +87,41 @@ function cardArms() {
   return A
 }
 
-export const CALIB_SET = process.env.CALIB_SET === 'cards' ? 'cards' : 'v5'
-export const RESULTS_DIRNAME = CALIB_SET === 'cards' ? 'results_cards' : 'results'
-export const ARMS = CALIB_SET === 'cards' ? cardArms() : ARMS_V5
+// ---- Vague « EV par carte Spider-Man » (2026-07-10, CALIB_SET=cards_sm) -------------------
+// Même protocole que la vague cards : carte ajoutée à la main de départ de sm, matchup
+// sm vs bw, valeur = Δwin apparié vs base_sm / étalon sm_hp4. Lancée pour la fiche tournoi
+// (équipe SM+BW+HH choisie le 10 au soir — les cartes SM n'avaient jamais été mesurées).
+function cardArmsSm() {
+  const A = {
+    base_sm: null, // sm vs bw
+    sm_hp4: s => { p(s, 'sm').hp += 4 },
+  }
+  const sm = loadJson('../engine-ts/src/sim/data/characters/sm/hero.json')
+  for (const c of sm.cards) A['card_sm_' + c.id] = s => { p(s, 'sm').hand.push(c.id) }
+  return A
+}
+
+// ---- Vague « EV par carte Forge Master » (2026-07-10 nuit, CALIB_SET=cards_fm) ------------
+// Même protocole (équipe tournoi SM+BW+FM : les cartes FM n'avaient jamais été mesurées).
+function cardArmsFm() {
+  const A = {
+    base_fm: null, // fm vs bw
+    fm_hp4: s => { p(s, 'fm').hp += 4 },
+  }
+  const fm = loadJson('../engine-ts/src/sim/data/characters/fm/hero.json')
+  for (const c of fm.cards) A['card_fm_' + c.id] = s => { p(s, 'fm').hand.push(c.id) }
+  return A
+}
+
+export const CALIB_SET = process.env.CALIB_SET === 'cards' ? 'cards'
+  : process.env.CALIB_SET === 'cards_sm' ? 'cards_sm'
+  : process.env.CALIB_SET === 'cards_fm' ? 'cards_fm' : 'v5'
+export const RESULTS_DIRNAME = CALIB_SET === 'cards' ? 'results_cards'
+  : CALIB_SET === 'cards_sm' ? 'results_cards_sm'
+  : CALIB_SET === 'cards_fm' ? 'results_cards_fm' : 'results'
+export const ARMS = CALIB_SET === 'cards' ? cardArms()
+  : CALIB_SET === 'cards_sm' ? cardArmsSm()
+  : CALIB_SET === 'cards_fm' ? cardArmsFm() : ARMS_V5
 
 const HERO_PREFIXES = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py']
 
@@ -98,6 +130,8 @@ export function armHero(arm) {
   if (arm === 'base') return 'hh'
   if (arm.startsWith('base_')) return arm.slice(5)
   if (arm.startsWith('card_bw_')) return 'bw'
+  if (arm.startsWith('card_sm_')) return 'sm'
+  if (arm.startsWith('card_fm_')) return 'fm'
   if (arm.startsWith('card_')) return 'hh'
   const pref = arm.split('_')[0]
   return HERO_PREFIXES.includes(pref) ? pref : 'hh'

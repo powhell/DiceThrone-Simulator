@@ -9,3 +9,7 @@ rl-py/venv/
 rl-py/weights/
 rl-py/experience/
 rl-py/runs/
+rl-py/exp2/
+rl-py/weights2/
+rl-py/*.log
+calibration/*.log

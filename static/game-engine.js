@@ -41,6 +41,7 @@ var Game = (() => {
     createInitialPlayer: () => createInitialPlayer,
     createNetwork: () => createNetwork,
     createValueGreedyPolicy: () => createValueGreedyPolicy,
+    defenseTaxFor: () => defenseTaxFor,
     emptyBag: () => emptyBag,
     endHumanTurn: () => endHumanTurn,
     endOffensiveAlter: () => endOffensiveAlter,
@@ -62,6 +63,8 @@ var Game = (() => {
     humanApplyMain: () => humanApplyMain,
     humanAttack: () => humanAttack,
     humanAttackModifierOptions: () => humanAttackModifierOptions,
+    humanAttackProbe: () => humanAttackProbe,
+    humanAttackWithScript: () => humanAttackWithScript,
     humanCanTerrorize: () => humanCanTerrorize,
     humanCraft: () => humanCraft,
     humanCraftOptions: () => humanCraftOptions,
@@ -223,6 +226,45 @@ var Game = (() => {
       }
     }
   }
+
+  // src/sim/policy.ts
+  var greedyHighestDamagePolicy = {
+    // Grim Pursuit (a) : E[bonus] = 5 dés x P(Fer)=2/6 ~ +1.67 dégâts pour 1 jeton. Un jeton
+    // stocké ne vaut que par sa dépense (cap 3) : on dépense dès que l'attaque touche.
+    chooseGrimPursuitSpend(state, playerIdx, dmg) {
+      return dmg > 0;
+    },
+    chooseMidRollCards: () => [],
+    // Scripted decision: in a Main Phase window, play the first affordable Hero Upgrade offered (the
+    // engine re-enumerates after each play, so this plays every affordable upgrade one at a time —
+    // same net result as the old chooseMainPhaseCards subset). Passes on every other window type,
+    // including the DRP5 'defense' window (greedy never plays Action cards — same as the old
+    // chooseDefensiveCards: () => []). Options are enumerated in hand order (enumerateWindowActions).
+    decide(_state, _playerIdx, request) {
+      if (request.ctx.windowType === "mainPhase") {
+        const play = request.options.find((o) => o.kind === "playCard");
+        if (play) return play;
+      }
+      return { kind: "pass" };
+    },
+    chooseSabotageReroll: () => false,
+    chooseAbility(_state, _playerIdx, candidates) {
+      let best = candidates[0];
+      for (const c of candidates) {
+        if ((c.baseDamage ?? -Infinity) > (best.baseDamage ?? -Infinity)) best = c;
+      }
+      return best.name;
+    },
+    chooseHeadlessMayhem: (_state, _playerIdx, canTerrorize2) => canTerrorize2 ? "terrorize" : "none",
+    chooseCardsToDiscard(state, playerIdx, maxHandSize) {
+      const hand = state.players[playerIdx].hand;
+      const overflow = hand.length - maxHandSize;
+      return overflow > 0 ? hand.slice(0, overflow) : [];
+    },
+    chooseHorrifyBonus: () => "dreadful",
+    chooseAttackModifierCards: () => [],
+    chooseRollManipulationCards: () => []
+  };
 
   // src/core/dice.ts
   var OUTCOMES = [];
@@ -2566,24 +2608,179 @@ var Game = (() => {
     cpIncomePerTurn: null,
     source: "VERIFIED against photos of the physical board/leaflet/cards in characters/Black_Widow/{board,leaflet,cards}/, cross-checked on static/verify.html. 2026-07-01. Fixed two real bugs found in the pre-existing (guide-derived) engine code during this pass: Widow's Gauntlets dice pattern was encoded backwards (AAABB instead of the correct BBBAA), and Agility was applying its damage-halving unconditionally instead of requiring a 1-3 roll (leaflet: 'Spend & roll 1-3 to avoid 1/2 damage'). Also corrected Grapple's base damage (6, was 5) and added its conditional CP gain, and fixed Vengeance's rider dice to use BW's A/B/C symbol classification instead of raw face value.",
     tokens: [
-      { id: "covertOps", name: "Covert Ops", startingCount: 3, stackCap: 3, description: "Unique Status Effect. Spend once per turn during your Main Phase to either (a) put an Ability Upgrade from your hand into play, or (b) look at the top 3 cards of your deck \u2014 if none are Ability Upgrades you may reveal them and search your deck for one to add to hand (then shuffle), otherwise put them back in any order. May not be transferred or removed by any means." },
-      { id: "agility", name: "Agility", startingCount: 0, stackCap: 2, description: "Positive Status Effect. Spend & roll 1 die when receiving damage: on 1-3, prevent 1/2 incoming dmg (rounded up); on 4-6, no effect (wasted), unless Elude! is played on a 5-6 result, which instead ignores all incoming dmg." },
-      { id: "timeBomb", name: "Time Bomb", startingCount: 0, stackCap: 2, description: "Negative Status Effect inflicted on opponents. Starts on the 0:02 side (0:01 if the inflictor has >=6 Ability Upgrades in play). Each Upkeep Phase the afflicted player rolls 1 die: 1-5 advances the token (0:02->0:01, or 0:01-> detonate for 4 undefendable dmg and remove); 6 defuses it (removed, no dmg)." }
+      {
+        id: "covertOps",
+        name: "Covert Ops",
+        startingCount: 3,
+        stackCap: 3,
+        description: "Unique Status Effect. Spend once per turn during your Main Phase to either (a) put an Ability Upgrade from your hand into play, or (b) look at the top 3 cards of your deck \u2014 if none are Ability Upgrades you may reveal them and search your deck for one to add to hand (then shuffle), otherwise put them back in any order. May not be transferred or removed by any means."
+      },
+      {
+        id: "agility",
+        name: "Agility",
+        startingCount: 0,
+        stackCap: 2,
+        description: "Positive Status Effect. Spend & roll 1 die when receiving damage: on 1-3, prevent 1/2 incoming dmg (rounded up); on 4-6, no effect (wasted), unless Elude! is played on a 5-6 result, which instead ignores all incoming dmg."
+      },
+      {
+        id: "timeBomb",
+        name: "Time Bomb",
+        startingCount: 0,
+        stackCap: 2,
+        description: "Negative Status Effect inflicted on opponents. Starts on the 0:02 side (0:01 if the inflictor has >=6 Ability Upgrades in play). Each Upkeep Phase the afflicted player rolls 1 die: 1-5 advances the token (0:02->0:01, or 0:01-> detonate for 4 undefendable dmg and remove); 6 defuses it (removed, no dmg)."
+      }
     ],
     flags: [],
     abilities: [
-      { id: "baton_strike_3b", boardName: "Baton Strike 3B (BBB)", dicePattern: "BBB", baseDamage: 5, defendable: true, upgradedBy: { upgradeId: "baton-strike-ii", baseDamage: 6 }, verified: true },
-      { id: "baton_strike_4b", boardName: "Baton Strike 4B (BBBB)", dicePattern: "BBBB", baseDamage: 6, defendable: true, upgradedBy: { upgradeId: "baton-strike-ii", baseDamage: 7 }, verified: true },
-      { id: "baton_strike_5b", boardName: "Baton Strike 5B (BBBBB)", dicePattern: "BBBBB", baseDamage: 7, defendable: true, upgradedBy: { upgradeId: "baton-strike-ii", baseDamage: 8 }, verified: true },
-      { id: "infiltrate", boardName: "Infiltrate (AABC)", dicePattern: "AABC", baseDamage: 0, defendable: true, tokensGrantedToSelf: { agility: 1 }, tokensInflictedOnOpponent: { timeBomb: 1 }, advancesAllTimeBombsInPlay: true, notes: "Text order (verified): 'Gain Agility. Advance all Time Bomb tokens. Then inflict Time Bomb.' \u2014 the newly-inflicted TB is NOT advanced this turn. Infiltrate II reverses the order ('inflict, then advance'), so its newly-inflicted TB IS advanced the same turn. Advance-all-in-play not yet wired in turn.ts (TODO(user)).", verified: true },
-      { id: "widows_gauntlets", boardName: "Widow's Gauntlets (BBBAA)", dicePattern: "BBBAA", baseDamage: 6, defendable: true, cpGain: 1, bonusDamagePerUpgrade: 1, upgradedBy: { upgradeId: "widows-gauntlets-ii", baseDamage: 7 }, notes: "Dice pattern is 3 Batons + 2 Espionage. An earlier draft of this engine had it backwards (3 Espionage + 2 Batons) \u2014 corrected 2026-07-01 after cross-checking the base board photo twice against the Widow's Gauntlets II card photo. Widow's Gauntlets II also bumps its own base dmg 6->7 (on top of unlocking Covert Mission).", verified: true },
-      { id: "hacked", boardName: "Hacked (4-straight)", dicePattern: "Small Straight (4 consecutive)", baseDamage: 5, defendable: true, tokensInflictedOnOpponent: { timeBomb: 1 }, thresholdBonus: { upgradesAtLeast: 3, bonusDamage: 2 }, upgradedBy: { upgradeId: "hacked-ii", baseDamage: 6 }, notes: 'Hacked II bumps base dmg 5->6; the existing >=3-upgrades +2 threshold bonus still applies on top, matching the printed "deal 8 dmg instead".', verified: true },
-      { id: "grapple", boardName: "Grapple (CCCC)", dicePattern: "CCCC", baseDamage: 6, defendable: false, tokensGrantedToSelf: { agility: 1 }, bonusDamagePerUpgrade: 1, cpGainIfUpgradesAtLeast: { upgradesAtLeast: 2, cpGain: 1 }, upgradedBy: { upgradeId: "grapple-ii", baseDamage: 7, cpGain: 1 }, notes: "Undefendable. Base damage is 6 (an earlier draft had 5.0 \u2014 corrected 2026-07-01). Grapple II makes the CP gain unconditional instead of requiring >=2 upgrades, and also bumps its own base dmg 6->7 (on top of unlocking Recon).", verified: true },
-      { id: "vengeance", boardName: "Vengeance (5-straight)", dicePattern: "Large Straight (5 consecutive)", baseDamage: 7, defendable: true, tokensGrantedToSelf: { agility: 1 }, bonusRoll: { diceCount: "4 (5 with Vengeance II)", perSymbolDamage: { B: 1 } }, notes: "Rider (verified): roll 4 dice (5 with Vengeance II), +1 dmg per Batons(B). On any Espionage(A) rolled, inflict 1 Time Bomb (boolean, not scaled by count). On a Widow-pair (>=2 C), gain 1 Covert Ops. An earlier draft checked raw face===1 for TB and awarded dmg for every other face, and didn't model the Covert Ops gain at all \u2014 all fixed in hero/bw.rules.ts's resolveVengeanceRider.", verified: true },
-      { id: "widows_bite", boardName: "Widow's Bite (CCCCC)", dicePattern: "CCCCC", baseDamage: 10, defendable: false, tokensInflictedOnOpponent: { timeBomb: 1 }, searchUpgradesIntoPlay: 2, notes: "Ultimate. Confirmed undefendable: 'Dice may be altered to prevent an Ultimate. Otherwise, no action of any kind may be performed by any opponent until the ability fully completes' \u2014 identical convention to HH's Dreadful Charge. Deck search into play not yet wired (TODO(user), needs deck/hand modeling).", verified: true }
+      {
+        id: "baton_strike_3b",
+        boardName: "Baton Strike 3B (BBB)",
+        dicePattern: "BBB",
+        baseDamage: 5,
+        defendable: true,
+        upgradedBy: {
+          upgradeId: "baton-strike-ii",
+          baseDamage: 6
+        },
+        verified: true
+      },
+      {
+        id: "baton_strike_4b",
+        boardName: "Baton Strike 4B (BBBB)",
+        dicePattern: "BBBB",
+        baseDamage: 6,
+        defendable: true,
+        upgradedBy: {
+          upgradeId: "baton-strike-ii",
+          baseDamage: 7
+        },
+        verified: true
+      },
+      {
+        id: "baton_strike_5b",
+        boardName: "Baton Strike 5B (BBBBB)",
+        dicePattern: "BBBBB",
+        baseDamage: 7,
+        defendable: true,
+        upgradedBy: {
+          upgradeId: "baton-strike-ii",
+          baseDamage: 8
+        },
+        verified: true
+      },
+      {
+        id: "infiltrate",
+        boardName: "Infiltrate (AABC)",
+        dicePattern: "AABC",
+        baseDamage: 0,
+        defendable: true,
+        tokensGrantedToSelf: {
+          agility: 1
+        },
+        tokensInflictedOnOpponent: {
+          timeBomb: 1
+        },
+        advancesAllTimeBombsInPlay: true,
+        notes: "Text order (verified): 'Gain Agility. Advance all Time Bomb tokens. Then inflict Time Bomb.' \u2014 the newly-inflicted TB is NOT advanced this turn. Infiltrate II reverses the order ('inflict, then advance'), so its newly-inflicted TB IS advanced the same turn. Advance-all-in-play not yet wired in turn.ts (TODO(user)).",
+        verified: true
+      },
+      {
+        id: "widows_gauntlets",
+        boardName: "Widow's Gauntlets (BBBAA)",
+        dicePattern: "BBBAA",
+        baseDamage: 6,
+        defendable: true,
+        cpGain: 1,
+        bonusDamagePerUpgrade: 1,
+        upgradedBy: {
+          upgradeId: "widows-gauntlets-ii",
+          baseDamage: 7
+        },
+        notes: "Dice pattern is 3 Batons + 2 Espionage. An earlier draft of this engine had it backwards (3 Espionage + 2 Batons) \u2014 corrected 2026-07-01 after cross-checking the base board photo twice against the Widow's Gauntlets II card photo. Widow's Gauntlets II also bumps its own base dmg 6->7 (on top of unlocking Covert Mission).",
+        verified: true
+      },
+      {
+        id: "hacked",
+        boardName: "Hacked (4-straight)",
+        dicePattern: "Small Straight (4 consecutive)",
+        baseDamage: 5,
+        defendable: true,
+        tokensInflictedOnOpponent: {
+          timeBomb: 1
+        },
+        thresholdBonus: {
+          upgradesAtLeast: 3,
+          bonusDamage: 2
+        },
+        upgradedBy: {
+          upgradeId: "hacked-ii",
+          baseDamage: 6
+        },
+        notes: 'Hacked II bumps base dmg 5->6; the existing >=3-upgrades +2 threshold bonus still applies on top, matching the printed "deal 8 dmg instead".',
+        verified: true
+      },
+      {
+        id: "grapple",
+        boardName: "Grapple (CCCC)",
+        dicePattern: "CCCC",
+        baseDamage: 6,
+        defendable: false,
+        tokensGrantedToSelf: {
+          agility: 1
+        },
+        bonusDamagePerUpgrade: 1,
+        cpGainIfUpgradesAtLeast: {
+          upgradesAtLeast: 2,
+          cpGain: 1
+        },
+        upgradedBy: {
+          upgradeId: "grapple-ii",
+          baseDamage: 7,
+          cpGain: 1
+        },
+        notes: "Undefendable. Base damage is 6 (an earlier draft had 5.0 \u2014 corrected 2026-07-01). Grapple II makes the CP gain unconditional instead of requiring >=2 upgrades, and also bumps its own base dmg 6->7 (on top of unlocking Recon).",
+        verified: true
+      },
+      {
+        id: "vengeance",
+        boardName: "Vengeance (5-straight)",
+        dicePattern: "Large Straight (5 consecutive)",
+        baseDamage: 7,
+        defendable: true,
+        tokensGrantedToSelf: {
+          agility: 1
+        },
+        bonusRoll: {
+          diceCount: "4 (5 with Vengeance II)",
+          perSymbolDamage: {
+            B: 1
+          }
+        },
+        notes: "Rider (verified): roll 4 dice (5 with Vengeance II), +1 dmg per Batons(B). On any Espionage(A) rolled, inflict 1 Time Bomb (boolean, not scaled by count). On a Widow-pair (>=2 C), gain 1 Covert Ops. An earlier draft checked raw face===1 for TB and awarded dmg for every other face, and didn't model the Covert Ops gain at all \u2014 all fixed in hero/bw.rules.ts's resolveVengeanceRider.",
+        verified: true
+      },
+      {
+        id: "widows_bite",
+        boardName: "Widow's Bite (CCCCC)",
+        dicePattern: "CCCCC",
+        baseDamage: 10,
+        defendable: false,
+        tokensInflictedOnOpponent: {
+          timeBomb: 1
+        },
+        searchUpgradesIntoPlay: 2,
+        notes: "Ultimate. Confirmed undefendable: 'Dice may be altered to prevent an Ultimate. Otherwise, no action of any kind may be performed by any opponent until the ability fully completes' \u2014 identical convention to HH's Dreadful Charge. Deck search into play not yet wired (TODO(user), needs deck/hand modeling).",
+        verified: true
+      }
     ],
     passives: [
-      { id: "red_room_training", name: "Red Room Training", trigger: "Passive (always active)", text: "Begin the game with 3 Covert Ops. You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.", verified: true }
+      {
+        id: "red_room_training",
+        name: "Red Room Training",
+        trigger: "Passive (always active)",
+        text: "Begin the game with 3 Covert Ops. You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.",
+        verified: true
+      }
     ],
     defense: {
       name: "Sabotage",
@@ -2592,20 +2789,207 @@ var Game = (() => {
       verified: true
     },
     cards: [
-      { id: "baton-strike-ii", name: "Baton Strike II", kind: "upgrade", cpCost: 1, upgradeSlot: "baton_strike", text: "Deal 6/7/8 dmg for 3/4/5 Batons (up from 5/6/7). When this card is played, force an opponent to reveal their hand to you.", effect: null, verified: true },
-      { id: "widows-gauntlets-ii", name: "Widow's Gauntlets II", kind: "upgrade", cpCost: 2, upgradeSlot: "widows_gauntlets", text: "Gain 1 CP. Deal 7 dmg. Add 1 dmg per Ability Upgrade you have in play.", effect: null, altAbility: { id: "covert-mission", boardName: "Covert Mission", dicePattern: "AABB", baseDamage: 0, defendable: true, tokensInflictedOnOpponent: { timeBomb: 1 }, notes: "Inflict Time Bomb on up to two different chosen opponents (engine is 1v1, so modeled as inflicting on the single opponent).", verified: true }, verified: true },
-      { id: "red-room-training-ii", name: "Red Room Training II", kind: "upgrade", cpCost: 2, upgradeSlot: "red_room_training", text: "Whenever you play an Ability Upgrade card, draw 1 (excluding this card). You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.", effect: null, verified: true },
-      { id: "grapple-ii", name: "Grapple II", kind: "upgrade", cpCost: 2, upgradeSlot: "grapple", text: "Gain 1 CP and Agility. Deal 7 undefendable dmg. Add 1 dmg per Ability Upgrade you have in play.", effect: null, altAbility: { id: "recon", boardName: "Recon", dicePattern: "CCC", baseDamage: 0, defendable: true, tokensGrantedToSelf: { agility: 1 }, searchUpgradesIntoPlay: 1, notes: "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck.", verified: true }, verified: true },
-      { id: "hacked-ii", name: "Hacked II", kind: "upgrade", cpCost: 1, upgradeSlot: "hacked", text: "Small Straight. A chosen opponent is inflicted with Time Bomb. Deal 6 dmg. If you have at least 3 Ability Upgrades in play, deal 8 dmg instead.", effect: null, verified: true },
-      { id: "sabotage-ii", name: "Sabotage II", kind: "upgrade", cpCost: 2, upgradeSlot: "sabotage", text: "Defense Roll 4. Deal 1xBatons dmg. Prevent 1xEspionage dmg. On Widow-Widow, inflict Time Bomb. If you have at least 4 Ability Upgrades in play, you may re-roll any of these dice.", effect: null, verified: true },
-      { id: "infiltrate-ii", name: "Infiltrate II", kind: "upgrade", cpCost: 2, upgradeSlot: "infiltrate", text: "Gain Agility. Inflict Time Bomb. Then advance all Time Bomb tokens.", effect: null, altAbility: { id: "spy-game", boardName: "Spy Game", dicePattern: "AABCC", baseDamage: 6, defendable: false, tokensGrantedToSelf: { covertOps: 1, agility: 1 }, notes: "Gain Covert Ops & Agility. Deal 6 undefendable dmg.", verified: true }, verified: true },
-      { id: "vengeance-ii", name: "Vengeance II", kind: "upgrade", cpCost: 2, upgradeSlot: "vengeance", text: "Large Straight. Gain Agility. Deal 7 dmg & roll 5: Add 1xBatons dmg. On Espionage, inflict Time Bomb. On Widow-Widow, gain Covert Ops.", effect: null, altAbility: { id: "subvert", boardName: "Subvert", dicePattern: "ABBB", baseDamage: 0, defendable: true, tokensGrantedToSelf: { covertOps: 1, agility: 1 }, notes: "Gain Covert Ops & Agility.", verified: true }, verified: true },
-      { id: "recoil", name: "Recoil!", kind: "action", cpCost: 0, actionTiming: "rollPhase", text: "Roll Phase Action. Play only after being Attacked. Roll 2 dice: On Espionage, gain 1 CP. On Widow, prevent 1/2 incoming dmg (rounded up).", effect: null, verified: true },
-      { id: "subversion", name: "Subversion!", kind: "action", cpCost: 1, actionTiming: "rollPhase", text: "Roll Phase Action, Attack Modifier. Add 2 dmg. Add an additional 1 dmg for each Ability Upgrade played this turn.", effect: { damage: 2 }, verified: true },
-      { id: "assemble", name: "Assemble!", kind: "action", cpCost: 1, actionTiming: "instant", text: "Instant Action. Gain 2 Agility.", effect: { tokensGrantedToSelf: { agility: 2 } }, verified: true },
-      { id: "elude", name: "Elude!", kind: "action", cpCost: 1, actionTiming: "rollPhase", text: "Roll Phase Action. If the outcome of an Agility die roll is 5-6, you may play this card to ignore all incoming dmg (this card can be played after your dice have been rolled).", effect: null, verified: true },
-      { id: "undercover-mission", name: "Undercover Mission!", kind: "action", cpCost: 2, actionTiming: "mainPhase", text: "Main Phase Action. A chosen opponent gains Time Bomb. If you have at least 4 Ability Upgrades in play, gain Agility.", effect: { tokensInflictedOnOpponent: { timeBomb: 1 } }, verified: true },
-      { id: "cunning", name: "Cunning!", kind: "action", cpCost: 2, actionTiming: "mainPhase", text: "Main Phase Action. Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and then add them to your hand. Put all remaining cards back in any order.", effect: null, verified: true }
+      {
+        id: "baton-strike-ii",
+        name: "Baton Strike II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "baton_strike",
+        text: "Deal 6/7/8 dmg for 3/4/5 Batons (up from 5/6/7). When this card is played, force an opponent to reveal their hand to you.",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "widows-gauntlets-ii",
+        name: "Widow's Gauntlets II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "widows_gauntlets",
+        text: "Gain 1 CP. Deal 7 dmg. Add 1 dmg per Ability Upgrade you have in play.",
+        effect: null,
+        altAbility: {
+          id: "covert-mission",
+          boardName: "Covert Mission",
+          dicePattern: "AABB",
+          baseDamage: 0,
+          defendable: true,
+          tokensInflictedOnOpponent: {
+            timeBomb: 1
+          },
+          notes: "Inflict Time Bomb on up to two different chosen opponents (engine is 1v1, so modeled as inflicting on the single opponent).",
+          verified: true
+        },
+        verified: true
+      },
+      {
+        id: "red-room-training-ii",
+        name: "Red Room Training II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "red_room_training",
+        text: "Whenever you play an Ability Upgrade card, draw 1 (excluding this card). You may play Ability Upgrades during any Roll Phase. If you have at least 5 Ability Upgrades in play, add 1 dmg to all of your Attacks.",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "grapple-ii",
+        name: "Grapple II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "grapple",
+        text: "Gain 1 CP and Agility. Deal 7 undefendable dmg. Add 1 dmg per Ability Upgrade you have in play.",
+        effect: null,
+        altAbility: {
+          id: "recon",
+          boardName: "Recon",
+          dicePattern: "CCC",
+          baseDamage: 0,
+          defendable: true,
+          tokensGrantedToSelf: {
+            agility: 1
+          },
+          searchUpgradesIntoPlay: 1,
+          notes: "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck. RULING USER (2026-07-10): une upgrade mise en jeu par Recon/Widow's Bite DECLENCHE la pioche de Red Room Training II ('put into play' compte comme jouee).",
+          verified: true
+        },
+        verified: true
+      },
+      {
+        id: "hacked-ii",
+        name: "Hacked II",
+        kind: "upgrade",
+        cpCost: 1,
+        upgradeSlot: "hacked",
+        text: "Small Straight. A chosen opponent is inflicted with Time Bomb. Deal 6 dmg. If you have at least 3 Ability Upgrades in play, deal 8 dmg instead.",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "sabotage-ii",
+        name: "Sabotage II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "sabotage",
+        text: "Defense Roll 4. Deal 1xBatons dmg. Prevent 1xEspionage dmg. On Widow-Widow, inflict Time Bomb. If you have at least 4 Ability Upgrades in play, you may re-roll any of these dice.",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "infiltrate-ii",
+        name: "Infiltrate II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "infiltrate",
+        text: "Gain Agility. Inflict Time Bomb. Then advance all Time Bomb tokens.",
+        effect: null,
+        altAbility: {
+          id: "spy-game",
+          boardName: "Spy Game",
+          dicePattern: "AABCC",
+          baseDamage: 6,
+          defendable: false,
+          tokensGrantedToSelf: {
+            covertOps: 1,
+            agility: 1
+          },
+          notes: "Gain Covert Ops & Agility. Deal 6 undefendable dmg.",
+          verified: true
+        },
+        verified: true
+      },
+      {
+        id: "vengeance-ii",
+        name: "Vengeance II",
+        kind: "upgrade",
+        cpCost: 2,
+        upgradeSlot: "vengeance",
+        text: "Large Straight. Gain Agility. Deal 7 dmg & roll 5: Add 1xBatons dmg. On Espionage, inflict Time Bomb. On Widow-Widow, gain Covert Ops.",
+        effect: null,
+        altAbility: {
+          id: "subvert",
+          boardName: "Subvert",
+          dicePattern: "ABBB",
+          baseDamage: 0,
+          defendable: true,
+          tokensGrantedToSelf: {
+            covertOps: 1,
+            agility: 1
+          },
+          notes: "Gain Covert Ops & Agility.",
+          verified: true
+        },
+        verified: true
+      },
+      {
+        id: "recoil",
+        name: "Recoil!",
+        kind: "action",
+        cpCost: 0,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. Play only after being Attacked. Roll 2 dice: On Espionage, gain 1 CP. On Widow, prevent 1/2 incoming dmg (rounded up).",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "subversion",
+        name: "Subversion!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action, Attack Modifier. Add 2 dmg. Add an additional 1 dmg for each Ability Upgrade played this turn.",
+        effect: {
+          damage: 2
+        },
+        verified: true
+      },
+      {
+        id: "assemble",
+        name: "Assemble!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "instant",
+        text: "Instant Action. Gain 2 Agility.",
+        effect: {
+          tokensGrantedToSelf: {
+            agility: 2
+          }
+        },
+        verified: true
+      },
+      {
+        id: "elude",
+        name: "Elude!",
+        kind: "action",
+        cpCost: 1,
+        actionTiming: "rollPhase",
+        text: "Roll Phase Action. If the outcome of an Agility die roll is 5-6, you may play this card to ignore all incoming dmg (this card can be played after your dice have been rolled).",
+        effect: null,
+        verified: true
+      },
+      {
+        id: "undercover-mission",
+        name: "Undercover Mission!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. A chosen opponent gains Time Bomb. If you have at least 4 Ability Upgrades in play, gain Agility.",
+        effect: {
+          tokensInflictedOnOpponent: {
+            timeBomb: 1
+          }
+        },
+        verified: true
+      },
+      {
+        id: "cunning",
+        name: "Cunning!",
+        kind: "action",
+        cpCost: 2,
+        actionTiming: "mainPhase",
+        text: "Main Phase Action. Look at the top 5 cards of your deck. Reveal all Ability Upgrades to your opponent and then add them to your hand. Put all remaining cards back in any order.",
+        effect: null,
+        verified: true
+      }
     ]
   };
 
@@ -4656,11 +5040,11 @@ var Game = (() => {
     const tokens = self.tokens;
     tokens.grimPursuit = Math.max(0, tokens.grimPursuit - amount);
   }
-  function spendGrimPursuitForBonusDamage(self, rng) {
+  function spendGrimPursuitForBonusDamage(self, rng, preRolled) {
     const tokens = self.tokens;
     if (tokens.grimPursuit <= 0) return { dice: [], bonus: 0 };
     tokens.grimPursuit -= 1;
-    const dice = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)];
+    const dice = preRolled ?? [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)];
     const bonus = dice.filter((v) => v === 4 || v === 5).length;
     return { dice, bonus };
   }
@@ -4787,8 +5171,8 @@ var Game = (() => {
     const tokens = self.tokens;
     tokens.covertOps = Math.min(cap, tokens.covertOps + amount);
   }
-  function resolveVengeanceRider(self, opponent, rng, diceCount = 4) {
-    const dice = rollDice(diceCount, rng);
+  function resolveVengeanceRider(self, opponent, rng, diceCount = 4, preRolled) {
+    const dice = preRolled ?? rollDice(diceCount, rng);
     let a = 0, bonusDamage = 0, c = 0;
     for (const face of dice) {
       const s = bwFaceToSymbol(face);
@@ -4898,7 +5282,7 @@ var Game = (() => {
     return { armorId: opt.armorId, slot: opt.slot, tier: opt.tier };
   }
   function craftOnce(self) {
-    const opts = craftOptions(self).sort((a, b) => b.tier - a.tier || (a.slot === "shield" ? -1 : 1));
+    const opts = craftOptions(self).sort((a, b) => b.tier - a.tier || (a.slot === "helmet" ? -1 : 1));
     return opts.length ? craftSpecific(self, opts[0].armorId) : null;
   }
   var HELMET_COUNTER = [0, 1, 2, 3];
@@ -5463,8 +5847,20 @@ var Game = (() => {
     }
     return Math.min(risk, 5) * 0.8;
   }
+  var TAX_AUDIT_DELTA = {
+    hh: 0.47,
+    bw: 0.5,
+    sm: 0.45,
+    py: 0.45,
+    dr: 0.35,
+    th: 0.4,
+    rv: 0.15,
+    se: 0,
+    du: -0.5,
+    fm: 0.1
+  };
   function defenseTaxFor(opponent) {
-    return baseDefenseTaxFor(opponent) + responseRiskFor(opponent);
+    return baseDefenseTaxFor(opponent) + responseRiskFor(opponent) + (TAX_AUDIT_DELTA[opponent.heroId] ?? 0);
   }
   function baseDefenseTaxFor(opponent) {
     if (opponent.heroId === "se") {
@@ -6409,7 +6805,12 @@ var Game = (() => {
         const to = 1 - from;
         for (const k of TRANSFERABLE_TOKENS) {
           if (countToken(state.players[from], k) > 0) {
-            options.push({ kind: "transferToken", cardId: "transference", tokenKind: k, fromIdx: from, toIdx: to });
+            if (k === "timeBomb") {
+              for (const p of [...new Set(state.players[from].timeBombs)])
+                options.push({ kind: "transferToken", cardId: "transference", tokenKind: k, fromIdx: from, toIdx: to, bombPos: p });
+            } else {
+              options.push({ kind: "transferToken", cardId: "transference", tokenKind: k, fromIdx: from, toIdx: to });
+            }
           }
         }
       }
@@ -6516,6 +6917,17 @@ var Game = (() => {
         }
         if (ctx.windowType === "defenseRoll" && playerIdx === pr.rollerIdx && canAfford("better-d")) {
           options.push({ kind: "rerollAll", cardId: "better-d" });
+        }
+        if (playerIdx === pr.rollerIdx && state.players[playerIdx].heroId === "fm" && state.players[playerIdx].humanControlled === true) {
+          const forge = state.players[playerIdx].forge ?? [];
+          if (forge.includes("diamond-ore")) {
+            pr.dice.forEach((_, i) => options.push({ kind: "rerollDie", cardId: "scrap-diamond", dieIndex: i }));
+          }
+          if (forge.includes("ultimanium-ore")) {
+            pr.dice.forEach((v, i) => {
+              if (v !== 6) options.push({ kind: "setDie", cardId: "scrap-ultimanium", sets: [{ dieIndex: i, value: 6 }] });
+            });
+          }
         }
         pushSetDieOptions(pr.dice, canAfford, options);
         if (playerIdx === pr.rollerIdx) {
@@ -6649,7 +7061,7 @@ var Game = (() => {
         self.deck = [...ups, ...others, ...rest];
         log(state, playerIdx, ctxPhaseless, `Covert Ops (b): top 3 contained ${ups.length} upgrade(s) \u2014 no search, put back with upgrade(s) ON TOP (${ups.join(",")})`);
       } else {
-        const found = self.deck.find(isUp);
+        const found = action.chosenId && self.deck.includes(action.chosenId) && isUp(action.chosenId) ? action.chosenId : self.deck.find(isUp);
         if (found) {
           self.deck.splice(self.deck.indexOf(found), 1);
           self.hand.push(found);
@@ -6664,7 +7076,24 @@ var Game = (() => {
     }
     if (action.kind === "spendGrimPursuitBonus") return;
     const pr = state.pendingRoll;
-    if (!pr || !spendActionCard(state, playerIdx, action.cardId)) return;
+    if (!pr) return;
+    if (typeof action.cardId === "string" && action.cardId.startsWith("scrap-")) {
+      const self2 = state.players[playerIdx];
+      const oreId = action.cardId === "scrap-diamond" ? "diamond-ore" : "ultimanium-ore";
+      const oi = (self2.forge ?? []).indexOf(oreId);
+      if (oi < 0) return;
+      self2.forge.splice(oi, 1);
+      self2.discard.push(oreId);
+      if (action.kind === "rerollDie") {
+        pr.dice[action.dieIndex] = rollDie(rng);
+        log(state, playerIdx, ctxPhaseless, `Scrap: ${oreId} -> defense die ${action.dieIndex + 1} rerolled to ${pr.dice[action.dieIndex]}`);
+      } else if (action.kind === "setDie") {
+        for (const s of action.sets) pr.dice[s.dieIndex] = s.value;
+        log(state, playerIdx, ctxPhaseless, `Scrap: ${oreId} -> die set to 6`);
+      }
+      return;
+    }
+    if (!spendActionCard(state, playerIdx, action.cardId)) return;
     if (action.kind === "setDie") {
       if (action.cardId === "radiant-exchange") {
         const p2 = state.players[playerIdx];
@@ -6704,22 +7133,27 @@ var Game = (() => {
       if ((to.tokens.regen2 ?? 0) + (to.tokens.regen1 ?? 0) < 2) to.tokens[kind] = (to.tokens[kind] ?? 0) + 1;
     } else to.tokens[kind] = Math.min(TOKEN_CAPS[kind], (to.tokens[kind] ?? 0) + 1);
   }
-  function removeTransferable(from, kind) {
-    if (kind === "timeBomb") return from.timeBombs.pop();
+  function removeTransferable(from, kind, bombPos) {
+    if (kind === "timeBomb") {
+      let i = bombPos !== void 0 ? from.timeBombs.indexOf(bombPos) : -1;
+      if (i < 0) i = from.timeBombs.indexOf("0:01");
+      if (i < 0) i = 0;
+      return from.timeBombs.splice(i, 1)[0];
+    }
     from.tokens[kind] = Math.max(0, from.tokens[kind] - 1);
     return void 0;
   }
   function applyTransferToken(state, playerIdx, action, _rng) {
     const from = state.players[action.fromIdx];
     if (countToken(from, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return;
-    const pos = removeTransferable(from, action.tokenKind);
+    const pos = removeTransferable(from, action.tokenKind, action.bombPos);
     grantTransferable(state.players[action.toIdx], action.tokenKind, pos);
     log(state, playerIdx, ctxPhaseless, `Transference!: moved ${action.tokenKind} from p${action.fromIdx} to p${action.toIdx}`);
   }
   function applyRemoveToken(state, playerIdx, action) {
     const target = state.players[action.targetIdx];
     if (countToken(target, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return;
-    removeTransferable(target, action.tokenKind);
+    removeTransferable(target, action.tokenKind, action.bombPos);
     log(state, playerIdx, ctxPhaseless, `Get That Outta Here!: removed ${action.tokenKind} from p${action.targetIdx}`);
   }
   function applyRemoveAllTokens(state, playerIdx, action) {
@@ -7292,7 +7726,8 @@ var Game = (() => {
     }
     if (self.heroId === "hh" && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
       if (policy.chooseGrimPursuitSpend?.(state, playerIdx, result.dmg)) {
-        const r = spendGrimPursuitForBonusDamage(self, rng);
+        const gpDice = bonusRollWindow(state, playerIdx, rollDice(5, rng), "Grim Pursuit", rng, policy);
+        const r = spendGrimPursuitForBonusDamage(self, rng, gpDice);
         self.grimPursuitBonusUsedThisTurn = true;
         result = { ...result, dmg: result.dmg + r.bonus };
         log(state, playerIdx, "resolveAttack", `Grim Pursuit spend (b): rolled [${r.dice.join(",")}], ${r.bonus} Horseshoe(s) -> +${r.bonus} dmg`);
@@ -7429,14 +7864,22 @@ var Game = (() => {
       return;
     }
     let dmg = data.baseDamage ?? 0;
-    if (data.bonusDamagePerUpgrade) dmg += data.bonusDamagePerUpgrade * self.upgradesInPlay.length;
+    if (data.bonusDamagePerUpgrade) {
+      const b = data.bonusDamagePerUpgrade * self.upgradesInPlay.length;
+      dmg += b;
+      if (b > 0) log(state, playerIdx, "resolveAttack", `${name}: +${b} dmg (1 per upgrade in play, ${self.upgradesInPlay.length})`);
+    }
     if (data.thresholdBonus && self.upgradesInPlay.length >= data.thresholdBonus.upgradesAtLeast) {
       dmg += data.thresholdBonus.bonusDamage;
+      log(state, playerIdx, "resolveAttack", `${name}: +${data.thresholdBonus.bonusDamage} dmg (>=${data.thresholdBonus.upgradesAtLeast} upgrades)`);
     }
-    dmg += rrtAttackBonus(self.upgradesInPlay);
+    const rrtB = rrtAttackBonus(self.upgradesInPlay);
+    dmg += rrtB;
+    if (rrtB > 0) log(state, playerIdx, "resolveAttack", `Red Room Training: +${rrtB} dmg (>=5 upgrades in play)`);
     if (name.startsWith("Vengeance")) {
       const riderDice = self.upgradesInPlay.includes("vengeance-ii") ? 5 : 4;
-      const rider = resolveVengeanceRider(self, opp, rng, riderDice);
+      const vd = bonusRollWindow(state, playerIdx, rollDice(riderDice, rng), "Vengeance (rider)", rng, policies[playerIdx]);
+      const rider = resolveVengeanceRider(self, opp, rng, riderDice, vd);
       dmg += rider.bonusDamage;
       log(state, playerIdx, "resolveAttack", `Vengeance rider: +${rider.bonusDamage} dmg, ${rider.tbInflictedOnOpponent} TB inflicted, +${rider.covertOpsGained} Covert Ops`);
     }
@@ -7504,6 +7947,7 @@ var Game = (() => {
       const existingId = self.upgradesInPlay.find((id) => cardById(hero, id)?.upgradeSlot === slot);
       if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter((id) => id !== existingId);
       self.upgradesInPlay.push(cardId);
+      rrtIIDrawOnUpgrade(state, playerIdx, cardId, rng);
     }
     self.deck = remaining;
     return found;
@@ -7532,6 +7976,27 @@ var Game = (() => {
     }
     queueDamage(state, defenderIdx, dmg);
     flushDamage(state);
+    checkGameOver(state);
+  }
+  function bonusRollWindow(state, playerIdx, dice, label, rng, rollerPolicy) {
+    if (!rollerPolicy || rollerPolicy.humanBonusRoll !== true) return dice;
+    const saved = state.pendingRoll;
+    state.pendingRoll = { rollerIdx: playerIdx, dice: dice.slice() };
+    const passP = { ...greedyHighestDamagePolicy };
+    const pair = playerIdx === 0 ? [rollerPolicy, passP] : [passP, rollerPolicy];
+    resolveResponseWindow(
+      state,
+      [playerIdx, 1 - playerIdx],
+      { windowType: "offensiveRoll", bonusRoll: true, bonusLabel: label },
+      rng,
+      pair,
+      enumerateWindowActions,
+      applyWindowAction
+    );
+    const out = state.pendingRoll ? state.pendingRoll.dice.slice() : dice.slice();
+    state.pendingRoll = saved;
+    if (out.join(",") !== dice.join(",")) log(state, playerIdx, "resolveAttack", `${label} bonus roll altered: [${dice.join(",")}] -> [${out.join(",")}]`);
+    return out;
   }
   function resolveAbilityPhase(state, playerIdx, dice, rng, policies) {
     const policy = policies[playerIdx];
@@ -8330,7 +8795,7 @@ var Game = (() => {
       return;
     }
     if (name.startsWith("Spider-Reflexes")) {
-      const two = [rollDie(rng), rollDie(rng)];
+      const two = bonusRollWindow(state, playerIdx, [rollDie(rng), rollDie(rng)], "Spider-Reflexes", rng, policies[playerIdx]);
       const total = two[0] + two[1];
       log(state, playerIdx, "resolveAttack", `Spider-Reflexes: rolled [${two.join(",")}] -> ${total} dmg`);
       if (total <= 5) gainCombo2("Spider-Reflexes (total <= 5)");
@@ -8676,51 +9141,13 @@ var Game = (() => {
     return { winner: state.winner, turns: state.turnNumber, finalState: state };
   }
 
-  // src/sim/policy.ts
-  var greedyHighestDamagePolicy = {
-    // Grim Pursuit (a) : E[bonus] = 5 dés x P(Fer)=2/6 ~ +1.67 dégâts pour 1 jeton. Un jeton
-    // stocké ne vaut que par sa dépense (cap 3) : on dépense dès que l'attaque touche.
-    chooseGrimPursuitSpend(state, playerIdx, dmg) {
-      return dmg > 0;
-    },
-    chooseMidRollCards: () => [],
-    // Scripted decision: in a Main Phase window, play the first affordable Hero Upgrade offered (the
-    // engine re-enumerates after each play, so this plays every affordable upgrade one at a time —
-    // same net result as the old chooseMainPhaseCards subset). Passes on every other window type,
-    // including the DRP5 'defense' window (greedy never plays Action cards — same as the old
-    // chooseDefensiveCards: () => []). Options are enumerated in hand order (enumerateWindowActions).
-    decide(_state, _playerIdx, request) {
-      if (request.ctx.windowType === "mainPhase") {
-        const play = request.options.find((o) => o.kind === "playCard");
-        if (play) return play;
-      }
-      return { kind: "pass" };
-    },
-    chooseSabotageReroll: () => false,
-    chooseAbility(_state, _playerIdx, candidates) {
-      let best = candidates[0];
-      for (const c of candidates) {
-        if ((c.baseDamage ?? -Infinity) > (best.baseDamage ?? -Infinity)) best = c;
-      }
-      return best.name;
-    },
-    chooseHeadlessMayhem: (_state, _playerIdx, canTerrorize2) => canTerrorize2 ? "terrorize" : "none",
-    chooseCardsToDiscard(state, playerIdx, maxHandSize) {
-      const hand = state.players[playerIdx].hand;
-      const overflow = hand.length - maxHandSize;
-      return overflow > 0 ? hand.slice(0, overflow) : [];
-    },
-    chooseHorrifyBonus: () => "dreadful",
-    chooseAttackModifierCards: () => [],
-    chooseRollManipulationCards: () => []
-  };
-
   // src/sim/interactive.ts
   function newHumanGame(humanHero, aiHero, ai, rng, humanFirst = true, bossHard = false) {
     if (aiHero === "nx") humanFirst = true;
     const state = humanFirst ? createInitialGameState(humanHero, aiHero, rng) : createInitialGameState(aiHero, humanHero, rng);
     state.bossHard = bossHard;
     const humanIdx = humanFirst ? 0 : 1;
+    state.players[humanIdx].humanControlled = true;
     return { state, humanIdx, aiIdx: 1 - humanIdx, ai, rng };
   }
   function humanDragonsHoard(g, choice) {
@@ -8793,7 +9220,7 @@ var Game = (() => {
     if (mayhem) policy = { ...policy, chooseHeadlessMayhem: () => mayhem };
     if (fmMine) policy = { ...policy, chooseFmMine: () => fmMine };
     playUpkeepPhase(g.state, g.humanIdx, g.rng, policy);
-    if (g.state.gameOver) return;
+    if (checkGameOver(g.state)) return;
     playIncomePhase(g.state, g.humanIdx, g.rng);
   }
   function humanCanTerrorize(g) {
@@ -8846,8 +9273,9 @@ var Game = (() => {
     const opp = g.state.players[g.aiIdx];
     return resolveMatchedAbilities(self.heroId, dice, oracleStateFor(self, opp));
   }
-  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = [], fmMine, gbSpend = false) {
-    const humanPolicy = {
+  function humanAttackPolicy(abilityName, gpBonus, attackMods, fmMine, gbSpend, script, probe) {
+    let i = 0;
+    const p = {
       ...greedyHighestDamagePolicy,
       chooseAbility: () => abilityName,
       chooseGrimPursuitSpend: () => gpBonus,
@@ -8855,10 +9283,46 @@ var Game = (() => {
       // humain automatiquement (user-caught) — ici c'est SON toggle UI qui décide.
       chooseGuardBreakSpend: () => gbSpend,
       chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter((id) => eligible.includes(id)),
-      ...fmMine ? { chooseFmMine: () => fmMine } : {}
+      ...fmMine ? { chooseFmMine: () => fmMine } : {},
+      decide(state, playerIdx, req) {
+        if (req.ctx?.bonusRoll !== true) return greedyHighestDamagePolicy.decide(state, playerIdx, req);
+        if (i < script.length) return script[i++];
+        if (probe && !probe.captured) {
+          probe.captured = {
+            label: req.ctx.bonusLabel ?? "Jet bonus",
+            dice: state.pendingRoll ? state.pendingRoll.dice.slice() : [],
+            options: req.options
+          };
+        }
+        i++;
+        return { kind: "pass" };
+      }
     };
-    const policies = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy];
+    p.humanBonusRoll = true;
+    return p;
+  }
+  function humanAttackProbe(g, dice, abilityName, script, gpBonus = false, attackMods = [], fmMine, gbSpend = false) {
+    const savedRng = g.rng.state;
+    const clone = structuredClone({ ...g.state, log: [] });
+    const cloneRng = mulberry32Stateful(0);
+    cloneRng.state = savedRng;
+    const probe = { captured: null };
+    const pol = humanAttackPolicy(abilityName, gpBonus, attackMods, fmMine, gbSpend, script, probe);
+    const policies = g.humanIdx === 0 ? [pol, g.ai] : [g.ai, pol];
+    try {
+      resolveAbilityPhase(clone, g.humanIdx, dice, cloneRng, policies);
+    } catch (e) {
+    }
+    return probe.captured;
+  }
+  function humanAttackWithScript(g, dice, abilityName, script, gpBonus = false, attackMods = [], fmMine, gbSpend = false) {
+    const pol = humanAttackPolicy(abilityName, gpBonus, attackMods, fmMine, gbSpend, script);
+    const policies = g.humanIdx === 0 ? [pol, g.ai] : [g.ai, pol];
     resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies);
+    checkGameOver(g.state);
+  }
+  function humanAttack(g, dice, abilityName, gpBonus = false, attackMods = [], fmMine, gbSpend = false) {
+    humanAttackWithScript(g, dice, abilityName, [], gpBonus, attackMods, fmMine, gbSpend);
   }
   function humanAttackModifierOptions(g, grimPursuitIncoming = false) {
     const self = g.state.players[g.humanIdx];

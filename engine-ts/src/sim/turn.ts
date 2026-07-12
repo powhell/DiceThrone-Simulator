@@ -16,6 +16,7 @@ import type { SEState } from '../characters/sunelf/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
+import { greedyHighestDamagePolicy } from './policy.js'
 import type { RollStep, RollStepUpdate } from './oracle.js'
 import { runOffensiveRoll } from './oracle.js'
 import { resolveMatchedAbilities } from './ability-resolver.js'
@@ -76,8 +77,16 @@ function responseRiskFor(opponent: PlayerState): number {
   return Math.min(risk, 5) * 0.8
 }
 
+// Correction empirique par défenseur (calibration/audit_ev.mjs, 2026-07-10 : 1 500 vraies
+// résolutions par cas — écart taxe mesurée − annoncée à l'attaque de référence ~6). Le
+// résidu dépendant de la TAILLE de l'attaque (~+0,1/dégât au-delà de 6 chez bw/py/sm/th)
+// n'est PAS modélisé ici : il faudrait une taxe par habileté (post-tournoi).
+const TAX_AUDIT_DELTA: Partial<Record<string, number>> = {
+  hh: 0.47, bw: 0.5, sm: 0.45, py: 0.45, dr: 0.35, th: 0.4, rv: 0.15, se: 0, du: -0.5, fm: 0.1,
+}
+
 export function defenseTaxFor(opponent: PlayerState): number {
-  return baseDefenseTaxFor(opponent) + responseRiskFor(opponent)
+  return baseDefenseTaxFor(opponent) + responseRiskFor(opponent) + (TAX_AUDIT_DELTA[opponent.heroId] ?? 0)
 }
 
 function baseDefenseTaxFor(opponent: PlayerState): number {
@@ -1165,7 +1174,13 @@ function pushCrossPlayerOptions(state: GameState, canAfford: (id: string) => boo
       const to = (1 - from) as 0 | 1
       for (const k of TRANSFERABLE_TOKENS) {
         if (countToken(state.players[from], k) > 0) {
-          options.push({ kind: 'transferToken', cardId: 'transference', tokenKind: k, fromIdx: from, toIdx: to })
+          if (k === 'timeBomb') {
+            // une option PAR POSITION distincte : le joueur choisit QUELLE bombe part
+            for (const p of [...new Set(state.players[from].timeBombs)])
+              options.push({ kind: 'transferToken', cardId: 'transference', tokenKind: k, fromIdx: from, toIdx: to, bombPos: p })
+          } else {
+            options.push({ kind: 'transferToken', cardId: 'transference', tokenKind: k, fromIdx: from, toIdx: to })
+          }
         }
       }
     }
@@ -1307,6 +1322,21 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
       if (ctx.windowType === 'defenseRoll' && playerIdx === pr.rollerIdx && canAfford('better-d')) {
         options.push({ kind: 'rerollAll', cardId: 'better-d' })
       }
+      // Scrap d'Ore (fm, leaflet « à tout moment ») : Diamond = relance un dé de TON jet,
+      // Ultimanium = un dé → 6. Le jet offensif passe par humanScrapDie côté UI ; ici on
+      // couvre le JET DE DÉFENSE (user-caught : impossible de relancer le dé Masterwork avec
+      // un Diamond Ore). humanControlled only en v1 — offrir au valueGreedy changerait les
+      // sims la veille du tournoi (à ouvrir à l'IA avec le re-calibrage post-tournoi).
+      if (playerIdx === pr.rollerIdx && state.players[playerIdx].heroId === 'fm'
+        && state.players[playerIdx].humanControlled === true) {
+        const forge = state.players[playerIdx].forge ?? []
+        if (forge.includes('diamond-ore')) {
+          pr.dice.forEach((_, i) => options.push({ kind: 'rerollDie', cardId: 'scrap-diamond', dieIndex: i }))
+        }
+        if (forge.includes('ultimanium-ore')) {
+          pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'scrap-ultimanium', sets: [{ dieIndex: i, value: 6 }] }) })
+        }
+      }
       // So Wild! / Twice As Wild! — either player sets the roller's dice to chosen values.
       pushSetDieOptions(pr.dice, canAfford, options)
       // Six-It! / Samesies! / Try Try Again! — Roll Phase Actions on YOUR OWN dice, so
@@ -1434,7 +1464,10 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
       self.deck = [...ups, ...others, ...rest]
       log(state, playerIdx, ctxPhaseless, `Covert Ops (b): top 3 contained ${ups.length} upgrade(s) — no search, put back with upgrade(s) ON TOP (${ups.join(',')})`)
     } else {
-      const found = self.deck.find(isUp)
+      // Le joueur choisit SA carte (chosenId, validé upgrade-présent-au-deck) ; sinon
+      // heuristique premier-trouvé (IA, comportement historique).
+      const found = (action.chosenId && self.deck.includes(action.chosenId) && isUp(action.chosenId))
+        ? action.chosenId : self.deck.find(isUp)
       if (found) { self.deck.splice(self.deck.indexOf(found), 1); self.hand.push(found) }
       for (let i = self.deck.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [self.deck[i], self.deck[j]] = [self.deck[j], self.deck[i]] }
       log(state, playerIdx, ctxPhaseless, found ? `Covert Ops (b): searched ${found} to hand, deck shuffled` : 'Covert Ops (b): no upgrade left in deck, shuffled')
@@ -1445,7 +1478,26 @@ export function applyWindowAction(state: GameState, playerIdx: 0 | 1, action: Wi
 
   // Dice-alteration actions mutate the in-progress roll on state.pendingRoll (ORP2 / DRP3).
   const pr = state.pendingRoll
-  if (!pr || !spendActionCard(state, playerIdx, action.cardId)) return
+  if (!pr) return
+  // Scrap d'Ore (fm) : consomme un Ore de la Forge, PAS une carte — court-circuite
+  // spendActionCard. Diamond = relance ; Ultimanium = →6 (leaflet vérifié, défausse l'Ore).
+  if (typeof (action as any).cardId === 'string' && (action as any).cardId.startsWith('scrap-')) {
+    const self2 = state.players[playerIdx]
+    const oreId = (action as any).cardId === 'scrap-diamond' ? 'diamond-ore' : 'ultimanium-ore'
+    const oi = (self2.forge ?? []).indexOf(oreId)
+    if (oi < 0) return
+    self2.forge.splice(oi, 1)
+    self2.discard.push(oreId)
+    if (action.kind === 'rerollDie') {
+      pr.dice[action.dieIndex] = rollDie(rng)
+      log(state, playerIdx, ctxPhaseless, `Scrap: ${oreId} -> defense die ${action.dieIndex + 1} rerolled to ${pr.dice[action.dieIndex]}`)
+    } else if (action.kind === 'setDie') {
+      for (const s of action.sets) pr.dice[s.dieIndex] = s.value
+      log(state, playerIdx, ctxPhaseless, `Scrap: ${oreId} -> die set to 6`)
+    }
+    return
+  }
+  if (!spendActionCard(state, playerIdx, action.cardId)) return
   if (action.kind === 'setDie') {
     // Radiant Exchange! (se) : le set-à-6 coûte AUSSI la remise du cadran à 0 (carte vérifiée).
     if (action.cardId === 'radiant-exchange') {
@@ -1495,22 +1547,30 @@ function grantTransferable(to: PlayerState, kind: TransferableToken, pos: TimeBo
   // le stackCap suit la déf vérifiée du jeton, pas le perso qui reçoit.
   else to.tokens[kind] = Math.min(TOKEN_CAPS[kind], (to.tokens[kind] ?? 0) + 1)
 }
-function removeTransferable(from: PlayerState, kind: TransferableToken): TimeBombPosition | undefined {
-  if (kind === 'timeBomb') return from.timeBombs.pop()
+function removeTransferable(from: PlayerState, kind: TransferableToken, bombPos?: TimeBombPosition): TimeBombPosition | undefined {
+  if (kind === 'timeBomb') {
+    // bombPos = position choisie par le joueur (user-caught : .pop() transférait une bombe
+    // ARBITRAIRE — la 0:02 au lieu de la 0:01 prête à sauter). Défaut sans choix : la plus
+    // AVANCÉE (position minimale), le geste évident.
+    let i = bombPos !== undefined ? from.timeBombs.indexOf(bombPos) : -1
+    if (i < 0) i = from.timeBombs.indexOf('0:01') // défaut : la plus avancée
+    if (i < 0) i = 0
+    return from.timeBombs.splice(i, 1)[0]
+  }
   from.tokens[kind] = Math.max(0, from.tokens[kind] - 1)
   return undefined
 }
-function applyTransferToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1 }, _rng: RNG): void {
+function applyTransferToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1; bombPos?: TimeBombPosition }, _rng: RNG): void {
   const from = state.players[action.fromIdx]
   if (countToken(from, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return
-  const pos = removeTransferable(from, action.tokenKind)
+  const pos = removeTransferable(from, action.tokenKind, action.bombPos)
   grantTransferable(state.players[action.toIdx], action.tokenKind, pos)
   log(state, playerIdx, ctxPhaseless, `Transference!: moved ${action.tokenKind} from p${action.fromIdx} to p${action.toIdx}`)
 }
-function applyRemoveToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1 }): void {
+function applyRemoveToken(state: GameState, playerIdx: 0 | 1, action: { cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1; bombPos?: TimeBombPosition }): void {
   const target = state.players[action.targetIdx]
   if (countToken(target, action.tokenKind) <= 0 || !spendActionCard(state, playerIdx, action.cardId)) return
-  removeTransferable(target, action.tokenKind)
+  removeTransferable(target, action.tokenKind, action.bombPos)
   log(state, playerIdx, ctxPhaseless, `Get That Outta Here!: removed ${action.tokenKind} from p${action.targetIdx}`)
 }
 function applyRemoveAllTokens(state: GameState, playerIdx: 0 | 1, action: { cardId: string; targetIdx: 0 | 1 }): void {
@@ -2202,7 +2262,8 @@ function applyAttackModifiers(state: GameState, playerIdx: 0 | 1, policy: Policy
   // are just the payout).
   if (self.heroId === 'hh' && self.tokens.grimPursuit >= 1 && !self.grimPursuitBonusUsedThisTurn) {
     if (policy.chooseGrimPursuitSpend?.(state, playerIdx, result.dmg)) {
-      const r = hh.spendGrimPursuitForBonusDamage(self, rng)
+      const gpDice = bonusRollWindow(state, playerIdx, rollDice(5, rng), 'Grim Pursuit', rng, policy)
+      const r = hh.spendGrimPursuitForBonusDamage(self, rng, gpDice)
       self.grimPursuitBonusUsedThisTurn = true
       result = { ...result, dmg: result.dmg + r.bonus }
       log(state, playerIdx, 'resolveAttack', `Grim Pursuit spend (b): rolled [${r.dice.join(',')}], ${r.bonus} Horseshoe(s) -> +${r.bonus} dmg`)
@@ -2357,15 +2418,26 @@ function applyBWAbility(state: GameState, playerIdx: 0 | 1, name: string, rng: R
   if (!data) { log(state, playerIdx, 'resolveAttack', `Unknown ability "${name}" — no data, skipped`); return }
 
   let dmg = data.baseDamage ?? 0
-  if (data.bonusDamagePerUpgrade) dmg += data.bonusDamagePerUpgrade * self.upgradesInPlay.length
+  // Chaque bonus est LOGGÉ pour que le BILAN de l'UI montre l'arithmétique complète
+  // (user-caught 2026-07-10 : « 7 base = 10 infligés » sans explication — le +1/upgrade
+  // de Gauntlets et le +1 Red Room étaient appliqués en silence).
+  if (data.bonusDamagePerUpgrade) {
+    const b = data.bonusDamagePerUpgrade * self.upgradesInPlay.length
+    dmg += b
+    if (b > 0) log(state, playerIdx, 'resolveAttack', `${name}: +${b} dmg (1 per upgrade in play, ${self.upgradesInPlay.length})`)
+  }
   if (data.thresholdBonus && self.upgradesInPlay.length >= data.thresholdBonus.upgradesAtLeast) {
     dmg += data.thresholdBonus.bonusDamage
+    log(state, playerIdx, 'resolveAttack', `${name}: +${data.thresholdBonus.bonusDamage} dmg (>=${data.thresholdBonus.upgradesAtLeast} upgrades)`)
   }
-  dmg += bw.rrtAttackBonus(self.upgradesInPlay)
+  const rrtB = bw.rrtAttackBonus(self.upgradesInPlay)
+  dmg += rrtB
+  if (rrtB > 0) log(state, playerIdx, 'resolveAttack', `Red Room Training: +${rrtB} dmg (>=5 upgrades in play)`)
 
   if (name.startsWith('Vengeance')) {
     const riderDice = self.upgradesInPlay.includes('vengeance-ii') ? 5 : 4
-    const rider = bw.resolveVengeanceRider(self, opp, rng, riderDice)
+    const vd = bonusRollWindow(state, playerIdx, rollDice(riderDice, rng), 'Vengeance (rider)', rng, policies[playerIdx])
+    const rider = bw.resolveVengeanceRider(self, opp, rng, riderDice, vd)
     dmg += rider.bonusDamage
     log(state, playerIdx, 'resolveAttack', `Vengeance rider: +${rider.bonusDamage} dmg, ${rider.tbInflictedOnOpponent} TB inflicted, +${rider.covertOpsGained} Covert Ops`)
   }
@@ -2449,6 +2521,9 @@ function searchDeckForUpgrades(state: GameState, playerIdx: 0 | 1, count: number
     const existingId = self.upgradesInPlay.find(id => cardById(hero, id)?.upgradeSlot === slot)
     if (existingId) self.upgradesInPlay = self.upgradesInPlay.filter(id => id !== existingId)
     self.upgradesInPlay.push(cardId)
+    // Ruling user (2026-07-10) : une upgrade qui ENTRE EN JEU déclenche la pioche de Red Room
+    // Training II, même via Recon/Widow's Bite (« put into play » compte comme jouée).
+    rrtIIDrawOnUpgrade(state, playerIdx, cardId, rng)
   }
   self.deck = remaining
   return found
@@ -2488,6 +2563,32 @@ function queueAttackDamageVsArmor(state: GameState, attackerIdx: 0 | 1, dmg: num
   }
   queueDamage(state, defenderIdx, dmg)
   flushDamage(state)
+  // Ceinture et bretelles (bug Druid ressuscité, 2026-07-10) : le chemin indéfendable doit
+  // constater la mort lui-même — les appels playTurn/humanAttack le re-vérifient sans effet.
+  checkGameOver(state)
+}
+
+// ---- Fenêtre de manipulation des JETS BONUS (ruling user 2026-07-10) ----------------------
+// Spider-Reflexes (2d6), rider Vengeance, Grim Pursuit (b) : les Roll Phase Actions (Try Try
+// Again!, Six-It!, Samesies!, Tip It!…) s'appliquent aussi à ces jets — ils ont lieu pendant
+// la Roll Phase. La fenêtre ne s'ouvre QUE pour une policy marquée `humanBonusRoll` (le pont
+// interactif) : l'IA, le RL et les sims passent — zéro impact entraînement/lookahead.
+export function bonusRollWindow(
+  state: GameState, playerIdx: 0 | 1, dice: number[], label: string,
+  rng: RNG, rollerPolicy?: Policy,
+): number[] {
+  if (!rollerPolicy || (rollerPolicy as any).humanBonusRoll !== true) return dice
+  const saved = state.pendingRoll
+  state.pendingRoll = { rollerIdx: playerIdx, dice: dice.slice() }
+  const passP: Policy = { ...greedyHighestDamagePolicy }
+  const pair: [Policy, Policy] = playerIdx === 0 ? [rollerPolicy, passP] : [passP, rollerPolicy]
+  resolveResponseWindow(state, [playerIdx, (1 - playerIdx) as 0 | 1],
+    { windowType: 'offensiveRoll', bonusRoll: true, bonusLabel: label },
+    rng, pair, enumerateWindowActions, applyWindowAction)
+  const out = state.pendingRoll ? state.pendingRoll.dice.slice() : dice.slice()
+  state.pendingRoll = saved
+  if (out.join(',') !== dice.join(',')) log(state, playerIdx, 'resolveAttack', `${label} bonus roll altered: [${dice.join(',')}] -> [${out.join(',')}]`)
+  return out
 }
 
 export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
@@ -3338,7 +3439,7 @@ function applySMAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     return
   }
   if (name.startsWith('Spider-Reflexes')) {
-    const two = [rollDie(rng), rollDie(rng)]
+    const two = bonusRollWindow(state, playerIdx, [rollDie(rng), rollDie(rng)], 'Spider-Reflexes', rng, policies[playerIdx])
     const total = two[0] + two[1]
     log(state, playerIdx, 'resolveAttack', `Spider-Reflexes: rolled [${two.join(',')}] -> ${total} dmg`)
     if (total <= 5) gainCombo('Spider-Reflexes (total <= 5)')

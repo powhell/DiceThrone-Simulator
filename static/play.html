@@ -20,7 +20,9 @@
   body{font-family:var(--sans); color:var(--ink); background:var(--felt);
     background-image:radial-gradient(120% 80% at 50% 6%, #241a33 0%, #17111f 46%, #0e0a14 100%);
     min-height:100vh; padding:16px; -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1560px; margin:0 auto; display:flex; flex-direction:column; gap:12px}
+  /* 1900px : la colonne journal ajoutée (320px) débordait du conteneur 1560px → page
+     décentrée avec un vide à droite (user-caught). Les bandeaux héros suivent la même largeur. */
+  .wrap{max-width:1900px; margin:0 auto; display:flex; flex-direction:column; gap:12px}
   .mast{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;
     border-bottom:1px solid var(--edge); padding-bottom:9px}
   .mast h1{font-family:var(--display); font-weight:700; font-size:22px; margin:0}
@@ -56,12 +58,16 @@
   .tok.agi .dot{background:#5fd0d6} .tok.covert .dot{background:#7ba7ff}
   .tok.head{border-color:#7a5c1f} .tok.bomb{border-color:var(--danger)} .tok.bomb .dot{background:var(--danger)}
 
-  .arena{display:grid; grid-template-columns:260px 1fr 390px 290px; gap:12px}
-  @media(max-width:1400px){.arena{grid-template-columns:280px 1fr 420px}
+  /* Le journal a SA colonne, complètement à gauche, AVANT le board ennemi (demande user 07-10) */
+  .arena{display:grid; grid-template-columns:320px 280px 1fr 390px 290px; gap:12px}
+  @media(max-width:1750px){.arena{grid-template-columns:320px 280px 1fr 400px}
     .col-ev{grid-column:1 / -1} .col-ev .abils{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}}
-  @media(max-width:1100px){.arena{grid-template-columns:1fr 300px} .col-left{grid-column:1 / -1} .col-left .abils{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}}
+  @media(max-width:1400px){.arena{grid-template-columns:300px 1fr 420px}
+    .col-left{grid-column:1 / -1} .col-left .abils{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}}
+  @media(max-width:1100px){.arena{grid-template-columns:1fr 300px} .col-journal{grid-column:1 / -1; order:9}}
   @media(max-width:860px){.arena{grid-template-columns:1fr}}
-  .col-main,.col-side,.col-left,.col-ev{display:flex; flex-direction:column; gap:12px}
+  .col-main,.col-side,.col-left,.col-ev,.col-journal{display:flex; flex-direction:column; gap:12px}
+  .col-journal .log{max-height:76vh}
   .defbox{margin-top:8px; padding:8px 10px; border-radius:9px; background:#151024; border:1px solid var(--edge);
     font-size:11px; line-height:1.45; color:var(--muted)}
   .defbox b{color:var(--ink); font-family:var(--display); font-size:12.5px}
@@ -125,8 +131,8 @@
   .evrow .dist{font-size:10.5px; color:var(--muted); grid-column:1 / -1; line-height:1.35}
   .evrow .sure{font-size:9px; font-weight:700; letter-spacing:.06em; color:#120c17; background:var(--hp);
     border-radius:4px; padding:1px 5px; vertical-align:1px; margin-left:5px}
-  .log{display:flex; flex-direction:column; font-size:12.5px; max-height:420px; overflow-y:auto}
-  .log .l{padding:5px 2px; border-bottom:1px solid #241c31; color:var(--muted); line-height:1.35}
+  .log{display:flex; flex-direction:column; font-size:13.5px; max-height:52vh; overflow-y:auto}
+  .log .l{padding:7px 3px; border-bottom:1px solid #241c31; color:var(--muted); line-height:1.5}
   .log .l:last-child{border-bottom:0} .log .l b{color:var(--ink); font-weight:600}
   .log .l .t{font-family:var(--mono); font-size:10px; color:var(--muted-2); margin-right:6px}
   /* séparateur de tour : le journal se lit maintenant DANS L'ORDRE (haut = début, bas = récent) */
@@ -135,6 +141,41 @@
   .log .lh:first-child{margin-top:0}
   .log .l.you-line{box-shadow:inset 2px 0 0 var(--hh)}
   .log .l.ai-line{box-shadow:inset 2px 0 0 var(--bw)}
+  /* Jetons de l'IA en GRAND dans la colonne gauche (demande user : les voir facilement) */
+  .toks-big{display:flex; flex-wrap:wrap; gap:7px}
+  .toks-big .tok{font-size:13px; padding:7px 12px; border-radius:10px}
+  .toks-big .tok b{font-size:12px}
+  .toks-big .tok .dot{width:14px; height:14px}
+  .logjump{position:absolute; bottom:10px; right:14px; z-index:3; font-size:12px; padding:6px 12px;
+    background:#3a2d52; border:1px solid #6a56a0; border-radius:99px; cursor:pointer; color:var(--ink)}
+  /* Deltas d'état (jetons/PV/CP avant→après) — puces vertes = gain, rouges = perte */
+  .log .l.delta-line{border-bottom:0; padding:3px 2px 9px}
+  .log .dtitle{display:block; font-size:11px; color:var(--muted-2); margin-bottom:3px}
+  .dwho{font-family:var(--mono); font-size:9px; letter-spacing:.08em; color:var(--muted-2); margin:0 4px 0 2px; text-transform:uppercase}
+  .dchip{display:inline-block; padding:1px 8px; margin:2px 4px 2px 0; border-radius:999px; font-size:11px; border:1px solid #3a2f4a; background:#221a30; color:var(--ink)}
+  .dchip.up{border-color:#2f6b3f; background:#132217}
+  .dchip.down{border-color:#7a2f30; background:#251314}
+  .dsep{display:inline-block; width:10px}
+  /* Scène centrale : l'événement en cours EN GROS au-dessus des dés — on suit la partie
+     sans lire le journal (le journal reste l'historique) */
+  .stage{display:none; margin-bottom:9px; border-radius:12px; padding:12px 16px;
+    background:linear-gradient(180deg,#231a33,#1a1426); border:1px solid #45356a; animation:stagein .25s ease}
+  .stage.show{display:block}
+  .stage .s-title{font-size:17px; font-weight:700; color:var(--ink); line-height:1.3}
+  .stage .s-sub{font-size:13px; color:var(--muted); margin-top:3px}
+  .stage .s-chips{margin-top:8px}
+  .stage .dchip{font-size:13px; padding:3px 12px}
+  .stage .dwho{font-size:11px}
+  .stage.hit{border-color:#8a3a3a; background:linear-gradient(180deg,#331a1e,#241318)}
+  .stage.gain{border-color:#3a6a45; background:linear-gradient(180deg,#1a2b20,#141f18)}
+  @keyframes stagein{from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:none}}
+  /* Nombre flottant sur les bandeaux héros quand les PV bougent */
+  .fighter{position:relative}
+  .hpfloat{position:absolute; right:26px; top:-8px; font-weight:800; font-size:24px; z-index:5;
+    pointer-events:none; text-shadow:0 2px 8px #000; animation:hpfloat 1.6s ease forwards}
+  .hpfloat.dmg{color:#ff6a5e} .hpfloat.heal{color:#5ed08a}
+  @keyframes hpfloat{from{opacity:0; transform:translateY(10px)} 20%{opacity:1} to{opacity:0; transform:translateY(-24px)}}
+  @media (prefers-reduced-motion: reduce){ .stage{animation:none} .hpfloat{animation:none; opacity:.9} }
   .hand{display:flex; gap:11px; overflow-x:auto; padding:4px 2px 9px; min-height:60px}
   .card{flex:0 0 152px; height:206px; border-radius:12px; padding:10px 11px; cursor:pointer;
     background:linear-gradient(180deg,#efe7d6,#d8cbb0); color:#241a12; border:1px solid #b7a684;
@@ -163,11 +204,16 @@
     </div>
     <div class="fighter ai" id="ai-strip"></div>
     <div class="arena">
+      <div class="col-journal">
+        <div class="panel"><h2>Journal</h2><div class="log" id="log"></div></div>
+      </div>
       <div class="col-left">
+        <div class="panel"><h2>Jetons de l'IA</h2><div class="toks-big" id="ai-tokens"></div></div>
         <div class="panel"><h2 id="ai-board-title">Board IA</h2><div class="abils" id="ai-abils"></div></div>
       </div>
       <div class="col-main">
         <div class="tray-wrap">
+          <div class="stage" id="stage"></div>
           <div class="tray" id="tray"></div>
           <div class="controls" id="controls"></div>
           <div class="match" id="match"></div>
@@ -177,7 +223,6 @@
       <div class="col-side">
         <div class="panel"><h2 id="board-title">Habiletés</h2><div class="abils" id="abils"></div></div>
         <div class="panel" id="coach-panel" style="display:none"><h2>🎓 Coach — EV par garde</h2><div id="coach-evs"></div></div>
-        <div class="panel"><h2>Journal</h2><div class="log" id="log"></div></div>
       </div>
       <div class="col-ev">
         <div class="panel"><h2>📊 EV par habileté — ton état</h2><div class="abils" id="ev-panel"></div></div>

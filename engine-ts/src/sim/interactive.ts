@@ -65,6 +65,10 @@ export function newHumanGame(humanHero: HeroId, aiHero: HeroId, ai: Policy, rng:
     : createInitialGameState(aiHero, humanHero, rng)
   state.bossHard = bossHard
   const humanIdx: 0 | 1 = humanFirst ? 0 : 1
+  // Le flag vivait dans play.js seulement (ligne ~137) : les drivers/tests qui passent par
+  // newHumanGame ne l'avaient pas — les gates humanControlled (Swing Escape, Scrap en
+  // défense…) étaient silencieusement fermés hors navigateur.
+  state.players[humanIdx].humanControlled = true
   return { state, humanIdx, aiIdx: (1 - humanIdx) as 0 | 1, ai, rng }
 }
 
@@ -165,7 +169,11 @@ export function beginHumanTurn(g: HumanGame, mayhem?: 'terrorize' | 'giveHead' |
   if (mayhem) policy = { ...policy, chooseHeadlessMayhem: () => mayhem }
   if (fmMine) policy = { ...policy, chooseFmMine: () => fmMine }
   playUpkeepPhase(g.state, g.humanIdx, g.rng, policy)
-  if (g.state.gameOver) return
+  // Miroir de playTurn : la détonation de Time Bomb à l'upkeep peut être LÉTALE — sans ce
+  // check le joueur continuait à jouer à PV négatifs (user-caught 2026-07-11 ; 3e occurrence
+  // du pattern « chaque chemin de dégâts doit constater la mort » : attaque IA 07-09,
+  // attaque humaine 07-10, upkeep humain 07-11).
+  if (checkGameOver(g.state)) return
   playIncomePhase(g.state, g.humanIdx, g.rng)
 }
 
@@ -238,13 +246,18 @@ export function matchedAbilities(g: HumanGame, dice: number[]): AbilityCandidate
 // Resolve the human's chosen attack. The chosen ability name is injected into a one-shot policy so
 // the real resolveAbilityPhase (which also runs the AI's defense) picks it. Returns nothing; read
 // g.state for the result. If dice match no ability it's a Whiff (handled inside resolveAbilityPhase).
-export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice, gbSpend = false): void {
-  // gpBonus: mode (b) Grim Pursuit pre-armed. attackMods: attack-modifier card ids the human
-  // pre-armed in the UI (Cranial Assist!, Unescapable!, Subversion!, Thundering Hooves!) —
-  // before this parameter the human hook always answered "none", making those 4 cards
-  // unplayable on your own attacks (user-caught on Cranial Assist!).
-  // fmMine: choix de Mine pré-armé pour A Good Haul ('cp' = ne rien révéler ; défaut = tout).
-  const humanPolicy: Policy = {
+// Fenêtre de JET BONUS capturée pendant l'attaque humaine (Spider-Reflexes 2d6, rider
+// Vengeance, Grim Pursuit b) — même mécanique sonde/rejeu que la défense interactive.
+export interface BonusRollPrompt { label: string; dice: number[]; options: WindowAction[] }
+
+// Policy de l'attaque humaine : hooks pré-armés + script des fenêtres bonus. Si `probe` est
+// fourni, la PREMIÈRE décision bonus non scriptée est capturée pour l'UI au lieu d'être jouée.
+function humanAttackPolicy(
+  abilityName: string, gpBonus: boolean, attackMods: string[], fmMine: FmMineChoice | undefined,
+  gbSpend: boolean, script: WindowAction[], probe?: { captured: BonusRollPrompt | null },
+): Policy {
+  let i = 0
+  const p: Policy = {
     ...greedyHighestDamagePolicy,
     chooseAbility: () => abilityName,
     chooseGrimPursuitSpend: () => gpBonus,
@@ -253,9 +266,59 @@ export function humanAttack(g: HumanGame, dice: number[], abilityName: string, g
     chooseGuardBreakSpend: () => gbSpend,
     chooseAttackModifierCards: (_s, _p, _d, eligible) => attackMods.filter(id => eligible.includes(id)),
     ...(fmMine ? { chooseFmMine: () => fmMine } : {}),
+    decide(state, playerIdx, req) {
+      if (req.ctx?.bonusRoll !== true) return greedyHighestDamagePolicy.decide(state, playerIdx, req)
+      if (i < script.length) return script[i++]
+      if (probe && !probe.captured) {
+        probe.captured = {
+          label: req.ctx.bonusLabel ?? 'Jet bonus',
+          dice: state.pendingRoll ? state.pendingRoll.dice.slice() : [],
+          options: req.options,
+        }
+      }
+      i++
+      return { kind: 'pass' } as WindowAction
+    },
   }
-  const policies: [Policy, Policy] = g.humanIdx === 0 ? [humanPolicy, g.ai] : [g.ai, humanPolicy]
+  ;(p as any).humanBonusRoll = true // ouvre bonusRollWindow (l'IA/le RL ne portent pas ce marqueur)
+  return p
+}
+
+// Sonde : rejoue l'attaque sur un CLONE (rng au snapshot) avec le script courant, et capture
+// la prochaine fenêtre de jet bonus. null = plus de décision -> résoudre pour vrai.
+export function humanAttackProbe(
+  g: HumanGame, dice: number[], abilityName: string, script: WindowAction[],
+  gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice, gbSpend = false,
+): BonusRollPrompt | null {
+  const savedRng = (g.rng as StatefulRNG).state
+  const clone = structuredClone({ ...g.state, log: [] }) as GameState
+  const cloneRng = mulberry32Stateful(0)
+  cloneRng.state = savedRng
+  const probe: { captured: BonusRollPrompt | null } = { captured: null }
+  const pol = humanAttackPolicy(abilityName, gpBonus, attackMods, fmMine, gbSpend, script, probe)
+  const policies: [Policy, Policy] = g.humanIdx === 0 ? [pol, g.ai] : [g.ai, pol]
+  try { resolveAbilityPhase(clone, g.humanIdx, dice, cloneRng, policies) } catch (e) { /* clone jetable */ }
+  return probe.captured
+}
+
+// Résolution RÉELLE avec le script accumulé (le rng n'a pas bougé depuis les sondes -> les
+// jets bonus reproduisent exactement ce que l'UI a montré).
+export function humanAttackWithScript(
+  g: HumanGame, dice: number[], abilityName: string, script: WindowAction[],
+  gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice, gbSpend = false,
+): void {
+  const pol = humanAttackPolicy(abilityName, gpBonus, attackMods, fmMine, gbSpend, script)
+  const policies: [Policy, Policy] = g.humanIdx === 0 ? [pol, g.ai] : [g.ai, pol]
   resolveAbilityPhase(g.state, g.humanIdx, dice, g.rng, policies)
+  // Miroir de resolveAiAttack (fix 2026-07-09) : sans ce check, une attaque létale du JOUEUR
+  // laissait gameOver à faux — le Druid tué à -1 PV se régénérait à son upkeep (user-caught
+  // 2026-07-10, Venom Punch = chemin indéfendable sans checkGameOver par-habileté).
+  checkGameOver(g.state)
+}
+
+export function humanAttack(g: HumanGame, dice: number[], abilityName: string, gpBonus = false, attackMods: string[] = [], fmMine?: FmMineChoice, gbSpend = false): void {
+  // Compat : attaque sans fenêtres bonus scriptées (elles s'ouvrent et se referment sur pass).
+  humanAttackWithScript(g, dice, abilityName, [], gpBonus, attackMods, fmMine, gbSpend)
 }
 
 // The attack-modifier cards the human could arm for the attack being chosen (hand + CP +

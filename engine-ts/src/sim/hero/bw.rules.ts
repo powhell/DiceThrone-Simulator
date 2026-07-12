@@ -163,8 +163,9 @@ export function resolveVengeanceRider(
   opponent: PlayerState,
   rng: RNG,
   diceCount = 4,
+  preRolled?: number[], // dés passés par la fenêtre bonus (bonusRollWindow) — absent = lance ici
 ): VengeanceRiderResult {
-  const dice = rollDice(diceCount, rng)
+  const dice = preRolled ?? rollDice(diceCount, rng)
   let a = 0, bonusDamage = 0, c = 0
   for (const face of dice) {
     const s = bwFaceToSymbol(face)

@@ -6,6 +6,7 @@
 //
 // Usage : node chain2.mjs <rounds=3> <workers=3> <gamesPerWorker=10> <sims=100> <gateGames=2>
 import { spawn } from 'node:child_process'
+import * as os from 'node:os'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,6 +34,8 @@ fs.mkdirSync(path.join(here, 'exp2'), { recursive: true })
 function run(cmd, args, cwd, tag) {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, { cwd, shell: false })
+    // priorité basse : les enfants héritent de BELOW_NORMAL sous Windows → la machine reste utilisable
+    try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL) } catch {}
     let out = ''
     p.stdout.on('data', d => { out += d })
     p.stderr.on('data', d => { out += d })
@@ -61,10 +64,11 @@ for (let round = round0; round < round0 + rounds; round++) {
   const t0 = Date.now()
   console.log(`\n===== ronde ${round} (champion: ${fs.existsSync(champPath) ? 'ok' : 'MANQUANT'})`)
 
-  // 1. self-play avec le CHAMPION
+  // 1. self-play avec le CHAMPION (reprise : on saute les fichiers déjà produits par une ronde interrompue)
   await Promise.all(Array.from({ length: workers }, (_, i) => {
-    const [cmd, args] = tsx(['src/sim/search/selfplay2.ts', champPath,
-      path.join(here, 'exp2', `round${round}_w${i}.dtx2`),
+    const outFile = path.join(here, 'exp2', `round${round}_w${i}.dtx2`)
+    if (fs.existsSync(outFile)) { console.log(`[selfplay r${round}w${i}] existe déjà — sauté`); return Promise.resolve('') }
+    const [cmd, args] = tsx(['src/sim/search/selfplay2.ts', champPath, outFile,
       String(gamesPerWorker), String(sims), String(50_000 + round * 1000 + i * 100)])
     return run(cmd, args, engine, `selfplay r${round}w${i}`)
   }))
@@ -75,7 +79,8 @@ for (let round = round0; round < round0 + rounds; round++) {
     expPatterns.push(path.join(here, 'exp2', `round${r}_*.dtx2`))
   }
   const candPath = path.join(here, 'weights2', `cand_r${round}.json`)
-  await run(py, ['train.py', 'train2', '--net', champPath, '--exp', ...expPatterns,
+  if (fs.existsSync(candPath)) console.log(`[train2 r${round}] cand_r${round}.json existe déjà — sauté`)
+  else await run(py, ['train.py', 'train2', '--net', champPath, '--exp', ...expPatterns,
     '--out', candPath, '--epochs', '4', '--batch', '512'], here, `train2 r${round}`)
 
   // 2b. parité
@@ -95,7 +100,7 @@ for (let round = round0; round < round0 + rounds; round++) {
   }
   const dec = aW + bW
   const winrate = dec ? aW / dec : 0.5
-  const promoted = winrate > 0.5
+  const promoted = winrate > +(process.env.GATE_WR ?? 0.5) // 0.55 = anti-bruit (diagnostic 07-11)
   if (promoted) {
     fs.copyFileSync(candPath, champPath)
     fs.copyFileSync(candPath, path.join(here, 'weights2', `champion_r${round}.json`))

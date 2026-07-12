@@ -77,11 +77,13 @@ export function spendGrimPursuit(self: PlayerState, amount: number): void {
 // Horseshoe (faces 4-5) rolled, so 0..5, average ~1.67 (matches the solver's long-standing
 // GRIM_PURSUIT_AVG_DMG = 1.66). The previous "roll 1 die, add its value" was a transcription
 // error that DOUBLED the average payout — user-caught 2026-07-04.
-export function spendGrimPursuitForBonusDamage(self: PlayerState, rng: RNG): { dice: number[]; bonus: number } {
+// preRolled : dés déjà lancés et passés par la fenêtre de manipulation des jets bonus
+// (bonusRollWindow, ruling user 2026-07-10). Absent = lance ici (chemin sim historique).
+export function spendGrimPursuitForBonusDamage(self: PlayerState, rng: RNG, preRolled?: number[]): { dice: number[]; bonus: number } {
   const tokens = self.tokens
   if (tokens.grimPursuit <= 0) return { dice: [], bonus: 0 }
   tokens.grimPursuit -= 1
-  const dice = [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)]
+  const dice = preRolled ?? [rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng), rollDie(rng)]
   const bonus = dice.filter(v => v === 4 || v === 5).length
   return { dice, bonus }
 }

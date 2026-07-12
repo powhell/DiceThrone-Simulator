@@ -101,9 +101,13 @@ export function craftSpecific(self: PlayerState, armorId: string): { armorId: st
   return { armorId: opt.armorId, slot: opt.slot, tier: opt.tier }
 }
 
-// Auto-greedy (IA/sim) : la pièce la plus haute craftable, bouclier avant casque à tier égal.
+// Auto-greedy (IA/sim) : la pièce la plus haute craftable, CASQUE avant bouclier à tier égal.
+// (Inversé 2026-07-11 : la calibration v3 mesure la pièce casque 4,05 > bouclier 3,41. A/B
+// en jeu réel fm-vs-sm, mêmes seeds, 300 parties/bras : bouclier 55,9 % vs casque 54,0 % —
+// ÉGALITÉ statistique (±5,8). On garde casque-d'abord pour rester aligné avec le conseil
+// mesuré donné au joueur dans la fiche FM ; à re-trancher avec un A/B plus large.)
 export function craftOnce(self: PlayerState): { armorId: string; slot: 'helmet' | 'shield'; tier: number } | null {
-  const opts = craftOptions(self).sort((a, b) => (b.tier - a.tier) || (a.slot === 'shield' ? -1 : 1))
+  const opts = craftOptions(self).sort((a, b) => (b.tier - a.tier) || (a.slot === 'helmet' ? -1 : 1))
   return opts.length ? craftSpecific(self, opts[0].armorId) : null
 }
 

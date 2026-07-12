@@ -240,9 +240,9 @@ export type WindowAction =
   // ANY response window by ANY participant; resolves immediately for the player who plays it.
   | { kind: 'playInstant'; cardId: string }
   // Transference!: move one status-effect token from one player to another (1v1: to = the other).
-  | { kind: 'transferToken'; cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1 }
+  | { kind: 'transferToken'; cardId: string; tokenKind: TransferableToken; fromIdx: 0 | 1; toIdx: 0 | 1; bombPos?: TimeBombPosition }
   // Get That Outta Here!: remove one status-effect token from a chosen player.
-  | { kind: 'removeToken'; cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1 }
+  | { kind: 'removeToken'; cardId: string; tokenKind: TransferableToken; targetIdx: 0 | 1; bombPos?: TimeBombPosition }
   // What Status Effects?: remove ALL status-effect tokens from a chosen player.
   | { kind: 'removeAllTokens'; cardId: string; targetIdx: 0 | 1 }
   // Rolling Pumpkin!: move the Haunted Head to a chosen player.
@@ -254,7 +254,9 @@ export type WindowAction =
   | { kind: 'covertOpsUpgrade'; cardId: string }
   // Covert Ops mode (b) (texte vérifié du jeton) : regarde le top 3 du deck ; si AUCUN
   // upgrade, cherche un upgrade du deck vers la MAIN puis mélange ; sinon remet (raté).
-  | { kind: 'covertOpsSearch' }
+  // chosenId : l'upgrade que le JOUEUR choisit de chercher (règle : « search your deck » =
+  // choix du joueur, pas le premier trouvé — user-caught 2026-07-10). Absent = heuristique IA.
+  | { kind: 'covertOpsSearch'; chosenId?: string }
   // Mjölnir (th, déf vérifiée) : « At ANY time, discard a card to Throw or Retrieve » —
   // offert en Main Phase ; la défausse est choisie par l'application (carte la moins utile).
   | { kind: 'mjolnirShuttle' }
@@ -266,6 +268,11 @@ export interface WindowContext {
   windowType: 'mainPhase' | 'defense' | 'offensiveRoll' | 'defenseRoll'
   phase?: Phase // for card plays that are phase-scoped (playCard needs it)
   eludeEligible?: boolean // 'defense' window only: Elude! is offered only if the Agility roll was 5-6
+  // Fenêtre de JET BONUS (Spider-Reflexes 2d6, rider Vengeance, Grim Pursuit b…) : les Roll
+  // Phase Actions s'y appliquent (ruling user 2026-07-10). Réutilise l'énumération
+  // 'offensiveRoll' sur state.pendingRoll ; bonusLabel = nom du jet pour l'UI.
+  bonusRoll?: boolean
+  bonusLabel?: string
 }
 
 // Handed to Policy.decide: the context plus every legal action (a response window always includes

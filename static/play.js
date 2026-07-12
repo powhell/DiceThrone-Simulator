@@ -323,6 +323,9 @@
   function renderFighters() {
     renderFighter('ai-strip', g.aiIdx, aiHero, false);
     renderFighter('you-strip', g.humanIdx, humanHero, true);
+    // panneau « Jetons de l'IA » en colonne gauche — les mêmes chips que le bandeau, en grand
+    const at = document.getElementById('ai-tokens');
+    if (at) at.innerHTML = tokenChips(g.state.players[g.aiIdx], false) || '<span class="empty">aucun jeton</span>';
   }
 
   function dieHTML(hero, d, i, interactive) {
@@ -451,22 +454,41 @@
   // BILAN lines can show the full arithmetic (base + riders + Grim Pursuit − prevented = total)
   // instead of making the player reverse-engineer it from scattered lines (reported twice).
   function parseCombat(fromIdx){
-    const out = { rider:0, gp:0, bonus:0, prevented:0, counter:0 };
+    const out = { rider:0, gp:0, bonus:0, prevented:0, counter:0, perUp:0, thresh:0, rrt:0, mod:0 };
     for (let i=fromIdx; i<g.state.log.length; i++){
       const msg = g.state.log[i].message; let x;
       if ((x = msg.match(/ rider: \+(\d+) dmg/))) out.rider += +x[1];
       if ((x = msg.match(/^Grim Pursuit spend \(b\): rolled \[[\d,]+\], \d+ Horseshoe\(s\) -> \+(\d+)/))) out.gp += +x[1];
       if ((x = msg.match(/bonus roll: \+(\d+) dmg/))) out.bonus += +x[1];
+      // Riders BW loggés depuis le fix « 7 base = 10 infligés » (user-caught 2026-07-10) :
+      if ((x = msg.match(/: \+(\d+) dmg \(1 per upgrade in play, (\d+)\)/))) out.perUp += +x[1];
+      else if ((x = msg.match(/: \+(\d+) dmg \(>=\d+ upgrades\)/))) out.thresh += +x[1];
+      else if ((x = msg.match(/^Red Room Training: \+(\d+) dmg/))) out.rrt += +x[1];
+      // Cartes attack-modifier (Subversion!, Cranial Assist!… — leur nom finit par « ! ») :
+      else if ((x = msg.match(/^[A-Z][^:]*!: \+(\d+) dmg/))) out.mod += +x[1];
       if ((x = msg.match(/(?:Hallowed Reckoning|Sabotage): prevented (\d+), (\d+) dmg back/))) { out.prevented += +x[1]; out.counter += +x[2]; }
+      if ((x = msg.match(/^Masterwork: face \d+, prevented (\d+), (\d+) dmg back/))) { out.prevented += +x[1]; out.counter += +x[2]; }
     }
     return out;
   }
-  function breakdownStr(base, cb){
+  // realTotal (optionnel) : le total RÉEL appliqué — si l'addition affichée n'y retombe pas,
+  // on montre l'écart en clair (« ±N non détaillé ») au lieu d'un bilan qui ne s'additionne
+  // pas (user-caught 2× : rider Vengeance, puis Subversion!).
+  function breakdownStr(base, cb, realTotal){
     const parts = [`${base} base`];
+    if (cb.perUp) parts.push(`+${cb.perUp} (1/upgrade en jeu)`);
+    if (cb.thresh) parts.push(`+${cb.thresh} (palier d'upgrades)`);
+    if (cb.rrt) parts.push(`+${cb.rrt} Red Room`);
+    if (cb.mod) parts.push(`+${cb.mod} carte(s) modificatrice(s)`);
     if (cb.rider) parts.push(`+${cb.rider} rider`);
     if (cb.bonus) parts.push(`+${cb.bonus} jet bonus`);
     if (cb.gp) parts.push(`+${cb.gp} Grim Pursuit`);
     if (cb.prevented) parts.push(`−${cb.prevented} prévenu(s)`);
+    if (realTotal != null) {
+      const sum = base + cb.perUp + cb.thresh + cb.rrt + cb.mod + cb.rider + cb.bonus + cb.gp - cb.prevented;
+      const diff = realTotal - sum;
+      if (diff !== 0) parts.push(`${diff>0?'+':'−'}${Math.abs(diff)} non détaillé`);
+    }
     return parts.join(' ');
   }
 
@@ -578,28 +600,38 @@
     if (!adv || !adv.topOptions || !adv.topOptions.length) { panel.style.display='none'; return; }
     panel.style.display='';
     const distName = n => n==='Whiff' ? 'Raté (whiff)' : formatAbility(humanHero, n).name;
-    // Demande user : DEUX solveurs côte à côte — « dés seuls » vs « avec tes cartes de manip ».
+    // Demande user (2026-07-10, 2e passe) : DEUX BLOCS SÉPARÉS — « dés seuls » d'abord,
+    // « avec tes cartes » ensuite — au lieu d'une liste fusionnée illisible.
     const dual = hasDiceCards();
     const raw = dual ? liveAdvice(false) : null;
-    const rawByKept = new Map((raw && raw.topOptions || []).map(o => [o.kept.join(','), o.ev]));
-    const header = dual && raw ? `<div class="evrow" style="opacity:.75"><div class="keep"><small>garde</small></div><div class="ev"><small>🎲 seuls&nbsp;→&nbsp;🃏 avec cartes</small></div></div>` : '';
-    const rows = adv.topOptions.map((o,i)=>{
+    const renderRows = (a, max) => (a.topOptions||[]).slice(0,max).map((o,i)=>{
       const icons = o.kept.length
         ? o.kept.map(v=>symIcon(humanHero, humanHero.cls(v))).join('')
         : '<small>tout relancer</small>';
       const dist = Object.entries(o.probDist||{})
         .sort((x,y)=>y[1]-x[1]).filter(e=>e[1]>=3).slice(0,3)
         .map(e=>`${distName(e[0])} ${Math.round(e[1])}%`).join(' · ');
-      const rawEv = rawByKept.get(o.kept.join(','));
-      const evCell = (dual && rawEv !== undefined && Math.abs(rawEv - o.ev) >= 0.05)
-        ? `<span style="opacity:.65">${rawEv.toFixed(1)}</span> → ${o.ev.toFixed(1)}`
-        : o.ev.toFixed(1);
       return `<div class="evrow${i===0?' best':''}">
         <div class="keep">${o.kept.length?`[${o.kept.join(',')}] `:''}${icons}${o.isGuaranteed?'<span class="sure">SÛR</span>':''}</div>
-        <div class="ev">${evCell}</div>
+        <div class="ev">${o.ev.toFixed(1)}</div>
         ${dist?`<div class="dist">${dist}</div>`:''}</div>`;
     }).join('');
-    const rowsOut = header + rows;
+    const secHdr = t => `<div class="dist" style="padding:4px 8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)">${t}</div>`;
+    let rowsOut;
+    if (dual && raw) {
+      const youN = g.state.players[g.humanIdx];
+      const nets2 = [['six-it',1],['tip-it',1],['samesies',1],['so-wild',2],['twice-as-wild',3]]
+        .filter(([id,c])=>youN.hand.includes(id)&&youN.cp>=c)
+        .map(([id])=> (G.cardById(G.heroTemplateFor(HUMAN),id)||{name:id}).name);
+      const bestRaw = raw.topOptions[0], bestCards = adv.topOptions[0];
+      const differ = bestRaw && bestCards && bestRaw.kept.join(',') !== bestCards.kept.join(',');
+      rowsOut =
+        secHdr('🎲 Dés seuls (sans jouer de carte)') + renderRows(raw, 3) +
+        secHdr(`🃏 En comptant tes cartes payables : ${nets2.join(', ')}`) + renderRows(adv, 3) +
+        (differ ? `<div class="dist" style="padding:2px 8px;color:var(--gold)">⚠️ Tes cartes CHANGENT la garde optimale : [${bestRaw.kept.join(',')||'tout relancer'}] sans → [${bestCards.kept.join(',')||'tout relancer'}] avec.</div>` : '');
+    } else {
+      rowsOut = renderRows(adv, 5);
+    }
     // A2 — LETHAL : un keep SÛR dont les dégâts DIRECTS tuent l'adversaire prime sur l'EV.
     const oppHp = Math.max(0, g.state.players[g.aiIdx].hp);
     const lethal = adv.topOptions.find(o=>o.isGuaranteed && (o.directDamage||0) >= oppHp && oppHp>0);
@@ -644,11 +676,28 @@
     const youW = g.state.players[g.humanIdx];
     const nets = [['twice-as-wild',3,'Twice As Wild'],['six-it',1,'Six-It'],['so-wild',2,'So Wild'],['samesies',1,'Samesies'],['tip-it',1,'Tip It']]
       .filter(([id,c])=>youW.hand.includes(id)&&youW.cp>=c).map(([,,n])=>n);
-    const netNote = nets.length
-      ? `<div class="dist" style="padding:2px 8px;color:var(--gold)">🃏 Filet actif : ${nets.join(', ')} — l'EV inclut la réparation au jet final, les % « Raté » NON (ils sont avant carte).</div>`
+    const netNote = nets.length && !dual
+      ? `<div class="dist" style="padding:2px 8px;color:var(--gold)">🃏 Filet actif : ${nets.join(', ')} — l'EV inclut la réparation au jet final.</div>`
       : '';
-    document.getElementById('coach-evs').innerHTML = banner + rowsOut + cardLines + netNote +
-      `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance.${dual?' <b>🎲 → 🃏</b> : EV dés seuls → EV en comptant tes cartes de manipulation.':''}</div>`;
+    // « Plus d'explication » (user 2026-07-10) : le POURQUOI de la meilleure garde, en français.
+    let explain = '';
+    try {
+      const bestE = adv.topOptions[0];
+      const tgtE = Object.entries(bestE.probDist||{}).sort((x,y)=>y[1]-x[1]).filter(e=>e[1]>=5).slice(0,2)
+        .map(e=>`${distName(e[0])} (${Math.round(e[1])}%)`).join(', puis ');
+      let why = bestE.isGuaranteed
+        ? 'cette main est déjà garantie — relancer ne peut que la dégrader.'
+        : `tu chasses ${tgtE||'mieux que ce jet'}.`;
+      let cmp = '';
+      if (!bestE.isGuaranteed && typeof adv.keepAllEv === 'number')
+        cmp += ` S'arrêter sur CE jet vaut ${adv.keepAllEv.toFixed(1)} ; la garde conseillée vaut ${bestE.ev.toFixed(1)} → tu gagnes ${(bestE.ev-adv.keepAllEv).toFixed(1)} en moyenne en relançant.`;
+      const sureE = adv.topOptions.find(o=>o.isGuaranteed && o!==bestE);
+      if (sureE && !bestE.isGuaranteed)
+        cmp += ` L'option SÛRE [${sureE.kept.join(',')}] vaut ${sureE.ev.toFixed(1)} (écart ${(bestE.ev-sureE.ev).toFixed(1)}) — préfère-la si le garanti TUE l'adversaire ou t'évite de mourir.`;
+      explain = `<div class="dist" style="padding:5px 8px;border-top:1px dashed var(--edge, #3a2f4a)">💡 <b>Pourquoi</b> : garder ${bestE.kept.length?`[${bestE.kept.join(',')}]`:'rien (tout relancer)'} — ${why}${cmp}</div>`;
+    } catch(e) {}
+    document.getElementById('coach-evs').innerHTML = banner + rowsOut + explain + cardLines + netNote +
+      `<div class="dist" style="padding:2px 8px">EV = dégâts + valeur estimée des jetons/pioche. SÛR = habileté déjà garantie sans relance. Les % d'atterrissage sont AVANT réparation par cartes.</div>`;
   }
 
   // Board / ability panel: during 'ability' phase, list matched abilities as pickable buttons.
@@ -1131,6 +1180,25 @@
   }
   function renderControls() {
     const c = $('controls'); c.innerHTML='';
+    // ⚠️ Coach stratégique minimal (user 07-11 : « le coach devrait me dire ça ») : la ZONE
+    // LÉTALE des Time Bombs est calculable — détonation = 4 dégâts par bombe à 0:01 (1-5 au d6).
+    {
+      const you0 = g.state.players[g.humanIdx];
+      const n01 = (you0.timeBombs||[]).filter(p=>p==='0:01').length;
+      const n02 = (you0.timeBombs||[]).filter(p=>p==='0:02').length;
+      if ((n01 > 0 || n02 > 0) && phase!=='over') {
+        const worstNow = n01 * 4;
+        const b=document.createElement('span'); b.className='rolls';
+        if (n01 > 0 && worstNow >= you0.hp) {
+          b.innerHTML = `<b style="color:#ff5a4e">☠️ ZONE LÉTALE — ${n01} bombe(s) à 0:01 : la détonation (${worstNow}) te TUE à ton prochain upkeep (5 chances sur 6 par bombe). Retire/transfère MAINTENANT si tu peux.</b>`;
+        } else if (n01 > 0) {
+          b.innerHTML = `<b style="color:#e8a02a">💣 ${n01} bombe(s) à 0:01 — détonation probable à ton prochain upkeep : −${worstNow} PV (tu tomberais à ${you0.hp - worstNow}).</b>`;
+        } else {
+          b.innerHTML = `<span>💣 ${n02} bombe(s) à 0:02 — passe(nt) à 0:01 à ton upkeep (désamorçage sur 6 seulement).</span>`;
+        }
+        c.appendChild(b);
+      }
+    }
     // While it's the AI's turn (except the defense window, which IS yours to act in), never show
     // your action buttons — otherwise a stale Main-Phase panel could be clicked during the AI's turn.
     if (phase!=='defense' && phase!=='defarm' && phase!=='aialter' && phase!=='over' && g.state.activePlayerIdx !== g.humanIdx) {
@@ -1269,7 +1337,24 @@
         }
       }
       if (acts.length===0) { const s=document.createElement('span'); s.className='rolls'; s.textContent='Rien à jouer (tu peux vendre des cartes ci-dessous, +1 CP chacune).'; c.appendChild(s); }
-      else acts.slice(0,8).forEach(a=>c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))));
+      else acts.slice(0,8).forEach(a=>{
+        // Covert Ops (b) : « search your deck » = TON choix de carte (user-caught). Un bouton
+        // par upgrade encore au deck — sans révéler le top 3 (tu ne le vois qu'en payant) :
+        // le choix est ta PRÉFÉRENCE si la recherche a lieu.
+        if (a.kind==='covertOpsSearch') {
+          const youC2 = g.state.players[g.humanIdx];
+          const heroT2 = G.heroTemplateFor(HUMAN);
+          const isUp2 = id => (G.cardById(heroT2,id)||{}).kind==='upgrade';
+          const ups = [...new Set(youC2.deck.filter(isUp2))];
+          if (!ups.length) { c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a))); return; }
+          ups.forEach(id=>{
+            const cd2 = G.cardById(heroT2,id)||{name:id};
+            c.appendChild(btn(`Covert Ops (b) : top 3 → si pas d'upgrade dedans, chercher ${cd2.name}`,'', ()=>applyMain({...a, chosenId:id})));
+          });
+          return;
+        }
+        c.appendChild(btn(mainLabel(a),'', ()=>applyMain(a)));
+      });
       addFmBtns(c);
       addThorBtns(c, true); // ⚡×4→pioche (Main Phase, leaflet) + navette Mjölnir
       { // ⚡ EK volés : « spend 4 during Main Phase to draw 1 » est sur le JETON — tout détenteur
@@ -1385,10 +1470,13 @@
       const hero = G.heroTemplateFor(HUMAN);
       const cardOK = id => { const cd=G.cardById(hero,id); return cd && you.hand.includes(id) && you.cp >= (cd.cpCost||0); };
       const sel = [...altSel].sort((a,b)=>a-b);
-      const anyCard = ['so-wild','twice-as-wild','tip-it'].some(cardOK);
+      // Samesies!/Six-It!/Try Try Again! manquaient ici (user-caught : « je n'ai pas réussi à
+      // faire mon Samesies alors qu'on était encore dans la roll phase, j'ai chié mon attaque »).
+      // La fenêtre d'altération EST encore la Roll Phase — le moteur les accepte (offensiveRoll).
+      const anyCard = ['so-wild','twice-as-wild','tip-it','samesies','six-it','try-try-again'].some(cardOK);
       const s=document.createElement('span'); s.className='rolls';
       if (!anyCard) s.textContent='Aucune carte de manipulation en main.';
-      else if (sel.length===0) s.textContent='Clique 1 dé (So Wild!/Tip It!) ou 2 dés (Twice As Wild!) ci-dessus.';
+      else if (sel.length===0) s.textContent='Clique 1 dé (So Wild!/Tip It!/Six-It!/Samesies!/Try Try Again!) ou 2 dés (Twice As Wild!) ci-dessus.';
       else if (sel.length===1) s.textContent=`Dé ${sel[0]+1} (${dice[sel[0]].v}) sélectionné — nouvelle valeur :`;
       else s.textContent=`Dés ${sel[0]+1} et ${sel[1]+1} sélectionnés — nouvelle valeur pour les DEUX :`;
       c.appendChild(s);
@@ -1399,6 +1487,14 @@
           if (cur<6) c.appendChild(btn(`Tip It! : ${cur}→${cur+1} · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'alterDie',cardId:'tip-it',dieIndex:i,delta:1}); }));
           if (cur>1) c.appendChild(btn(`Tip It! : ${cur}→${cur-1} · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'alterDie',cardId:'tip-it',dieIndex:i,delta:-1}); }));
         }
+        if (cardOK('six-it') && cur!==6)
+          c.appendChild(btn(`Six-It! : ${cur}→6 · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'six-it',sets:[{dieIndex:i,value:6}]}); }));
+        if (cardOK('samesies')) {
+          const vals=[...new Set(dice.map(d=>d.v))].filter(v=>v!==cur);
+          vals.forEach(v=>c.appendChild(btn(`Samesies! : dé ${i+1} copie un ${v} · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'samesies',sets:[{dieIndex:i,value:v}]}); })));
+        }
+        if (cardOK('try-try-again'))
+          c.appendChild(btn(`Try Try Again! : relance le dé ${i+1} (×2, même dé permis) · 1 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'rerollDie',cardId:'try-try-again',dieIndex:i}); }));
         if (cardOK('so-wild')) for (let v=1; v<=6; v++) if (v!==cur)
           c.appendChild(btn(`So Wild! : ${cur}→${v} · 2 CP`,'', ()=>{ altSel.clear(); applyAlter({kind:'setDie',cardId:'so-wild',sets:[{dieIndex:i,value:v}]}); }));
       } else if (sel.length===2 && cardOK('twice-as-wild')) {
@@ -1408,11 +1504,40 @@
       }
       addFmBtns(c);
       c.appendChild(btn('Choisir l\'habileté →','gold', toAbilityFromAlter));
+    } else if (phase==='bonusroll' && bonusCtx && bonusCtx.prompt) {
+      // Fenêtre de JET BONUS (ruling user 2026-07-10) : le jeu s'arrête sur le jet, tes cartes
+      // de relance/manipulation s'appliquent — exactement comme en vraie partie.
+      const p0 = bonusCtx.prompt;
+      const hero0 = G.heroTemplateFor(HUMAN);
+      const cn0 = id => (G.cardById(hero0,id)||{name:id}).name;
+      const lbl0 = a => {
+        if (a.kind==='setDie') return `${cn0(a.cardId)} : ${a.sets.map(s2=>`dé ${s2.dieIndex+1} (${p0.dice[s2.dieIndex]}→${s2.value})`).join(' · ')}`;
+        if (a.kind==='rerollDie') return `${cn0(a.cardId)} : relance le dé ${a.dieIndex+1} (${p0.dice[a.dieIndex]})`;
+        if (a.kind==='alterDie') return `${cn0(a.cardId)} : dé ${a.dieIndex+1} (${p0.dice[a.dieIndex]}→${p0.dice[a.dieIndex]+a.delta})`;
+        return actionLabel(a);
+      };
+      const s=document.createElement('span'); s.className='rolls';
+      s.innerHTML = `🎲 <b>${p0.label}</b> — jet bonus : <b>${p0.dice.join(' · ')}</b>. Tes cartes s'y appliquent :`;
+      c.appendChild(s);
+      p0.options.filter(o=>o.kind!=='pass').slice(0,12).forEach(o=>{
+        c.appendChild(btn(lbl0(o),'', ()=>{ bonusCtx.script.push(o); proceedHumanAttack(); }));
+      });
+      c.appendChild(btn('Laisser ce jet →','gold', ()=>{ bonusCtx.script.push({kind:'pass'}); proceedHumanAttack(); }));
     } else if (phase==='ability') {
       const cands = G.matchedAbilities(g, dice.map(d=>d.v));
       const s=document.createElement('span'); s.className='rolls';
       s.textContent = cands.length ? 'Choisis une habileté à droite →' : 'Aucune habileté — tu rates ton attaque.';
       c.appendChild(s);
+      // Règle : les dés restent manipulables jusqu'à la DÉCLARATION de l'attaque (user-caught :
+      // Samesies!/Tip It! inaccessibles ici). Retour à la fenêtre d'altération — l'IA aura de
+      // nouveau sa priorité de réponse, comme en vraie partie.
+      const youAb = g.state.players[g.humanIdx];
+      if (['samesies','tip-it','six-it','so-wild','twice-as-wild','try-try-again'].some(id=>{ const cd=G.cardById(G.heroTemplateFor(HUMAN),id); return cd && youAb.hand.includes(id) && youAb.cp>=(cd.cpCost||0); })) {
+        c.appendChild(btn('↩️ Revenir modifier mes dés (Samesies!, Tip It!…)','', ()=>{
+          G.beginOffensiveAlter(g, dice.map(d=>d.v));
+          altSel.clear(); phase='alter'; renderAll();
+        }));
+      }
       addThorBtns(c); // 🔨 Retrieve AVANT l'attaque = +1 EK compté dans Odinforce/Bottled Lightning
       addMorphBtns(c); // 🐆 passer Chat AVANT de résoudre l'attaque = +2 dmg + Wound (user-caught)
       // Grim Pursuit mode (b): pre-arm +1d6 dmg on the attack you're about to pick.
@@ -1518,7 +1643,17 @@
           log(`Tu joues <b>${actionLabel(a)}</b>.`); G.humanApplyInstant(g,a); renderAll(); }));
       });
       addFmBtns(c);
-      if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>toMain2()));
+      // Whiff : passer par le MOTEUR (resolveAbilityPhase → 0 candidat → passifs de raté :
+      // Headless Mayhem +1 Grim Pursuit, etc.) — l'ancien raccourci toMain2() les sautait
+      // (user-caught 2026-07-11 : « pas de Grim Pursuit quand je whiff »).
+      if (!cands.length) c.appendChild(btn('Continuer','gold', ()=>{
+        const beforeW = snapPlayers();
+        G.humanAttack(g, dice.map(d=>d.v), 'Whiff');
+        renderAll();
+        logDeltas(beforeW, undefined, {skipHp:true});
+        if (g.state.gameOver) return end();
+        toMain2();
+      }));
     } else if (phase==='aialter') {
       const s0=document.createElement('span'); s0.className='rolls';
       s0.textContent = "Jet FINAL de l'IA (elle ne relancera pas — un dé cassé reste cassé, sauf carte de réponse). Clique ses dés puis joue :";
@@ -1526,7 +1661,7 @@
       const sel=[...aiAlterSel].sort((x,y)=>x-y);
       const show = G.humanAiAlterOptions(g).filter(o=>{
         if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
-        if (o.kind==='setDie') return false; // remplacés par fullWildOptions (6 valeurs)
+        if (o.kind==='setDie' && !(o.cardId||'').startsWith('scrap-')) return false; // remplacés par fullWildOptions — SAUF le Scrap d'Ore fm (pas une carte)
         return true; // instants & cie
       }).concat(fullWildOptions(sel, aiDice||[]));
       show.slice(0,10).forEach(o=>c.appendChild(btn(actionLabel(o),'primary', ()=>{
@@ -1546,6 +1681,20 @@
         ? `${a&&a.abilityName?formatAbility(aiHero,a.abilityName).name+' — ':''}ton jet de défense est lancé (ci-dessus). Le modifier ?`
         : `${a&&a.abilityName?formatAbility(aiHero,a.abilityName).name+' — ':''}${rem}. Défense :`;
       c.appendChild(s);
+      // Swing Escape! est jouable APRÈS le jet (texte de la carte, user-caught : le bouton
+      // n'existait qu'AVANT) — offert tant que la défense n'est pas résolue. Le moteur ne
+      // paie le CP que si ça convertit un échec Spider-Sense.
+      if (HUMAN==='sm') {
+        const youSm = g.state.players[g.humanIdx];
+        if (youSm.hand.includes('swing-escape') && youSm.cp>=1 && youSm.smDefenseMode!=='counter') {
+          const dd = pendingDefense.defenseDice||[];
+          const hasSpider = dd.some(v=>v===6), hasWeb = dd.some(v=>v>=4&&v<=5);
+          const hint = dd.length ? (hasSpider?' (déjà réussi — inutile)':hasWeb?' ⚡ CONVERTIT ton jet raté !':' (ni Spider ni Toile — ne ferait rien)') : '';
+          c.appendChild(btn(`${youSm.swingEscapeArmed?'✅ ':''}🕸️ Swing Escape! : Spider-Sense réussit sur Toile${hint}`,
+            youSm.swingEscapeArmed?'primary':(hasWeb&&!hasSpider?'gold':''), ()=>{
+            youSm.swingEscapeArmed=!youSm.swingEscapeArmed; renderControls(); }));
+        }
+      }
       // In the roll window, dice-targeting options are FILTERED by the selected dice (same
       // die-first interaction as the offensive alter phase); cards/instants always show.
       const sel = [...defSel].sort((x,y)=>x-y);
@@ -1553,7 +1702,7 @@
         if (o.kind==='pass') return false;
         if (o.kind==='rerollAll') return sel.length===0; // sans sélection : relance tout
         if (o.kind==='alterDie' || o.kind==='rerollDie') return sel.length===1 && o.dieIndex===sel[0];
-        if (o.kind==='setDie') return false; // remplacés par fullWildOptions (6 valeurs)
+        if (o.kind==='setDie' && !(o.cardId||'').startsWith('scrap-')) return false; // remplacés par fullWildOptions — SAUF le Scrap d'Ore fm (pas une carte)
         return true; // cards, instants, token moves — always visible
       }).concat(fullWildOptions(sel, pendingDefense.defenseDice||[]));
       // Better D! ("up to five dice") : relance les dés SÉLECTIONNÉS — le moteur supporte
@@ -1901,24 +2050,46 @@
       if (cands.length > 1) coachNote('habileté', name, coach.chooseAbility(g.state, g.humanIdx, cands));
     } catch (e) {}
     log(`Tu attaques avec <b>${name}</b>${gpBonusSel?' (+ dé Grim Pursuit)':''}${gbSel?' (+ Guard Break)':''}${amSel.size?` + ${[...amSel].join(' + ')}`:''}.`);
-    const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
-    const cand = G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name);
-    const base = (cand && cand.baseDamage) || 0;
-    const logFrom = g.state.log.length;
-    G.humanAttack(g, dice.map(d=>d.v), name, gpBonusSel, [...amSel],
-      fmMineChoice && fmMineChoice.kind==='cp' ? {kind:'cp'} : undefined, gbSel);
+    // Fenêtres de JETS BONUS (Spider-Reflexes, rider Vengeance, Grim Pursuit b — ruling user) :
+    // sonde sur clone → l'UI te montre le jet et tes cartes de relance → rejeu déterministe.
+    bonusCtx = {
+      name, fmMine: fmMineChoice && fmMineChoice.kind==='cp' ? {kind:'cp'} : undefined,
+      script: [], beforeAtk: snapPlayers(),
+      hpYou: g.state.players[g.humanIdx].hp, hpAi: g.state.players[g.aiIdx].hp,
+      base: (G.matchedAbilities(g, dice.map(d=>d.v)).find(x=>x.name===name)||{}).baseDamage || 0,
+      logFrom: g.state.log.length, prompt: null,
+    };
+    proceedHumanAttack();
+  }
+  let bonusCtx = null;
+  function proceedHumanAttack(){
+    const b = bonusCtx;
+    let prompt = null;
+    try { prompt = G.humanAttackProbe(g, dice.map(d=>d.v), b.name, b.script, gpBonusSel, [...amSel], b.fmMine, gbSel); } catch(e) {}
+    if (prompt && prompt.options && prompt.options.some(o=>o.kind!=='pass')) {
+      b.prompt = prompt; phase='bonusroll'; renderAll(); return;
+    }
+    finishHumanAttack();
+  }
+  function finishHumanAttack(){
+    const b = bonusCtx; bonusCtx = null;
+    G.humanAttackWithScript(g, dice.map(d=>d.v), b.name, b.script, gpBonusSel, [...amSel], b.fmMine, gbSel);
     gpBonusSel = false; gbSel = false; amSel.clear(); aghCpSel = false;
-    const cb = parseCombat(logFrom);
-    const dealt = hpAi - g.state.players[g.aiIdx].hp, taken = hpYou - g.state.players[g.humanIdx].hp;
-    log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — ${breakdownStr(base, cb)} = ${Math.max(0,dealt)} infligés`+
-        `${taken>0?` · sa défense t'en renvoie ${taken}`:''} (IA ${hpAi}→${g.state.players[g.aiIdx].hp} PV, toi ${hpYou}→${g.state.players[g.humanIdx].hp})</b>`);
+    const cb = parseCombat(b.logFrom);
+    const dealt = b.hpAi - g.state.players[g.aiIdx].hp, taken = b.hpYou - g.state.players[g.humanIdx].hp;
+    log(`<b style="font-size:1.05em">⚔️ BILAN ATTAQUE — ${breakdownStr(b.base, cb, Math.max(0,dealt))} = ${Math.max(0,dealt)} infligés`+
+        `${taken>0?` · sa défense t'en renvoie ${taken}`:''} (IA ${b.hpAi}→${g.state.players[g.aiIdx].hp} PV, toi ${b.hpYou}→${g.state.players[g.humanIdx].hp})</b>`);
     renderAll();
+    // Tes gains de jetons (Effroi, Grim…) et ce que SA défense lui a rapporté — PV déjà au BILAN.
+    logDeltas(b.beforeAtk, undefined, {skipHp:true});
     if (g.state.gameOver) return end();
     toMain2();
   }
   function finishHumanTurn(){
+    const before = snapPlayers();
     G.endHumanTurn(g);
     renderAll();
+    logDeltas(before, '🏁 Fin de ton tour (pioche/défausse) :');
     if (g.state.gameOver) return end();
     $('turntag').textContent = `L'IA (${aiHero.name}) joue…`;
     setTimeout(aiTurn, 550);
@@ -1961,7 +2132,11 @@
     aiTurnInner();
   }
   function aiTurnInner(){
+    turnOwner = 'ai';
+    const before = snapPlayers();
     const r0 = G.runAiTurnUpToAlter(g);
+    renderAll(); // draine d'abord le détail moteur (upkeep, cartes jouées), puis la synthèse :
+    logDeltas(before, "🌀 Début du tour IA — upkeep, revenu et cartes jouées :");
     if (g.state.gameOver) { renderAll(); return end(); }
     if (r0.done) { renderAll(); return startHumanTurn(); }
     enterAiRoll(r0.dice);
@@ -2053,6 +2228,7 @@
   }
   function resolveAiAttackAndFinish(){
     const hpYou = g.state.players[g.humanIdx].hp, hpAi = g.state.players[g.aiIdx].hp;
+    const beforeAtk = snapPlayers();
     const logFrom = g.state.log.length;
     G.resolveAiAttack(g);
     // Big readable recap with the FULL arithmetic — "l'IA annonce 7 mais ça fait 9" was the
@@ -2066,9 +2242,12 @@
     const base = pendingAttackInfo ? pendingAttackInfo.incomingDamage : 0;
     const you2 = g.state.players[g.humanIdx].hp, ai2 = g.state.players[g.aiIdx].hp;
     const taken = hpYou - you2, countered = hpAi - ai2;
-    log(`<b style="font-size:1.05em">🛡️ BILAN DÉFENSE — ${breakdownStr(base, cb)} = ${Math.max(0,taken)} encaissés`+
+    log(`<b style="font-size:1.05em">🛡️ BILAN DÉFENSE — ${breakdownStr(base, cb, Math.max(0,taken))} = ${Math.max(0,taken)} encaissés`+
         `${countered>0?` · tu renvoies ${countered} dégât(s)`:''} (toi ${hpYou}→${you2} PV, IA ${hpAi}→${ai2} PV)</b>`);
     renderAll();                                   // shows your Hallowed/Sabotage roll + damage in the log
+    // Ce que son attaque lui a rapporté À ELLE (Effroi, Grim, plumes…) et t'a coûté à toi —
+    // les PV sont déjà dans le BILAN au-dessus, on ne les répète pas.
+    logDeltas(beforeAtk, undefined, {skipHp:true});
     if (g.state.gameOver) return end();
     // Spider-Man Combo : 2e Offensive Roll Phase (même cible) — DÉFENDABLE par toi aussi. Avant,
     // l'IA n'utilisait jamais son Combo contre toi (le driver interactif l'ignorait, user-caught).
@@ -2093,7 +2272,9 @@
     }
     $('turntag').textContent = `L'IA (${aiHero.name}) termine son tour…`;
     setTimeout(()=>{
+      const beforeEnd = snapPlayers();
       G.finishAiTurn(g); pendingAttackInfo = null; aiDice = null; renderAll();
+      logDeltas(beforeEnd, '🏁 Fin du tour IA (pioche, effets de fin de tour) :');
       if (g.state.gameOver) return end();
       startHumanTurn();
     }, 700);
@@ -2117,6 +2298,8 @@
         // Say WHICH die each option targets (old→new). Source of truth for the current values:
         // your defense dice when defending, the AI's dice during its attack, else your own roll.
         const src = (pendingDefense && pendingDefense.defenseDice) || aiDice || dice.map(d=>d.v);
+        if (a.cardId==='scrap-ultimanium')
+          return `⛏️ Scrap Ultimanium Ore : dé ${a.sets[0].dieIndex+1}${src&&src[a.sets[0].dieIndex]!=null?` (${src[a.sets[0].dieIndex]}→6)`:' →6'} (l'Ore est défaussé)`;
         const part = a.sets.map(s=>`dé ${s.dieIndex+1}${src&&src[s.dieIndex]!=null?` (${src[s.dieIndex]}→${s.value})`:` →${s.value}`}`).join(' · ');
         return `${cn(a.cardId)} : ${part}${cp(a.cardId)}`;
       }
@@ -2125,7 +2308,9 @@
         const old = src && src[a.dieIndex];
         return `${cn(a.cardId)} : dé ${a.dieIndex+1}${old!=null?` (${old}→${old+a.delta})`:` ${a.delta>0?'+1':'−1'}`}${cp(a.cardId)}`;
       }
-      case 'rerollDie':return `${cn(a.cardId)} : relance le dé ${a.dieIndex+1}${cp(a.cardId)}`;
+      case 'rerollDie':
+        if (a.cardId==='scrap-diamond') return `⛏️ Scrap Diamond Ore : relance le dé ${a.dieIndex+1} (l'Ore est défaussé)`;
+        return `${cn(a.cardId)} : relance le dé ${a.dieIndex+1}${cp(a.cardId)}`;
       case 'rerollAll':return a.dieIndices ? `${cn(a.cardId)} : relance les ${a.dieIndices.length} dé(s) sélectionné(s)${cp(a.cardId)}` : `${cn(a.cardId)} : relance TOUS tes dés de défense${cp(a.cardId)}`;
       case 'moveHead': return `Rolling Pumpkin! : Tête Hantée ${a.toIdx===g.humanIdx?'vers TOI':'vers l\'IA'}`;
       case 'spendGrimPursuitBonus': return 'Grim Pursuit : lance 5 dés, +1 dégât par Fer';
@@ -2177,6 +2362,8 @@
     if (mayhem !== undefined) {
       try { coachNote('upkeep', mayhem, coach.chooseHeadlessMayhem(g.state, g.humanIdx, G.humanCanTerrorize(g))); } catch (e) {}
     }
+    turnOwner = 'you';
+    const beforeUp = snapPlayers();
     const logBefore = g.state.log.length;
     G.beginHumanTurn(g, mayhem, fmMine);
     aiDice = null;
@@ -2196,6 +2383,7 @@
     phase='main1'; dice=[]; attempts=0; rollsLeft=2; gpBonusSel=false; gbSel=false; amSel.clear(); aghCpSel=false; tbArmed=false;
     $('turntag').textContent = `Ton tour · tour ${g.state.turnNumber}`;
     renderAll();
+    logDeltas(beforeUp, '🌀 Ton upkeep & revenu :');
   }
 
   function end(){
@@ -2503,16 +2691,24 @@
       return `🌀 <b>Agility</b> : jet ${m[1]} → ${m[2]==='halved damage'?'<b>dégâts divisés par 2</b> (1-3 réussit)':'raté (4-6), jeton perdu'}`;
     if ((m = msg.match(/^(.+?): removed (\w+) from p\d/))) return `<b>${m[1]}</b> : retire un jeton ${m[2]}`;
     if ((m = msg.match(/^(.+?): transferred (\w+)/))) return `<b>${m[1]}</b> : transfère un jeton ${m[2]}`;
+    if ((m = msg.match(/^(.+?): \+(\d+) dmg \(1 per upgrade in play, (\d+)\)/)))
+      return `<b>${m[1]}</b> : +${m[2]} dégâts (1 par amélioration en jeu — tu en as ${m[3]})`;
+    if ((m = msg.match(/^(.+?): \+(\d+) dmg \(>=(\d+) upgrades\)/)))
+      return `<b>${m[1]}</b> : +${m[2]} dégâts (≥${m[3]} améliorations)`;
+    if ((m = msg.match(/^Red Room Training: \+(\d+) dmg/)))
+      return `<b>Red Room Training</b> : +${m[1]} dégât (≥5 améliorations en jeu)`;
     if ((m = msg.match(/(\d+) dmg/))) return msg.replace(/(\d+) dmg/g, '$1 dégâts');
     return msg;
   }
   let lastLogLen = 0;
+  let turnOwner = 'you'; // à qui appartient le tour en cours — pour les bandeaux du journal
   function drainEngineLog(){
     const L = g.state.log;
     for (let i=lastLogLen; i<L.length; i++){ const e=L[i];
       const isHuman = e.playerIdx===g.humanIdx;
       const t = translateLog(e.message, isHuman, isHuman?humanHero:aiHero);
-      if (t !== null) addLog(`<span class="t">${isHuman?'Toi':'IA'}</span>${t}`, `Tour ${e.turn}`, isHuman?'you':'ai');
+      if (t !== null) addLog(`<span class="t">${isHuman?'Toi':'IA'}</span>${t}`,
+        `Tour ${e.turn} — ${turnOwner==='you'?'⚔️ ton tour':`🤖 l'IA (${aiHero.name})`}`, isHuman?'you':'ai');
     }
     lastLogLen = L.length;
   }
@@ -2520,18 +2716,75 @@
   // lignes s'ajoutent en bas, un bandeau doré sépare chaque tour, et on suit le fil en bas
   // sauf si tu as remonté lire plus haut.
   let lastLogHdr = '';
+  // Le journal SUIT toujours le fil (reproché : « il faut que je scroll down pour le lire »).
+  // Seule exception : tu viens de remonter lire l'historique — on te laisse 5 s, avec un
+  // bouton « ⬇ reprendre le fil » pour revenir en bas d'un clic.
+  let logHold = 0;
+  const logJump = document.createElement('button');
+  logJump.className='btn logjump'; logJump.textContent='⬇ reprendre le fil';
+  logJump.onclick = ()=>{ logHold=0; logJump.style.display='none'; logBox.scrollTop = logBox.scrollHeight; };
+  logJump.style.display='none';
+  logBox.parentElement.style.position='relative';
+  logBox.parentElement.appendChild(logJump);
+  logBox.addEventListener('wheel', ()=>{ logHold = Date.now()+5000; }, {passive:true});
+  logBox.addEventListener('touchmove', ()=>{ logHold = Date.now()+5000; }, {passive:true});
   function addLog(html, hdr, who){
-    const follow = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 40;
     if (hdr && hdr !== lastLogHdr) {
       const h=document.createElement('div'); h.className='lh'; h.textContent=hdr;
       logBox.appendChild(h); lastLogHdr=hdr;
     }
     const l=document.createElement('div');
-    l.className='l' + (who==='you'?' you-line':who==='ai'?' ai-line':'');
+    l.className='l' + (who==='you'?' you-line':who==='ai'?' ai-line':who==='delta'?' delta-line':'');
     l.innerHTML=html; logBox.appendChild(l);
-    if (follow) logBox.scrollTop = logBox.scrollHeight;
+    if (Date.now() > logHold) { logBox.scrollTop = logBox.scrollHeight; logJump.style.display='none'; }
+    else logJump.style.display='block';
   }
   function log(html){ addLog(html, undefined, 'you'); }
+
+  // ---------- Deltas d'état : ce que chaque étape a VRAIMENT changé ----------
+  // Calculés sur l'état moteur avant→après (zéro parsing de log, donc fiable pour tous les
+  // héros) — demande user 07-10 : « quand l'IA attaque, voir facilement combien elle gagne
+  // de tokens ». Puces vertes = gains, rouges = pertes, avec l'avant→après entre parenthèses.
+  const TOKEN_FR = { dreadful:'Effroi', grimPursuit:'Grim Pursuit', head:'🎃 Tête Hantée',
+    agility:'🌀 Agility', covertOps:'🕵️ Covert Ops', electrokinesis:'⚡ Electrokinesis',
+    guardBreak:'🛡️⚡ Guard Break', shapeShift:'🔄 Shape Shift', regen1:'🌿 Regen ①', regen2:'🌿 Regen ②',
+    wound:'🩸 Wound', feather:'🪶 Plume', combo:'👊 Combo', fireMastery:'🔥 Fire Mastery',
+    burn:'🔥 Burn', knockdown:'💥 Knockdown', stun:'🌀 Stun', invisibility:'👤 Invisibility',
+    webbed:'🕸️ Webbed', hex:'⬡ Hex', nevermore:'🐦‍⬛ Nevermore', disarm:'🪝 Disarm',
+    chargedGem:'💎 Charged Gem', sunMarked:'☀️ Sun Marked' };
+  function snapPlayers(){
+    return g.state.players.map(p=>({ hp:p.hp, cp:p.cp, hand:p.hand.length,
+      bombs:(p.timeBombs||[]).length, tokens:{...p.tokens} }));
+  }
+  function deltaChips(before, opts){
+    const skipHp = opts && opts.skipHp;
+    const parts = [];
+    g.state.players.forEach((p, idx)=>{
+      const b = before[idx], chips = [];
+      const push=(label, d, from, to)=>chips.push(
+        `<span class="dchip ${d>0?'up':'down'}">${label} ${d>0?'+':''}${d}${from!=null?` (${from}→${to})`:''}</span>`);
+      if (!skipHp && p.hp !== b.hp) push('PV', p.hp-b.hp, b.hp, p.hp);
+      if (p.cp !== b.cp) push('CP', p.cp-b.cp, b.cp, p.cp);
+      for (const k of new Set([...Object.keys(b.tokens), ...Object.keys(p.tokens)])){
+        const vb = b.tokens[k]||0, va = p.tokens[k]||0;
+        if (va === vb) continue;
+        const name = TOKEN_FR[k] || k;
+        if (k === 'head') chips.push(`<span class="dchip ${va>vb?'up':'down'}">${name} ${va>vb?'reçue':'donnée'}</span>`);
+        else push(name, va-vb, vb, va);
+      }
+      if (p.hand.length !== b.hand) push('🂠 Cartes', p.hand.length-b.hand, b.hand, p.hand.length);
+      const nb=(p.timeBombs||[]).length;
+      if (nb !== b.bombs) push('💣 Time Bomb', nb-b.bombs, b.bombs, nb);
+      if (chips.length) parts.push(`<span class="dwho">${idx===g.humanIdx?'toi':'ia'}</span>${chips.join('')}`);
+    });
+    return parts.join('<span class="dsep"></span>');
+  }
+  // Ajoute une ligne de deltas au journal (rien si rien n'a changé). À appeler APRÈS le
+  // renderAll() qui draine le log moteur, pour que la synthèse arrive sous le détail.
+  function logDeltas(before, title, opts){
+    const html = deltaChips(before, opts);
+    if (html) addLog(`${title?`<span class="dtitle">${title}</span>`:''}${html}`, undefined, 'delta');
+  }
 
   function renderAll(){ renderFighters(); renderDice(false); renderControls(); renderMatch(); renderCoachPanel(); renderAbilities(); renderHand(); renderCardsDrawer(); drainEngineLog(); }
 
