@@ -36,7 +36,7 @@
 <script src="game-engine.js"></script>
 <script src="ai-weights.js"></script>
 <script>
-const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', nx:'Naraxus'};
+const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', mb:'Mythic Brawler', nx:'Naraxus'};
 const games = (()=>{ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } })();
 const key = new URLSearchParams(location.search).get('g');
 const gr = games.find(x=>x.date===key) || (key==='last' ? games[games.length-1] : null);

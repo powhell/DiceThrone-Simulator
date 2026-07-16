@@ -13,6 +13,7 @@ import type { SMState } from '../characters/spiderman/config.js'
 import type { PYState } from '../characters/pyromancer/config.js'
 import type { DUState } from '../characters/duelist/config.js'
 import type { SEState } from '../characters/sunelf/config.js'
+import type { MBState } from '../characters/mythicbrawler/config.js'
 import type { RNG } from './rng.js'
 import { shuffle, rollDie, rollDice } from './rng.js'
 import type { Policy, RollManipulationChoice } from './policy.js'
@@ -33,6 +34,7 @@ import * as sm from './hero/sm.rules.js'
 import * as py from './hero/py.rules.js'
 import * as du from './hero/du.rules.js'
 import * as se from './hero/se.rules.js'
+import * as mb from './hero/mb.rules.js'
 import { CP_INCOME_PER_TURN, MAX_HAND_SIZE } from './data/config.js'
 import { grantCp } from './cp.js'
 
@@ -90,6 +92,13 @@ export function defenseTaxFor(opponent: PlayerState): number {
 }
 
 function baseDefenseTaxFor(opponent: PlayerState): number {
+  if (opponent.heroId === 'mb') {
+    // Wrassle : AUCUNE prévention — contre 1/Fist (E=0,5/dé), Heal 1/Spirit (E=0,33/dé),
+    // Strength sur Peak (~0,1/dé). ~0,9/dé ; 2 dés de base (II : 3 ; +1 par Sky).
+    // ESTIMATION à calibrer (banc audit_ev).
+    const nDice = (opponent.upgradesInPlay.includes('wrassle-ii') ? 3 : 2) + Math.min(2, opponent.tokens.strengthSky ?? 0)
+    return nDice * 0.9
+  }
   if (opponent.heroId === 'se') {
     // Harness the Light : AUCUNE prévention, aucun contre — il soigne (E[Staves]=1.5) et
     // charge son cadran. Taxe = son soin attendu (II : pareil + gem parfois).
@@ -161,7 +170,17 @@ export function wildcardFlagsFor(p: PlayerState) {
   }
 }
 
-export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState {
+export function oracleStateFor(player: PlayerState, opponent: PlayerState): HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState | MBState {
+  if (player.heroId === 'mb') {
+    return {
+      ocean: player.tokens.strengthOcean ?? 0,
+      mountain: player.tokens.strengthMountain ?? 0,
+      sky: player.tokens.strengthSky ?? 0,
+      oppConcussed: (opponent.tokens.concussion ?? 0) > 0,
+      upgradeIds: player.upgradesInPlay, defenseTax: defenseTaxFor(opponent),
+      wildcards: wildcardFlagsFor(player),
+    }
+  }
   if (player.heroId === 'se') {
     return {
       sunDial: se.dialOf(player),
@@ -372,6 +391,19 @@ export function playUpkeepPhase(state: GameState, playerIdx: 0 | 1, rng: RNG, po
     log(state, playerIdx, 'upkeep', `Reposition: ${Math.abs(r.moved)} step(s) ${dir} (position ${du.footworkPos(self)})${r.gbGained > 0 ? ', +1 Guard Break' : ''}`)
   }
 
+  // Strength of the Ocean (mb, leaflet vérifié) : à SON Upkeep, 1×/tour, dépense au choix —
+  // 1 jeton -> +1 CP ; 2 jetons -> +1 CP et Heal 2. IA : 2 si blessé, sinon 1 (mb.rules.ts).
+  // TODO : choix pré-armé pour l'humain si demandé.
+  if (self.heroId === 'mb' && (self.tokens.strengthOcean ?? 0) > 0) {
+    const count = mb.oceanUpkeepChoice(self)
+    if (count === 1 || count === 2) {
+      const r = mb.spendOcean(self, count)
+      grantCp(self, r.cp)
+      if (r.heal > 0) self.hp = Math.min(mb.HEAL_CAP, self.hp + r.heal)
+      log(state, playerIdx, 'upkeep', `Strength of the Ocean: spent ${count} -> +${r.cp} CP${r.heal ? ` and healed ${r.heal}` : ''} (${self.tokens.strengthOcean} left)`)
+    }
+  }
+
   // Sun Dial (se, leaflet vérifié) : côté DUSK, +1 à SON upkeep ; à 5 -> flip DAWN immédiat.
   if (self.heroId === 'se' && !se.isDawn(self)) {
     const r = se.increaseDial(self, 1)
@@ -503,6 +535,12 @@ export function playIncomePhase(state: GameState, playerIdx: 0 | 1, rng: RNG): v
     return
   }
   const self = state.players[playerIdx]
+  // Concussion (mb, jeton vérifié) : le porteur SAUTE son Income Phase puis retire le jeton.
+  if ((self.tokens.concussion ?? 0) > 0) {
+    self.tokens.concussion = 0
+    log(state, playerIdx, 'income', 'Income Phase skipped (Concussion) — token removed')
+    return
+  }
   // Disarm non payé à l'upkeep (du) : l'Income Phase est sautée entièrement.
   if (self.skipIncomeThisTurn) {
     self.skipIncomeThisTurn = false
@@ -866,6 +904,64 @@ function playActionCard(state: GameState, playerIdx: 0 | 1, phase: Phase, card: 
     }
     return
   }
+  if (card.id === 'sea-song') {
+    // « Remove Strength of the Ocean to gain 2 CP » (carte vérifiée, 0 CP, instant).
+    if ((self.tokens.strengthOcean ?? 0) < 1) { log(state, playerIdx, phase, 'Sea Song!: no Ocean token — no effect'); return }
+    self.tokens.strengthOcean -= 1
+    grantCp(self, 2)
+    log(state, playerIdx, phase, 'Sea Song!: removed Strength of the Ocean -> +2 CP')
+    return
+  }
+  if (card.id === 'haka') {
+    // « Gain 1 Strength. You may spend an additional 2 CP to gain 2 Strengths instead. »
+    // IA : le +2 CP ne paie que pour vider un excédent (2 slots ouverts + CP >= 5 après coût).
+    const extra = !self.humanControlled && self.cp >= 5
+      && (self.tokens.strengthMountain ?? 0) + (self.tokens.strengthSky ?? 0) + (self.tokens.strengthOcean ?? 0) <= 5
+    const n = extra ? 2 : 1
+    if (extra) self.cp -= 2
+    const gained: string[] = []
+    for (let i = 0; i < n; i++) { const k = mb.gainStrength(self); if (k) gained.push(k.replace('strength', '')) }
+    log(state, playerIdx, phase, `Haka!: ${extra ? 'spent +2 CP, ' : ''}gained ${gained.length ? gained.join(' + ') : 'nothing (all Strengths at cap)'}`)
+    return
+  }
+  if (card.id === 'enjoy-the-view') {
+    // CHOIX : gain Sky OU Heal 2. IA : Sky si slot ouvert, sinon soin.
+    if ((self.tokens.strengthSky ?? 0) < mb.SKY_CAP) {
+      mb.gainStrengthOf(self, 'strengthSky')
+      log(state, playerIdx, phase, 'Enjoy the View!: gained Strength of the Sky')
+    } else {
+      self.hp = Math.min(mb.HEAL_CAP, self.hp + 2)
+      log(state, playerIdx, phase, 'Enjoy the View!: healed 2')
+    }
+    return
+  }
+  if (card.id === 'explosive-flex') {
+    // CHOIX : gain Mountain OU 2 dmg. IA : Mountain si slot ouvert, sinon dégâts.
+    if ((self.tokens.strengthMountain ?? 0) < mb.MOUNTAIN_CAP) {
+      mb.gainStrengthOf(self, 'strengthMountain')
+      log(state, playerIdx, phase, 'Explosive Flex!: gained Strength of the Mountain')
+    } else {
+      opp.hp -= 2
+      log(state, playerIdx, phase, 'Explosive Flex!: 2 dmg to opponent')
+      checkGameOver(state)
+    }
+    return
+  }
+  if (card.id === 'spirit-chant') {
+    const sc = rollDie(rng)
+    if (sc <= 3) {
+      const g = mb.inflictConcussion(opp)
+      log(state, playerIdx, phase, `Spirit Chant!: rolled ${sc} (Fist) -> ${g ? 'Concussion inflicted' : 'opponent already Concussed'}`)
+    } else if (sc <= 5) {
+      drawCards(self, 2, rng)
+      log(state, playerIdx, phase, `Spirit Chant!: rolled ${sc} (Spirit) -> drew 2`)
+    } else {
+      const g1 = mb.gainStrength(self), g2 = mb.gainStrength(self)
+      const names = [g1, g2].filter(Boolean).map(k => (k as string).replace('strength', ''))
+      log(state, playerIdx, phase, `Spirit Chant!: rolled 6 (Peak) -> gained ${names.length ? names.join(' + ') : 'nothing (caps)'}`)
+    }
+    return
+  }
   if (card.id === 'clouds-parting') {
     const cp6 = rollDie(rng)
     const inc = Math.ceil(cp6 / 2)
@@ -1028,7 +1124,7 @@ export function resolveOffensiveAlterWindow(state: GameState, rollerIdx: 0 | 1, 
 // "instant" cards per isCardPlayableNow's TODO; Better D! needs a "Defensive Roll Phase" with
 // its own keep/reroll decision, but defense here is a single deterministic dice roll with no
 // reroll step at all — see resolveDefense/hh.resolveHallowedReckoning/bw.resolveSabotage).
-const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy', 'quick-footwork', 'radiant-exchange']
+const ROLL_MANIPULATION_CARD_IDS = ['one-more-time', 'try-try-again', 'six-it', 'so-wild', 'twice-as-wild', 'samesies', 'he-is-worthy', 'quick-footwork', 'radiant-exchange', 'heavy-hand']
 
 function eligibleRollManipulationCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -1137,7 +1233,7 @@ export function playMainPhase(state: GameState, playerIdx: 0 | 1, phase: 'main1'
 
 // Instant Action self-buffs: structured-effect cards a player may play in ANY window to help
 // themselves (hero-gated automatically — dark-surprise is HH's, assemble is BW's; the rest common).
-const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak', 'yikes', 'radioactive-blood', 'here-comes-the-sun']
+const INSTANT_SELFBUFF_IDS = ['getting-paid', 'double-up', 'triple-up', 'dark-surprise', 'assemble', 'broken-stillness', 'quick-morph', 'power-trip', 'time-to-hammer', 'stormbreak', 'yikes', 'radioactive-blood', 'here-comes-the-sun', 'sea-song', 'haka']
 
 // Conditions d'eligibilite propres aux instants Thor/Spider-Man (textes verifies).
 function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolean {
@@ -1149,12 +1245,16 @@ function instantEligible(state: GameState, playerIdx: 0 | 1, id: string): boolea
   if (id === 'radioactive-blood') return (self.tokens.combo ?? 0) < 1
   // « Play only if Sun Dial is on the DUSK side » (carte vérifiée)
   if (id === 'here-comes-the-sun') return self.sunDialDawn !== true
+  // Sea Song! : « Remove Strength of the Ocean » — exige le jeton
+  if (id === 'sea-song') return (self.tokens.strengthOcean ?? 0) >= 1
+  // Haka! : inutile si les 3 Strengths sont au cap
+  if (id === 'haka') return mb.chooseStrengthKind(self) !== null
   return true
 }
 // Main Phase Action cards (not Instant-timed, so only in your own Main Phase), other than the
 // cross-player status cards (handled separately) and Hero Upgrades: Dancing Pumpkin! (HH), Vegas
 // Baby!, Undercover Mission! + Cunning! (BW). All resolve via playActionCard.
-const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up', 'sashay', 'courageous-advance', 'all-in-the-wrists', 'confident-footing', 'clouds-parting', 'solstice', 'it-gives-life', 'the-suns-blessing', 'first-light', 'the-glorious-sun']
+const MAIN_PHASE_ACTION_IDS = ['dancing-pumpkin', 'vegas-baby', 'undercover-mission', 'cunning', 'nevermore-attack', 'midnight-dreary', 'hibernate', 'ready-to-pounce', 'natures-rest', 'natures-cycle', 'fey-lure', 'strength-of-the-woods', 'web-shooters', 'booyah', 'milkshake-me', 'cha-ching', 'warm-up', 'fire-up', 'sashay', 'courageous-advance', 'all-in-the-wrists', 'confident-footing', 'clouds-parting', 'solstice', 'it-gives-life', 'the-suns-blessing', 'first-light', 'the-glorious-sun', 'enjoy-the-view', 'explosive-flex', 'spirit-chant']
 
 // Whether either player currently holds any transferable status effect (for gating What Status
 // Effects? / the head-move enumeration).
@@ -1360,6 +1460,13 @@ export function enumerateWindowActions(state: GameState, playerIdx: 0 | 1, ctx: 
         }
         if (canAfford('radiant-exchange') && player.heroId === 'se' && (player.sunDial ?? 0) >= 1) {
           pr.dice.forEach((v, i) => { if (v !== 6) options.push({ kind: 'setDie', cardId: 'radiant-exchange', sets: [{ dieIndex: i, value: 6 }] }) })
+        }
+        if (canAfford('heavy-hand')) {
+          // Heavy Hand! (mb) : change 1 de tes dés en 1, 2 ou 3 (le chiffre compte pour les
+          // suites/of-a-kind, on propose les trois valeurs).
+          pr.dice.forEach((v, i) => {
+            for (const hv of [1, 2, 3]) if (v !== hv) options.push({ kind: 'setDie', cardId: 'heavy-hand', sets: [{ dieIndex: i, value: hv }] })
+          })
         }
         if (canAfford('samesies')) {
           const seen = new Set<string>()
@@ -1713,6 +1820,10 @@ export function resolveDefense(state: GameState, attackerIdx: 0 | 1, incomingDam
     defenseDice = rollDice(4, rng) // Retreat : 4 dés
   } else if (defender.heroId === 'se') {
     defenseDice = rollDice(3, rng) // Harness the Light : 3 dés
+  } else if (defender.heroId === 'mb') {
+    // Wrassle : 2 dés (II : 3) + 1 par Strength of the Sky (jeton vérifié, persistant).
+    const nDice = (defender.upgradesInPlay.includes('wrassle-ii') ? 3 : 2) + Math.min(mb.SKY_CAP, defender.tokens.strengthSky ?? 0)
+    defenseDice = rollDice(nDice, rng)
   } else if (defender.heroId === 'nx') {
     defenseDice = [rollDie(rng)] // Dragon Scales : 1 de
   } else if (defender.heroId === 'fm') {
@@ -1842,6 +1953,19 @@ export function finalizeDefenseRoll(
     let gemMsg = ''
     if (eff.gem) gemMsg = se.gainChargedGem(defender) > 0 ? ', +Charged Gem' : ', Charged Gem déjà détenu'
     log(state, defenderIdx, 'defense', `Harness the Light${up ? ' II' : ''}: prevented 0, healed ${eff.heal}${dialMsg}${gemMsg}`)
+  } else if (defender.heroId === 'mb') {
+    // Wrassle (board vérifié) : 1 dmg × Fist en contre, Heal 1 × Spirit, On Peak (une fois)
+    // gain 1 Strength. Aucune prévention.
+    const up = defender.upgradesInPlay.includes('wrassle-ii')
+    const eff = mb.wrassleEffects(finalDefenseDice)
+    if (eff.counterDamage > 0) queueDamage(state, attackerIdx, eff.counterDamage)
+    if (eff.heal > 0) defender.hp = Math.min(mb.HEAL_CAP, defender.hp + eff.heal)
+    let strMsg = ''
+    if (eff.strengthOnPeak) {
+      const k = mb.gainStrength(defender)
+      strMsg = k ? `, +1 ${k.replace('strength', 'Strength of the ')}` : ', Strength au cap (aucun gain)'
+    }
+    log(state, defenderIdx, 'defense', `Wrassle${up ? ' II' : ''}: prevented 0, ${eff.counterDamage} dmg back, healed ${eff.heal}${strMsg}`)
   } else if (defender.heroId === 'nx') {
     damagePrevented = nx.dragonScalesPrevent(finalDefenseDice[0])
     log(state, defenderIdx, 'defense', `Dragon Scales: face ${finalDefenseDice[0]}, prevented ${damagePrevented}`)
@@ -1943,7 +2067,7 @@ export function finalizeDefenseRoll(
 }
 
 // "Play only after being Attacked" Roll Phase Action cards that reduce/negate incoming dmg.
-const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch', 'i-hate-waiting', 'sun-shield']
+const DEFENSIVE_CARD_IDS = ['not-this-time', 'spirited-reprisal', 'recoil', 'shrug-off', 'dont-poke-the-bear', 'indomitable-will', 'invulnerability', 'nice-try', 'invisible-punch', 'i-hate-waiting', 'sun-shield', 'kapu']
 
 function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean): string[] {
   const hero = heroTemplateFor(defender.heroId)
@@ -1954,6 +2078,7 @@ function eligibleDefensiveCardIds(defender: PlayerState, eludeEligible: boolean)
     // du : reculer doit être possible ET utile (le Bonus défensif du tour pas encore consommé)
     if (id === 'i-hate-waiting') return defender.heroId === 'du' && (defender.footwork ?? 0) > -2
     if (id === 'sun-shield') return (defender.tokens.chargedGem ?? 0) > 0 // retire le jeton
+    if (id === 'kapu') return (defender.tokens.strengthMountain ?? 0) > 0 // retire le jeton
     return true
   })
   if (eludeEligible && defender.hand.includes('elude')) ids.push('elude')
@@ -1984,6 +2109,14 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
     defender.tokens.chargedGem = 0
     const prevented = Math.min(remaining, 3)
     log(state, defenderIdx, 'defense', `Sun Shield!: Charged Gem removed, prevented ${prevented} dmg`)
+    return remaining - prevented
+  }
+  if (cardId === 'kapu') {
+    // « Remove Strength of the Mountain to prevent 4 incoming dmg » (carte vérifiée).
+    if ((defender.tokens.strengthMountain ?? 0) < 1) { log(state, defenderIdx, 'defense', 'Kapu!: no Mountain token — no effect'); return remaining }
+    defender.tokens.strengthMountain -= 1
+    const prevented = Math.min(remaining, mb.KAPU_PREVENT)
+    log(state, defenderIdx, 'defense', `Kapu!: Strength of the Mountain removed, prevented ${prevented} dmg`)
     return remaining - prevented
   }
   if (cardId === 'i-hate-waiting') {
@@ -2071,7 +2204,7 @@ function applyDefensiveCard(state: GameState, defenderIdx: 0 | 1, cardId: string
 // attack. Thundering Hooves! doesn't touch dmg/defendability at all (pure CP->Grim Pursuit
 // conversion) but is timed the same way, so it shares this hook rather than inventing a
 // separate one.
-const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot', 'pick-it-up', 'burst-forward', 'blade-barrage']
+const ATTACK_MODIFIER_CARD_IDS = ['unescapable', 'cranial-assist', 'subversion', 'thundering-hooves', 'stone-beak', 'talon-strike', 'lethal-swipe', 'surprise-bite', 'ambush', 'huzzah', 'red-hot', 'pick-it-up', 'burst-forward', 'blade-barrage', 'flying-punch', 'wild-strength']
 
 export function eligibleAttackModifierCardIds(self: PlayerState): string[] {
   const hero = heroTemplateFor(self.heroId)
@@ -2094,6 +2227,12 @@ export function eligibleAttackModifierCardIds(self: PlayerState): string[] {
       // Burst Forward n'a de sens que si un pas en avant est possible (piste bornée).
       if (id === 'burst-forward') return du.footworkPos(self) < du.FOOTWORK_MAX
       return true // pick-it-up : l'état Disarm de l'adversaire est re-vérifié à la résolution
+    }
+    if (id === 'flying-punch') {
+      return self.heroId === 'mb' && (self.tokens.strengthSky ?? 0) > 0 // retire le jeton
+    }
+    if (id === 'wild-strength') {
+      return self.heroId === 'mb'
     }
     if (id === 'stone-beak' || id === 'talon-strike') {
       if (self.heroId !== 'rv') return false
@@ -2216,6 +2355,28 @@ export function applyAttackModifierCard(state: GameState, playerIdx: 0 | 1, card
     }
     log(state, playerIdx, 'resolveAttack', `Blade Barrage: rolled [${bbRoll.join(',')}], +${blades} dmg${stepMsg}`)
     return { ...current, dmg: current.dmg + blades }
+  }
+  if (cardId === 'flying-punch') {
+    if ((self.tokens.strengthSky ?? 0) < 1) return current // le jeton a pu partir entre l'éligibilité et la résolution
+    self.tokens.strengthSky -= 1
+    log(state, playerIdx, 'resolveAttack', 'Flying Punch!: Strength of the Sky removed, attack becomes undefendable')
+    return { ...current, undefendable: true }
+  }
+  if (cardId === 'wild-strength') {
+    // « Roll 5 dice: For every 2 Fists, add 2 dmg. You may re-roll up to one of these dice per
+    // Strength (up to 5 total). » IA : re-roll gloutons des non-Fists tant qu'il reste des
+    // re-rolls (1 par jeton Strength possédé, tous types — ruling user 2026-07-16).
+    if (!rng) { return { ...current, dmg: current.dmg + 2 } } // scoring : E ≈ +2-3 selon re-rolls
+    const wsRoll = rollDice(5, rng)
+    let rerolls = Math.min(5, mb.totalStrengths(self))
+    const rerolled: number[] = []
+    for (let i = 0; i < wsRoll.length && rerolls > 0; i++) {
+      if (wsRoll[i] > 3) { wsRoll[i] = rollDie(rng); rerolled.push(i); rerolls -= 1 }
+    }
+    const fists = wsRoll.filter(d => d <= 3).length
+    const bonus = Math.floor(fists / 2) * 2
+    log(state, playerIdx, 'resolveAttack', `Wild Strength!: rolled [${wsRoll.join(',')}]${rerolled.length ? ` (${rerolled.length} re-roll(s))` : ''}, ${fists} Fist(s) -> +${bonus} dmg`)
+    return { ...current, dmg: current.dmg + bonus }
   }
   if (cardId === 'cranial-assist') {
     // Cranial Assist! rewards attacking whoever holds the Haunted Head. The head is a bag token now,
@@ -2627,6 +2788,7 @@ export function resolveAbilityPhase(state: GameState, playerIdx: 0 | 1, dice: nu
   else if (self.heroId === 'py') applyPYAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'du') applyDUAbility(state, playerIdx, chosenName, dice, rng, policies)
   else if (self.heroId === 'se') applySEAbility(state, playerIdx, chosenName, dice, rng, policies)
+  else if (self.heroId === 'mb') applyMBAbility(state, playerIdx, chosenName, dice, rng, policies)
   else applyBWAbility(state, playerIdx, chosenName, rng, policies)
 }
 
@@ -3379,6 +3541,148 @@ function applySEAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
     return
   }
   log(state, playerIdx, 'resolveAttack', `Whiff — no Sun Elf ability matched (${name})`)
+}
+
+// --- Mythic Brawler ---------------------------------------------------------------------------
+// Board vérifié (characters/Mythic_Brawler/SPEC.md + rulings 2026-07-16). « Gain 1 Strength » =
+// choix parmi Ocean/Mountain/Sky — IA : heuristique mb.chooseStrengthKind (Mountain -> Sky ->
+// Ocean), alignée sur les valeurs EV du solveur. Mountain : +1 dmg par jeton sur TOUTE attaque
+// qui inflige des dégâts (Attack Modifier persistant, appliqué dans attack()).
+function applyMBAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
+  const self = state.players[playerIdx]
+  const oppIdx = (1 - playerIdx) as 0 | 1
+  const opp = state.players[oppIdx]
+  const policy = policies[playerIdx]
+  const has = (id: string) => self.upgradesInPlay.includes(id)
+
+  const gainStr = (n: number, label: string) => {
+    const gained: string[] = []
+    for (let i = 0; i < n; i++) { const k = mb.gainStrength(self); if (k) gained.push(k.replace('strength', '')) }
+    log(state, playerIdx, 'resolveAttack', `${label}: gained ${gained.length ? gained.join(' + ') : 'no Strength (all at cap)'}`)
+  }
+  const conc = (label: string) => {
+    const g = mb.inflictConcussion(opp)
+    log(state, playerIdx, 'resolveAttack', `${label}: ${g ? 'Concussion inflicted' : 'opponent already Concussed (stack 1)'}`)
+  }
+
+  const attack = (dmg: number, defendable: boolean, ultimate = false) => {
+    let result: AttackModifierResult = { dmg, undefendable: !defendable || ultimate }
+    const chosen = policy.chooseAttackModifierCards(state, playerIdx, result.dmg, eligibleAttackModifierCardIds(self)) ?? []
+    for (const cardId of chosen) result = applyAttackModifierCard(state, playerIdx, cardId, result, rng)
+    if (result.dmg <= 0) { log(state, playerIdx, 'resolveAttack', `${name} deals no damage — no defense roll`); return }
+    // Strength of the Mountain (jeton vérifié) : +1 dmg d'Attaque par jeton, persistant.
+    const mtn = Math.min(mb.MOUNTAIN_CAP, self.tokens.strengthMountain ?? 0)
+    if (mtn > 0) {
+      result = { ...result, dmg: result.dmg + mtn }
+      log(state, playerIdx, 'resolveAttack', `Strength of the Mountain: +${mtn} dmg`)
+    }
+    log(state, playerIdx, 'resolveAttack', `${name}: attack total ${result.dmg} dmg${result.undefendable ? ' (undefendable)' : ''}`)
+    if (result.undefendable) queueAttackDamageVsArmor(state, playerIdx, result.dmg, ultimate, rng, policies)
+    else resolveDefense(state, playerIdx, result.dmg, rng, policies)
+  }
+
+  if (name.startsWith('Strong Arm')) {
+    // « After targeting an opponent, you each roll 1 die: If your roll is equal or greater,
+    // gain 1 Strength and then deal 6 dmg. Otherwise, deal 7 dmg. » (board vérifié — l'égalité
+    // gagne, ruling user). Le dé de l'attaquant passe par la fenêtre de jets bonus.
+    const mine = bonusRollWindow(state, playerIdx, [rollDie(rng)], 'Strong Arm (roll-off)', rng, policy)[0]
+    const theirs = rollDie(rng)
+    const won = mine >= theirs
+    log(state, playerIdx, 'resolveAttack', `Strong Arm roll-off: ${mine} vs ${theirs} — ${won ? 'won (>=)' : 'lost'}`)
+    if (won) gainStr(1, 'Strong Arm')
+    attack(won ? 6 : 7, true)
+    return
+  }
+  if (name.startsWith('Tidal Blow')) {
+    const g = mb.gainStrengthOf(self, 'strengthOcean')
+    log(state, playerIdx, 'resolveAttack', `Tidal Blow: ${g ? 'gained Strength of the Ocean' : 'Ocean already at cap (3)'}`)
+    const up = has('tidal-blow-ii')
+    const bonus = bonusRollWindow(state, playerIdx, rollDice(up ? 2 : 1, rng), 'Tidal Blow (bonus)', rng, policy)
+    let dmg = 6
+    // I : « On Fist, add 2 dmg » (une fois) ; II : « Add 2 x Fist dmg » (par Fist).
+    const fists = bonus.filter(d => d <= 3).length
+    dmg += up ? 2 * fists : (fists >= 1 ? 2 : 0)
+    const msgs: string[] = []
+    if (bonus.some(d => d === 4 || d === 5)) { drawCards(self, 1, rng); msgs.push('drew 1 (Spirit)') }
+    if (bonus.some(d => d === 6)) { const c = mb.inflictConcussion(opp); msgs.push(c ? 'Concussion inflicted (Peak)' : 'opponent already Concussed (Peak)') }
+    log(state, playerIdx, 'resolveAttack', `Tidal Blow${up ? ' II' : ''}: bonus [${bonus.join(',')}] -> ${dmg} dmg${msgs.length ? ', ' + msgs.join(', ') : ''}`)
+    attack(dmg, true)
+    return
+  }
+  if (name.startsWith('Clobber')) {
+    const a = dice.filter(d => d <= 3).length
+    const up = has('clobber-ii')
+    const table = up ? [6, 7] : [5, 7]
+    const dmg = table[a >= 5 ? 1 : 0]
+    const counts = new Map<number, number>()
+    for (const d of dice) counts.set(d, (counts.get(d) ?? 0) + 1)
+    const kind = Math.max(...counts.values())
+    if (up && kind >= 3) {
+      const g = mb.gainStrengthOf(self, 'strengthSky')
+      log(state, playerIdx, 'resolveAttack', `Clobber II (3-of-a-kind): ${g ? 'gained Strength of the Sky' : 'Sky already at cap (2)'}`)
+    }
+    if (kind >= 4) conc(`Clobber${up ? ' II' : ''} (4-of-a-kind)`)
+    attack(dmg, true)
+    return
+  }
+  if (name.startsWith('Healing Wind')) {
+    self.hp = Math.min(mb.HEAL_CAP, self.hp + 3)
+    log(state, playerIdx, 'resolveAttack', 'Healing Wind: healed 3')
+    gainStr(2, 'Healing Wind')
+    return
+  }
+  if (name.startsWith('Ancestral Strength')) {
+    gainStr(2, 'Ancestral Strength')
+    attack(has('ancestral-strength-ii') ? 9 : 7, false) // INDÉFENDABLE (carte/board vérifiés)
+    return
+  }
+  if (name.startsWith('Spirit Call')) {
+    gainStr(2, 'Spirit Call')
+    conc('Spirit Call')
+    return
+  }
+  if (name.startsWith('Knock Out')) {
+    attack(3, false) // 3 dmg INDÉFENDABLES (Tectonic Punch II)
+    return
+  }
+  if (name.startsWith('Spirit Strike')) {
+    gainStr(1, 'Spirit Strike')
+    const up = has('spirit-strike-ii')
+    if (up && mb.straightUsesSix(dice)) {
+      self.hp = Math.min(mb.HEAL_CAP, self.hp + 1)
+      log(state, playerIdx, 'resolveAttack', 'Spirit Strike II: straight uses a 6 -> healed 1')
+    }
+    attack(up ? 8 : 7, true)
+    return
+  }
+  if (name.startsWith('Tectonic Punch')) {
+    if (has('tectonic-punch-ii')) {
+      const g = mb.gainStrengthOf(self, 'strengthMountain')
+      log(state, playerIdx, 'resolveAttack', `Tectonic Punch II: ${g ? 'gained Strength of the Mountain' : 'Mountain already at cap (2)'}`)
+      attack(12, true)
+      return
+    }
+    // I — CHOIX : gain Mountain OU retirer 1 Mountain pour +3 dmg. IA : dépense seulement au
+    // cap (même arbitrage que le solveur, characters/mythicbrawler/abilities.ts).
+    const spend = (self.tokens.strengthMountain ?? 0) >= mb.MOUNTAIN_CAP
+    if (spend) {
+      self.tokens.strengthMountain -= 1
+      log(state, playerIdx, 'resolveAttack', 'Tectonic Punch: removed 1 Strength of the Mountain -> +3 dmg')
+      attack(10 + 3, true)
+    } else {
+      const g = mb.gainStrengthOf(self, 'strengthMountain')
+      log(state, playerIdx, 'resolveAttack', `Tectonic Punch: ${g ? 'gained Strength of the Mountain' : 'Mountain already at cap (2)'}`)
+      attack(10, true)
+    }
+    return
+  }
+  if (name.startsWith('Power of the Ancients!')) {
+    gainStr(2, 'Power of the Ancients!')
+    conc('Power of the Ancients!')
+    attack(12, false, true)
+    return
+  }
+  log(state, playerIdx, 'resolveAttack', `Whiff — no Mythic Brawler ability matched (${name})`)
 }
 
 // --- Spider-Man ------------------------------------------------------------------------------

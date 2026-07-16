@@ -1,4 +1,4 @@
-export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'se' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; du = Duelist ; se = Sun Elf ; nx = Naraxus (boss)
+export type HeroId = 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'se' | 'mb' | 'nx' // rv = Raveness ; dr = Druid ; th = Thor ; sm = Spider-Man ; py = Pyromancer ; du = Duelist ; se = Sun Elf ; mb = Mythic Brawler ; nx = Naraxus (boss)
 
 // Data-layer token kinds: what cards/abilities grant or inflict (data/schema.ts mirrors this).
 // Includes 'timeBomb', which is NOT stored in the generic bag below — it's positional
@@ -15,7 +15,7 @@ export type TimeBombPosition = '0:02' | '0:01'
 // precedent); and 'head' is the Haunted Head, a unique 0-or-1 token (HH's, but it moves onto
 // opponents via giveHead). All keys are always present (init 0, see tokens.ts emptyBag) so
 // arithmetic like `tokens.dreadful += 1` needs no guard.
-export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun' | 'disarm' | 'chargedGem' | 'sunMarked'
+export type BagToken = 'dreadful' | 'grimPursuit' | 'agility' | 'covertOps' | 'head' | 'feather' | 'hex' | 'nevermore' | 'shapeShift' | 'regen2' | 'regen1' | 'wound' | 'electrokinesis' | 'guardBreak' | 'combo' | 'webbed' | 'invisibility' | 'fireMastery' | 'burn' | 'knockdown' | 'stun' | 'disarm' | 'chargedGem' | 'sunMarked' | 'strengthOcean' | 'strengthMountain' | 'strengthSky' | 'concussion'
 export type Tokens = Record<BagToken, number>
 
 export interface PlayerState {

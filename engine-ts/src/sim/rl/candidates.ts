@@ -96,6 +96,12 @@ function enumerateForCard(cardId: string, dice: number[]): RollManipulationChoic
   if (cardId === 'six-it' || cardId === 'radiant-exchange') {
     // radiant-exchange (se) : même géométrie que Six-It! (1 dé -> 6), coût cadran géré au apply
     for (let i = 0; i < n; i++) out.push({ cardId, dieIndices: [i], values: [6] })
+  } else if (cardId === 'heavy-hand') {
+    // Heavy Hand! (mb) : change 1 de tes dés en 1, 2 ou 3 (carte vérifiée). Le chiffre compte
+    // pour les suites/of-a-kind, pas seulement le symbole — on énumère les trois valeurs.
+    for (let i = 0; i < n; i++) {
+      for (const v of [1, 2, 3]) if (v !== dice[i]) out.push({ cardId, dieIndices: [i], values: [v] })
+    }
   } else if (cardId === 'so-wild') {
     // Pruned from the full 1-6 value search to {6} ∪ current die values (same rationale as
     // twice-as-wild below): the useful sets are "max it out" or "match an existing die" —

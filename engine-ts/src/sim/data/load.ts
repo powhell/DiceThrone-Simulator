@@ -11,6 +11,7 @@ import smHeroJson from './characters/sm/hero.json'
 import pyHeroJson from './characters/py/hero.json'
 import duHeroJson from './characters/du/hero.json'
 import seHeroJson from './characters/se/hero.json'
+import mbHeroJson from './characters/mb/hero.json'
 import commonCardsJson from './common-cards.json'
 
 export const hhHero = hhHeroJson as unknown as HeroTemplate
@@ -23,6 +24,7 @@ export const smHero = smHeroJson as unknown as HeroTemplate
 export const pyHero = pyHeroJson as unknown as HeroTemplate
 export const duHero = duHeroJson as unknown as HeroTemplate
 export const seHero = seHeroJson as unknown as HeroTemplate
+export const mbHero = mbHeroJson as unknown as HeroTemplate
 export const commonCards = commonCardsJson as unknown as CommonCardsTemplate
 
 // Naraxus (boss) : template minimal construit en dur — pas de cartes, pas d'habiletés de
@@ -37,8 +39,8 @@ export const nxHero: HeroTemplate = {
   cards: [],
 }
 
-export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'se' | 'nx'): HeroTemplate {
-  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : heroId === 'rv' ? rvHero : heroId === 'dr' ? drHero : heroId === 'th' ? thHero : heroId === 'sm' ? smHero : heroId === 'py' ? pyHero : heroId === 'du' ? duHero : heroId === 'se' ? seHero : heroId === 'nx' ? nxHero : bwHero
+export function heroTemplateFor(heroId: 'hh' | 'bw' | 'fm' | 'rv' | 'dr' | 'th' | 'sm' | 'py' | 'du' | 'se' | 'mb' | 'nx'): HeroTemplate {
+  return heroId === 'hh' ? hhHero : heroId === 'fm' ? fmHero : heroId === 'rv' ? rvHero : heroId === 'dr' ? drHero : heroId === 'th' ? thHero : heroId === 'sm' ? smHero : heroId === 'py' ? pyHero : heroId === 'du' ? duHero : heroId === 'se' ? seHero : heroId === 'mb' ? mbHero : heroId === 'nx' ? nxHero : bwHero
 }
 
 // Searches both the hero's base abilities and every card's altAbility (e.g. Cleave II's

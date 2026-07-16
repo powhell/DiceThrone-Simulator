@@ -12,6 +12,7 @@ import { smConfig, type SMState } from '../characters/spiderman/config.js'
 import { pyConfig, type PYState } from '../characters/pyromancer/config.js'
 import { duConfig, type DUState } from '../characters/duelist/config.js'
 import { seConfig, type SEState } from '../characters/sunelf/config.js'
+import { mbConfig, type MBState } from '../characters/mythicbrawler/config.js'
 import { heroTemplateFor, resolvedAbilityByBoardName } from './data/load.js'
 import type { AbilityCandidate, HeroId } from './types.js'
 
@@ -20,7 +21,7 @@ import type { AbilityCandidate, HeroId } from './types.js'
 export function fullAbilityBoard(
   heroId: HeroId,
   dice: number[],
-  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState,
+  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState | MBState,
 ) {
   return heroId === 'hh'
     ? hhConfig.buildAbilityBoard(dice, oracleState as HHState)
@@ -40,13 +41,15 @@ export function fullAbilityBoard(
                   ? duConfig.buildAbilityBoard(dice, oracleState as DUState)
                   : heroId === 'se'
                     ? seConfig.buildAbilityBoard(dice, oracleState as SEState)
-                    : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
+                    : heroId === 'mb'
+                      ? mbConfig.buildAbilityBoard(dice, oracleState as MBState)
+                      : bwConfig.buildAbilityBoard(dice, oracleState as BWState)
 }
 
 export function resolveMatchedAbilities(
   heroId: HeroId,
   dice: number[],
-  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState,
+  oracleState: HHState | BWState | FMState | RVState | DRState | THState | SMState | PYState | DUState | SEState | MBState,
 ): AbilityCandidate[] {
   const template = heroTemplateFor(heroId)
   const upgradeIds = oracleState.upgradeIds ?? []

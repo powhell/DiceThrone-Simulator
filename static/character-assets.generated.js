@@ -788,7 +788,7 @@ window.CHARACTER_ASSETS = {
                 "agility": 1
               },
               "searchUpgradesIntoPlay": 1,
-              "notes": "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck.",
+              "notes": "Gain Agility. Search your deck for an Ability Upgrade and put it into play. Then shuffle your deck. RULING USER (2026-07-10): une upgrade mise en jeu par Recon/Widow's Bite DECLENCHE la pioche de Red Room Training II ('put into play' compte comme jouee).",
               "verified": true
             },
             "verified": true

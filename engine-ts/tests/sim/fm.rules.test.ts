@@ -41,13 +41,13 @@ describe('Mine (Forging Info Card)', () => {
 })
 
 describe('Crafting (chaînes de blueprints)', () => {
-  it('2 Gold Ore -> Gold Shield en priorité, puis Gold Helmet', () => {
+  it('2 Gold Ore -> Gold Helmet en priorité, puis Gold Shield (casque-d\'abord depuis c389e17 — A/B 300 parties = égalité, aligné sur la fiche)', () => {
     const p = fmPlayer()
     p.forge = ['gold-ore', 'gold-ore', 'gold-ore', 'gold-ore']
     const c1 = craftOnce(p)!
-    expect(c1.armorId).toBe('gold_shield')
+    expect(c1.armorId).toBe('gold_helmet')
     const c2 = craftOnce(p)!
-    expect(c2.armorId).toBe('gold_helmet')
+    expect(c2.armorId).toBe('gold_shield')
     expect(craftOnce(p)).toBeNull() // plus d'Ore
     expect(p.armor).toEqual({ helmet: 1, shield: 1 })
     expect(armorCount(p)).toBe(2)

@@ -101,6 +101,13 @@
            C:'<g class="glyph"><circle cx="32" cy="32" r="6"/><path d="M32 8 L32 20 M32 44 L32 56 M8 32 L20 32 M44 32 L56 32 M15 15 L24 24 M40 40 L49 49 M49 15 L40 24 M24 40 L15 49" fill="none" stroke-width="4" stroke-linecap="round"/></g>'},
       symName:{A:'Stave',B:'Charge',C:'Sun Power'},
       col:{A:'#7aa8e8',B:'#3a5a9c',C:'#e8543a'} },
+    mb: { name:'Mythic Brawler', crest:'MB', cls:v=>v<=3?'A':v<=5?'B':'C',
+      // Fist = poing (rose), Spirit = volute (turquoise pâle), Peak = montagne (or) — leaflet
+      sym:{A:'<g class="glyph"><path d="M18 32 Q18 20 28 20 L42 20 Q50 20 50 30 L50 42 Q50 52 40 52 L28 52 Q18 52 18 42 Z M27 20 L27 32 M34 20 L34 32 M41 20 L41 32 M18 38 L12 30 L16 24" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           B:'<g class="glyph"><path d="M42 10 Q22 16 22 34 Q22 48 36 50 Q28 42 30 32 Q32 22 44 20 Q42 14 42 10 Z M46 30 Q52 40 44 52 Q42 44 38 42" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>',
+           C:'<g class="glyph"><path d="M8 52 L26 16 L36 34 L42 26 L56 52 Z"/><path d="M22 30 L32 30" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g>'},
+      symName:{A:'Fist',B:'Spirit',C:'Peak'},
+      col:{A:'#e8a8d8',B:'#bfe4e0',C:'#e8c34a'} },
     // Naraxus (boss) : son de n'a pas de symboles — la face choisit l'attaque.
     nx: { name:'Naraxus', crest:'NX', cls:v=>'A',
       sym:{A:'<g class="glyph"><circle cx="32" cy="32" r="14"/></g>'}, symName:{A:'Face'},
@@ -110,7 +117,7 @@
   // ---- game state ----
   // Sélection des persos par URL : play.html?me=fm&ai=hh (défaut : hh contre bw).
   const _q = new URLSearchParams(location.search);
-  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py'||v==='du'||v==='se') ? v : dflt;
+  const _pick = (v, dflt) => (v==='hh'||v==='bw'||v==='fm'||v==='rv'||v==='dr'||v==='th'||v==='sm'||v==='py'||v==='du'||v==='se'||v==='mb') ? v : dflt;
   const HUMAN = _pick(_q.get('me'), 'hh');
   const AI_HERO = (_q.get('ai')==='nx') ? 'nx' : _pick(_q.get('ai'), HUMAN==='bw' ? 'hh' : 'bw');
   const BOSS_HARD = _q.get('hard')==='1';
@@ -183,9 +190,10 @@
     py: [['Fireball',3,0,0,0],['Burning Soul',0,0,2,0],['Combustion',1,1,1,1],['Pyroblast',4,0,0,1],['Meteorite',0,0,0,4]],
     du: [['Blade Flurry',3,0,0],['Balestra',2,2,0],['Feint Attack',2,0,2],['En Garde',0,3,1],['Bladestorm',0,0,4]],
     se: [['Light Staff',3,0,0],['Ray Absorption',0,4,0],['Radiant Energy',3,0,2],['Scorching Staff',1,3,0],['Solar Burst',0,0,4]],
+    mb: [['Strong Arm',3,0,1],['Tidal Blow',3,2,0],['Clobber',4,0,0],['Healing Wind',0,3,1],['Ancestral Strength',0,0,4]],
   };
   const SUITE_NAME = { hh:'Suite (Sow Despair)', fm:'Suite (Armored Up)', bw:'Suite (Hacked)',
-    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)', du:'Suite (Strike)', se:'Suite (Ray of Light)' };
+    rv:'Suite (Craven)', dr:"Suite (Forest's Call)", th:'Suite (Lightning Rod)', sm:'Suite (Ensnare)', py:'Suite (Hot Streak)', du:'Suite (Strike)', se:'Suite (Ray of Light)', mb:'Suite (Spirit Strike)' };
   function planHint(kept){
     const heroCls = humanHero.cls;
     const cnt = k => kept.filter(v=>heroCls(v)===k).length;
@@ -290,6 +298,10 @@
       const dawn = p.sunDialDawn === true, v = p.sunDial || 0;
       out.push(`<span class="tok" style="border-color:${dawn?'#e8a03a':'#8a6ad2'}"><b>${dawn?'🌅 DAWN':'🌆 DUSK'}</b> cadran ${v}/5${dawn?' (dump = +'+v+' dmg, puis −4)':' (à 5 → DAWN)'}</span>`);
     }
+    if (t.strengthOcean) out.push(`<span class="tok" style="border-color:#4a8fd2"><b>🌊 Ocean</b> ${t.strengthOcean}/3 (upkeep : 1→+1 CP · 2→+1 CP et soin 2)</span>`);
+    if (t.strengthMountain) out.push(`<span class="tok" style="border-color:#6fcf9f"><b>⛰️ Mountain</b> ${t.strengthMountain}/2 (+1 dmg/attaque, persistant)</span>`);
+    if (t.strengthSky) out.push(`<span class="tok" style="border-color:#e8891a"><b>☁️ Sky</b> ${t.strengthSky}/2 (+1 dé de défense, persistant)</span>`);
+    if (t.concussion) out.push(`<span class="tok" style="border-color:#d24a4a"><b>💫 Concussion</b> (saute la prochaine Income Phase)</span>`);
     if (t.chargedGem) out.push(`<span class="tok" style="border-color:#d24a4a"><b>💎 Charged Gem</b> (Main : d6 → CP et/ou 2 dmg)</span>`);
     if (t.sunMarked) out.push(`<span class="tok" style="border-color:#e8891a"><b>☀️ Sun Marked</b> (ton attaquant se soigne de 2, persistant)</span>`);
     if (p.heroId === 'fm') {
@@ -906,6 +918,13 @@
       return `<div class="defbox"><b>🛡️ Harness the Light${up?' II':''}</b><br>
         Lance 3 dés : soigne 1 par Stave (aucune prévention)<br>
         ${up?'Charge (une fois) : cadran +1 · cadran +1 PAR Sun Power · Stave+Charge+Sun Power : +Charged Gem':'2 Charges (une fois) : cadran +1 · Sun Power (une fois) : cadran +1'}</div>`;
+    }
+    if (heroKey==='mb'){
+      const up = (p.upgradesInPlay||[]).includes('wrassle-ii');
+      const sky = (p.tokens||{}).strengthSky||0;
+      return `<div class="defbox"><b>🛡️ Wrassle${up?' II':''}</b><br>
+        Lance ${(up?3:2)+sky} dés (${up?3:2} base${sky?` +${sky} Sky`:''}) : 1 contre-dégât par Fist · soigne 1 par Spirit<br>
+        Peak (une fois) : gagne 1 Strength (aucune prévention)</div>`;
     }
     if (heroKey==='hh'){
       const up = p.upgradesInPlay.includes('hallowed-reckoning-ii');
@@ -2915,6 +2934,14 @@
       {name:'Sunbeam',req:'SUITE 5',dmg:'cadran +2 ·9'},
       {name:'Solar Burst',req:'CCCC',dmg:'cadran +2 ·Gem OU Marked ·8'},
       {name:'Solar Flare',req:'CCCCC',dmg:'10 ·cadran +3 ·Gem+Marked ·ULT'} ],
+    mb:[ {name:'Strong Arm',req:'AAAC',dmg:'duel d6 : ≥ → +Strength ·6 / sinon 7'},
+      {name:'Tidal Blow',req:'AAABB',dmg:'+Ocean ·6 +1d6 effets'},
+      {name:'Clobber',req:'AAAA+',dmg:'5/7 ·4-kind: Concussion'},
+      {name:'Healing Wind',req:'BBBC',dmg:'soin 3 ·+2 Strengths'},
+      {name:'Spirit Strike',req:'SUITE 4',dmg:'+Strength ·7'},
+      {name:'Tectonic Punch',req:'SUITE 5',dmg:'+Mountain OU -1⛰️: +3 ·10'},
+      {name:'Ancestral Strength',req:'CCCC',dmg:'+2 Strengths ·7 indéf.'},
+      {name:'Power of the Ancients',req:'CCCCC',dmg:'12 ·+2 Str ·Concussion ·ULT'} ],
     du:[ {name:'Blade Flurry',req:'AAA+',dmg:'4/5/6 ·4-kind: 1 Step'},
       {name:'Balestra',req:'AABB',dmg:'≤2 Steps ·6'},
       {name:'Feint Attack',req:'AACC',dmg:'+GB ·1 Step ·2 indéf.'},
@@ -2941,9 +2968,9 @@
   (function(){
     const mast = document.querySelector('.mast');
     const box = document.createElement('span');
-    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm','py','du','se'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
+    const opt = (v,cur)=>['hh','bw','fm','rv','dr','th','sm','py','du','se','mb'].map(h=>`<option value="${h}"${h===cur?' selected':''}>${HERO[h].name}</option>`).join('');
     const aiCur = AI_HERO==='nx' ? (BOSS_HARD?'nxh':'nx') : AI_HERO;
-    const optAi = ['hh','bw','fm','rv','dr','th','sm','py','du','se'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
+    const optAi = ['hh','bw','fm','rv','dr','th','sm','py','du','se','mb'].map(h=>`<option value="${h}"${h===aiCur?' selected':''}>${HERO[h].name}</option>`).join('')
       + `<option value="nx"${aiCur==='nx'?' selected':''}>🐲 Naraxus (boss)</option>`
       + `<option value="nxh"${aiCur==='nxh'?' selected':''}>🐲 Naraxus (HARD)</option>`;
     box.innerHTML = `<label style="font-size:11px;color:var(--muted)">Toi <select id="pick-me" class="btn" style="padding:3px 6px;font-size:.75rem">${opt('me',HUMAN)}</select></label>

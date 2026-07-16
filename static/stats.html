@@ -29,7 +29,7 @@
 <button class="btn" id="exp">💾 Exporter tout</button></p>
 <input type="file" id="imp" accept=".json" style="display:none">
 <script>
-const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', nx:'Naraxus'};
+const HERO_NAME = {hh:'Headless Horseman', bw:'Black Widow', fm:'Forgemaster', rv:'Raveness', dr:'Druid', th:'Thor', sm:'Spider-Man', py:'Pyromancer', du:'Duelist', se:'Sun Elf', mb:'Mythic Brawler', nx:'Naraxus'};
 function isWin(g){ return /Victoire|🏆/.test(g.result||''); }
 function isDraw(g){ return /nul|Nul|🤝/.test(g.result||''); }
 function load(){ try { return JSON.parse(localStorage.getItem('dt_games')||'[]'); } catch(e){ return []; } }

@@ -1,4 +1,4 @@
-// Mapping cardId -> scan réel (généré depuis card-images.json — fetch() interdit en file://)
+// Mapping cardId -> scan rÃ©el (gÃ©nÃ©rÃ© depuis card-images.json â€” fetch() interdit en file://)
 window.CARD_IMG = {
  "cleave-ii": "../characters/headless_horseman/cards/Scan_20260701_145312.jpg",
  "ride-down-ii": "../characters/headless_horseman/cards/Scan_20260701_145325.jpg",
@@ -147,5 +147,20 @@ window.CARD_IMG = {
  "light-staff-ii": "../characters/Sun_Elf/cards/Scan_20260707_221126.jpg",
  "solar-burst-ii": "../characters/Sun_Elf/cards/Scan_20260707_221136.jpg",
  "radiant-energy-ii": "../characters/Sun_Elf/cards/Scan_20260707_221236.jpg",
- "sunbeam-ii": "../characters/Sun_Elf/cards/Scan_20260707_221245.jpg"
+ "sunbeam-ii": "../characters/Sun_Elf/cards/Scan_20260707_221245.jpg",
+ "sea-song": "../characters/Mythic_Brawler/cards/Scan_20260716_152323.jpg",
+ "haka": "../characters/Mythic_Brawler/cards/Scan_20260716_152404.jpg",
+ "heavy-hand": "../characters/Mythic_Brawler/cards/Scan_20260716_152501.jpg",
+ "kapu": "../characters/Mythic_Brawler/cards/Scan_20260716_152520.jpg",
+ "flying-punch": "../characters/Mythic_Brawler/cards/Scan_20260716_152540.jpg",
+ "wild-strength": "../characters/Mythic_Brawler/cards/Scan_20260716_152556.jpg",
+ "enjoy-the-view": "../characters/Mythic_Brawler/cards/Scan_20260716_152610.jpg",
+ "explosive-flex": "../characters/Mythic_Brawler/cards/Scan_20260716_152620.jpg",
+ "spirit-chant": "../characters/Mythic_Brawler/cards/Scan_20260716_152633.jpg",
+ "wrassle-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_152655.jpg",
+ "tectonic-punch-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_152709.jpg",
+ "tidal-blow-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_153002.jpg",
+ "ancestral-strength-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_153015.jpg",
+ "spirit-strike-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_153029.jpg",
+ "clobber-ii": "../characters/Mythic_Brawler/cards/Scan_20260716_153112.jpg"
 };
