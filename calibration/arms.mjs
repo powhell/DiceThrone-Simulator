@@ -113,17 +113,41 @@ function cardArmsFm() {
   return A
 }
 
+// ---- Vague « jetons Mythic Brawler » (2026-07-16, CALIB_SET=mb) ---------------------------
+// Matchup mb vs bw, GREEDY des 2 côtés (le réseau v4 ne connaît pas mb — features hors
+// layout, voulu). Échelles Ocean/Mountain/Sky (marginal jeton par jeton) + Concussion
+// infligée + étalons hp4/cp1. Valeur = Δwin apparié / étalon mb_hp4. Analyse dédiée :
+// node calibration/analyze_mb.mjs
+function mbArms() {
+  return {
+    base_mb: null, // mb vs bw
+    mb_hp4: s => { p(s, 'mb').hp += 4 },
+    mb_cp1: s => { p(s, 'mb').cp += 1 },
+    mb_ocean1: s => { p(s, 'mb').tokens.strengthOcean = 1 },
+    mb_ocean2: s => { p(s, 'mb').tokens.strengthOcean = 2 },
+    mb_ocean3: s => { p(s, 'mb').tokens.strengthOcean = 3 },
+    mb_mountain1: s => { p(s, 'mb').tokens.strengthMountain = 1 },
+    mb_mountain2: s => { p(s, 'mb').tokens.strengthMountain = 2 },
+    mb_sky1: s => { p(s, 'mb').tokens.strengthSky = 1 },
+    mb_sky2: s => { p(s, 'mb').tokens.strengthSky = 2 },
+    mb_concopp1: s => { p(s, 'bw').tokens.concussion = 1 },
+  }
+}
+
 export const CALIB_SET = process.env.CALIB_SET === 'cards' ? 'cards'
   : process.env.CALIB_SET === 'cards_sm' ? 'cards_sm'
-  : process.env.CALIB_SET === 'cards_fm' ? 'cards_fm' : 'v5'
+  : process.env.CALIB_SET === 'cards_fm' ? 'cards_fm'
+  : process.env.CALIB_SET === 'mb' ? 'mb' : 'v5'
 export const RESULTS_DIRNAME = CALIB_SET === 'cards' ? 'results_cards'
   : CALIB_SET === 'cards_sm' ? 'results_cards_sm'
-  : CALIB_SET === 'cards_fm' ? 'results_cards_fm' : 'results'
+  : CALIB_SET === 'cards_fm' ? 'results_cards_fm'
+  : CALIB_SET === 'mb' ? 'results_mb' : 'results'
 export const ARMS = CALIB_SET === 'cards' ? cardArms()
   : CALIB_SET === 'cards_sm' ? cardArmsSm()
-  : CALIB_SET === 'cards_fm' ? cardArmsFm() : ARMS_V5
+  : CALIB_SET === 'cards_fm' ? cardArmsFm()
+  : CALIB_SET === 'mb' ? mbArms() : ARMS_V5
 
-const HERO_PREFIXES = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py']
+const HERO_PREFIXES = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'mb']
 
 // Le héros dont ce bras mesure la valeur (son win-rate est la métrique).
 export function armHero(arm) {

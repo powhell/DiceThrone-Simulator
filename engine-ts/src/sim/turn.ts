@@ -3545,9 +3545,10 @@ function applySEAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: 
 
 // --- Mythic Brawler ---------------------------------------------------------------------------
 // Board vérifié (characters/Mythic_Brawler/SPEC.md + rulings 2026-07-16). « Gain 1 Strength » =
-// choix parmi Ocean/Mountain/Sky — IA : heuristique mb.chooseStrengthKind (Mountain -> Sky ->
-// Ocean), alignée sur les valeurs EV du solveur. Mountain : +1 dmg par jeton sur TOUTE attaque
-// qui inflige des dégâts (Attack Modifier persistant, appliqué dans attack()).
+// choix parmi Ocean/Mountain/Sky — IA : mb.chooseStrengthKind, meilleur marginal calibré (Sky1 >
+// Mountain1 > Sky2 > Mountain2 > Ocean), aligné sur les valeurs EV du solveur. Mountain : +1 dmg
+// par jeton sur TOUTE attaque qui inflige des dégâts (Attack Modifier persistant, appliqué dans
+// attack()).
 function applyMBAbility(state: GameState, playerIdx: 0 | 1, name: string, dice: number[], rng: RNG, policies: [Policy, Policy]): void {
   const self = state.players[playerIdx]
   const oppIdx = (1 - playerIdx) as 0 | 1

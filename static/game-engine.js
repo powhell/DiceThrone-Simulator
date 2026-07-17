@@ -2459,10 +2459,19 @@ var Game = (() => {
   };
 
   // src/characters/mythicbrawler/constants.ts
-  var MOUNTAIN_VALUE = 1.5;
-  var SKY_VALUE = 1.2;
-  var OCEAN_VALUE = 1.1;
-  var CONCUSSION_VALUE = 1.8;
+  var MOUNTAIN_MARGINAL = [2.9, 1.9];
+  var SKY_MARGINAL = [4.2, 2.4];
+  var OCEAN_MARGINAL = [0, 0.7, 0.65];
+  var CONCUSSION_VALUE = 0.6;
+  function mountainMarginal(m) {
+    return MOUNTAIN_MARGINAL[m] ?? 0;
+  }
+  function skyMarginal(s) {
+    return SKY_MARGINAL[s] ?? 0;
+  }
+  function oceanMarginal(o) {
+    return OCEAN_MARGINAL[o] ?? 0;
+  }
   var HEAL_VALUE3 = 1;
   var CARD_VALUE = 1;
   var STRONG_ARM_DMG_WIN = 6;
@@ -2491,16 +2500,15 @@ var Game = (() => {
     let v = 0;
     let o = ocean, m = mountain, s = sky;
     for (let i = 0; i < n; i++) {
-      if (m < 2) {
-        v += MOUNTAIN_VALUE;
-        m++;
-      } else if (s < 2) {
-        v += SKY_VALUE;
-        s++;
-      } else if (o < 3) {
-        v += OCEAN_VALUE;
-        o++;
-      }
+      const vs = s < SKY_MARGINAL.length ? SKY_MARGINAL[s] : -1;
+      const vm = m < MOUNTAIN_MARGINAL.length ? MOUNTAIN_MARGINAL[m] : -1;
+      const vo = o < OCEAN_MARGINAL.length ? OCEAN_MARGINAL[o] : -1;
+      const best = Math.max(vs, vm, vo);
+      if (best < 0) break;
+      if (best === vs) s++;
+      else if (best === vm) m++;
+      else o++;
+      v += best;
     }
     return v;
   }
@@ -2548,7 +2556,7 @@ var Game = (() => {
       const eDmg = TIDAL_DMG + (up ? TIDAL_II_E_DMG : TIDAL_BONUS_E_DMG) + mountain;
       const pDraw = up ? TIDAL_II_P_DRAW : TIDAL_BONUS_P_DRAW;
       const pConc = up ? TIDAL_II_P_CONC : TIDAL_BONUS_P_CONC;
-      const oceanGain = ocean < 3 ? OCEAN_VALUE : 0;
+      const oceanGain = oceanMarginal(ocean);
       out.push(["Tidal Blow (AAABB)", eDmg + oceanGain + pDraw * CARD_VALUE + conc$(pConc) - tax(true), eDmg]);
     }
     if (a >= 4) {
@@ -2559,7 +2567,7 @@ var Game = (() => {
       const dmg = table[tier] + mountain;
       let v = dmg - tax(true);
       if (kind >= 4) v += conc$();
-      if (up && kind >= 3 && sky < 2) v += SKY_VALUE;
+      if (up && kind >= 3) v += skyMarginal(sky);
       out.push([a >= 5 ? "Clobber 5A (AAAAA)" : "Clobber 4A (AAAA)", v, dmg]);
     }
     if (b >= 3 && c >= 1) {
@@ -2578,10 +2586,10 @@ var Game = (() => {
     if (hasStraight11(dice, 5)) {
       if (has("tectonic-punch-ii")) {
         const dmg = TECTONIC_DMG_II + mountain;
-        out.push(["Tectonic Punch (5-straight)", dmg + (mountain < 2 ? MOUNTAIN_VALUE : 0) - tax(true), dmg]);
+        out.push(["Tectonic Punch (5-straight)", dmg + mountainMarginal(mountain) - tax(true), dmg]);
       } else {
-        const optGain = TECTONIC_DMG + mountain + (mountain < 2 ? MOUNTAIN_VALUE : 0);
-        const optSpend = mountain >= 1 ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) - MOUNTAIN_VALUE : -Infinity;
+        const optGain = TECTONIC_DMG + mountain + mountainMarginal(mountain);
+        const optSpend = mountain >= 1 ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) - mountainMarginal(mountain - 1) : -Infinity;
         const spend = optSpend > optGain;
         const dmg = spend ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) : TECTONIC_DMG + mountain;
         out.push(["Tectonic Punch (5-straight)", Math.max(optGain, optSpend) - tax(true), dmg]);
@@ -6324,10 +6332,17 @@ var Game = (() => {
     return p.tokens[kind] - before;
   }
   function chooseStrengthKind(p) {
-    if ((p.tokens.strengthMountain ?? 0) < MOUNTAIN_CAP) return "strengthMountain";
-    if ((p.tokens.strengthSky ?? 0) < SKY_CAP) return "strengthSky";
-    if ((p.tokens.strengthOcean ?? 0) < OCEAN_CAP) return "strengthOcean";
-    return null;
+    const m = p.tokens.strengthMountain ?? 0;
+    const s = p.tokens.strengthSky ?? 0;
+    const o = p.tokens.strengthOcean ?? 0;
+    const vm = m < MOUNTAIN_CAP ? MOUNTAIN_MARGINAL[m] : -1;
+    const vs = s < SKY_CAP ? SKY_MARGINAL[s] : -1;
+    const vo = o < OCEAN_CAP ? OCEAN_MARGINAL[o] : -1;
+    const best = Math.max(vm, vs, vo);
+    if (best < 0) return null;
+    if (best === vs) return "strengthSky";
+    if (best === vm) return "strengthMountain";
+    return "strengthOcean";
   }
   function gainStrength(p) {
     const kind = chooseStrengthKind(p);

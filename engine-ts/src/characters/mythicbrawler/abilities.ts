@@ -1,13 +1,13 @@
 // Mythic Brawler — matching + valeurs EV (board vérifié). Dé : 1-3 Fist (A), 4-5 Spirit (B), 6 Peak (C).
 import type { AbilityEntry } from '../../core/types.js'
 import {
-  MOUNTAIN_VALUE, CONCUSSION_VALUE, HEAL_VALUE, CARD_VALUE, strengthGainValue,
-  STRONG_ARM_DMG_WIN, STRONG_ARM_DMG_LOSE, STRONG_ARM_WIN_P,
+  mountainMarginal, skyMarginal, oceanMarginal, CONCUSSION_VALUE, HEAL_VALUE, CARD_VALUE,
+  strengthGainValue, STRONG_ARM_DMG_WIN, STRONG_ARM_DMG_LOSE, STRONG_ARM_WIN_P,
   TIDAL_DMG, TIDAL_BONUS_E_DMG, TIDAL_BONUS_P_DRAW, TIDAL_BONUS_P_CONC,
-  TIDAL_II_E_DMG, TIDAL_II_P_DRAW, TIDAL_II_P_CONC, OCEAN_VALUE,
+  TIDAL_II_E_DMG, TIDAL_II_P_DRAW, TIDAL_II_P_CONC,
   CLOBBER_DMG, CLOBBER_DMG_II, HEALING_WIND_HEAL,
   ANCESTRAL_DMG, ANCESTRAL_DMG_II, SPIRIT_STRIKE_DMG, SPIRIT_STRIKE_DMG_II,
-  TECTONIC_DMG, TECTONIC_DMG_II, TECTONIC_SPEND_BONUS, KNOCK_OUT_DMG, ULT_DMG, SKY_VALUE,
+  TECTONIC_DMG, TECTONIC_DMG_II, TECTONIC_SPEND_BONUS, KNOCK_OUT_DMG, ULT_DMG,
 } from './constants.js'
 
 export function mbFaceToSymbol(face: number): 'A' | 'B' | 'C' {
@@ -72,7 +72,7 @@ export function getCandidates(
     const eDmg = TIDAL_DMG + (up ? TIDAL_II_E_DMG : TIDAL_BONUS_E_DMG) + mountain
     const pDraw = up ? TIDAL_II_P_DRAW : TIDAL_BONUS_P_DRAW
     const pConc = up ? TIDAL_II_P_CONC : TIDAL_BONUS_P_CONC
-    const oceanGain = ocean < 3 ? OCEAN_VALUE : 0
+    const oceanGain = oceanMarginal(ocean)
     out.push(['Tidal Blow (AAABB)', eDmg + oceanGain + pDraw * CARD_VALUE + conc$(pConc) - tax(true), eDmg])
   }
 
@@ -85,7 +85,7 @@ export function getCandidates(
     const dmg = table[tier] + mountain
     let v = dmg - tax(true)
     if (kind >= 4) v += conc$()
-    if (up && kind >= 3 && sky < 2) v += SKY_VALUE
+    if (up && kind >= 3) v += skyMarginal(sky)
     out.push([a >= 5 ? 'Clobber 5A (AAAAA)' : 'Clobber 4A (AAAA)', v, dmg])
   }
 
@@ -114,12 +114,12 @@ export function getCandidates(
   if (hasStraight(dice, 5)) {
     if (has('tectonic-punch-ii')) {
       const dmg = TECTONIC_DMG_II + mountain
-      out.push(['Tectonic Punch (5-straight)', dmg + (mountain < 2 ? MOUNTAIN_VALUE : 0) - tax(true), dmg])
+      out.push(['Tectonic Punch (5-straight)', dmg + mountainMarginal(mountain) - tax(true), dmg])
     } else {
       // CHOIX : gain Mountain OU retirer 1 Mountain pour +3 (heuristique moteur : dépense
       // seulement au cap — même arbitrage qu'ici, valeurs alignées)
-      const optGain = TECTONIC_DMG + mountain + (mountain < 2 ? MOUNTAIN_VALUE : 0)
-      const optSpend = mountain >= 1 ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) - MOUNTAIN_VALUE : -Infinity
+      const optGain = TECTONIC_DMG + mountain + mountainMarginal(mountain)
+      const optSpend = mountain >= 1 ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) - mountainMarginal(mountain - 1) : -Infinity
       const spend = optSpend > optGain
       const dmg = spend ? TECTONIC_DMG + TECTONIC_SPEND_BONUS + (mountain - 1) : TECTONIC_DMG + mountain
       out.push(['Tectonic Punch (5-straight)', Math.max(optGain, optSpend) - tax(true), dmg])

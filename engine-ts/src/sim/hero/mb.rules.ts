@@ -5,10 +5,12 @@
 //   - Mountain (cap 2): +1 dmg d'Attaque par jeton. Persistent.
 //   - Sky (cap 2)     : +1 dé par jeton en activant la Defensive Ability. Persistent.
 // Concussion (négatif, cap 1) : le porteur SAUTE sa prochaine Income Phase puis retire le jeton.
-// IA : choix de Strength par heuristique Mountain -> Sky -> Ocean (ordre aligné sur les valeurs
-// EV du solveur, characters/mythicbrawler/constants.ts). TODO : prompt humain si demandé.
+// IA : choix de Strength = meilleur marginal courant (calibré, characters/mythicbrawler/
+// constants.ts — ordre effectif Sky1 > Mountain1 > Sky2 > Mountain2 > Ocean). TODO : prompt
+// humain si demandé.
 import type { PlayerState, Tokens } from '../types.js'
 import { emptyBag } from '../tokens.js'
+import { MOUNTAIN_MARGINAL, SKY_MARGINAL, OCEAN_MARGINAL } from '../../characters/mythicbrawler/constants.js'
 
 export const OCEAN_CAP = 3
 export const MOUNTAIN_CAP = 2
@@ -31,13 +33,21 @@ export function gainStrengthOf(p: PlayerState, kind: StrengthKind): number {
   return p.tokens[kind] - before
 }
 
-// « Gain 1 Strength » générique : heuristique Mountain -> Sky -> Ocean (premier slot non plein).
-// Retourne le jeton choisi, ou null si les trois sont au cap (le gain échoue silencieusement).
+// « Gain 1 Strength » générique : meilleur marginal courant (valeurs calibrées, alignées sur
+// strengthGainValue du solveur). Ocean1 vaut 0 mais reste pris quand le reste est au cap
+// (gratuit, débloque Ocean 2-3). Null si les trois sont au cap (le gain échoue silencieusement).
 export function chooseStrengthKind(p: PlayerState): StrengthKind | null {
-  if ((p.tokens.strengthMountain ?? 0) < MOUNTAIN_CAP) return 'strengthMountain'
-  if ((p.tokens.strengthSky ?? 0) < SKY_CAP) return 'strengthSky'
-  if ((p.tokens.strengthOcean ?? 0) < OCEAN_CAP) return 'strengthOcean'
-  return null
+  const m = p.tokens.strengthMountain ?? 0
+  const s = p.tokens.strengthSky ?? 0
+  const o = p.tokens.strengthOcean ?? 0
+  const vm = m < MOUNTAIN_CAP ? MOUNTAIN_MARGINAL[m] : -1
+  const vs = s < SKY_CAP ? SKY_MARGINAL[s] : -1
+  const vo = o < OCEAN_CAP ? OCEAN_MARGINAL[o] : -1
+  const best = Math.max(vm, vs, vo)
+  if (best < 0) return null
+  if (best === vs) return 'strengthSky'
+  if (best === vm) return 'strengthMountain'
+  return 'strengthOcean'
 }
 
 export function gainStrength(p: PlayerState): StrengthKind | null {

@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { parentPort } from 'worker_threads'
-import { ARMS, armMatchup } from './arms.mjs'
+import { ARMS, armMatchup, CALIB_SET } from './arms.mjs'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const G = new Function(fs.readFileSync(path.join(root, 'static/game-engine.js'), 'utf8') + '; return Game;')()
@@ -21,11 +21,13 @@ function runOne(arm, seating, seed) {
   const state = G.createInitialGameState(heroA, heroB, rng)
   const mutate = ARMS[arm]
   if (mutate) mutate(state)
+  // Vague mb : GREEDY des 2 côtés — le réseau v4 ne connaît pas mb (features hors layout).
+  const pol = CALIB_SET === 'mb' ? greedy : netPol
   while (!state.gameOver && state.turnNumber < G.MAX_TURNS) {
     state.turnNumber += 1
     const i = state.activePlayerIdx
     // v3 (2026-07-05) : le réseau est entraîné avec fm — netPol PARTOUT (v2 : greedy pour fm)
-    G.playTurn(state, i, rng, [netPol, netPol])
+    G.playTurn(state, i, rng, [pol, pol])
     state.activePlayerIdx = 1 - i
   }
   // hhScore = score du PREMIER héros du matchup (hh ou fm selon le bras)

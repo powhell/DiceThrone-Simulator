@@ -27,12 +27,13 @@ describe('mb.rules: jetons Strength', () => {
     expect(mb.gainStrength(p)).toBeNull() // tout au cap
   })
 
-  it('gain générique : heuristique Mountain -> Sky -> Ocean', () => {
+  it('gain générique : meilleur marginal calibré (Sky1 > Mountain1 > Sky2 > Mountain2 > Ocean)', () => {
     const p = createInitialPlayer('mb')
-    expect(mb.gainStrength(p)).toBe('strengthMountain')
+    expect(mb.gainStrength(p)).toBe('strengthSky')
     expect(mb.gainStrength(p)).toBe('strengthMountain')
     expect(mb.gainStrength(p)).toBe('strengthSky')
-    expect(mb.gainStrength(p)).toBe('strengthSky')
+    expect(mb.gainStrength(p)).toBe('strengthMountain')
+    expect(mb.gainStrength(p)).toBe('strengthOcean')
     expect(mb.gainStrength(p)).toBe('strengthOcean')
   })
 
