@@ -301,6 +301,43 @@ export function calculateOptimalKeep<S>(
   }
 }
 
+// Version ALLÉGÉE pour le chemin de simulation (oracle.completeOffensiveRoll) : renvoie
+// UNIQUEMENT la garde optimale — le seul champ que l'IA consomme (result.topOptions[0].kept).
+// Économise, par appel, les 32 calculs de _abilityDist (distribution des noms d'habileté),
+// buildAbilityBoard et l'annotation direct-damage — tous EXCLUSIVEMENT pour l'affichage
+// coach/UI. Le résultat est IDENTIQUE à calculateOptimalKeep(...).topOptions[0].kept :
+// même dé-doublonnage par kept, même argmax d'EV (premier masque atteignant le max — le tri
+// stable par EV décroissant de calculateOptimalKeep préserve l'ordre des masques, donc le
+// même gagnant en cas d'égalité). La déterminisme du banc est donc préservé bit à bit.
+export function optimalKeep<S>(
+  cfg: CharacterConfig<S>,
+  dice: number[],
+  rollsRemaining: number,
+  state: S,
+): number[] {
+  const totalDice = dice.length
+  const sorted = [...dice].sort((a, b) => a - b)
+  if (rollsRemaining === 0) return sorted
+
+  const seenKeys = new Set<string>()
+  let bestEv = -Infinity
+  let bestKept: number[] = sorted
+  for (let mask = 0; mask < (1 << totalDice); mask++) {
+    const kept: number[] = []
+    for (let i = 0; i < totalDice; i++) {
+      if (mask & (1 << i)) kept.push(sorted[i])
+    }
+    kept.sort((a, b) => a - b)
+    const kKey = kept.join(',')
+    if (seenKeys.has(kKey)) continue
+    seenKeys.add(kKey)
+
+    const ev = evalState(cfg, kept, rollsRemaining, state, totalDice)
+    if (ev > bestEv) { bestEv = ev; bestKept = kept }
+  }
+  return bestKept
+}
+
 function _distToPercent(dist: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [name, p] of Object.entries(dist)) {

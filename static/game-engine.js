@@ -506,6 +506,30 @@ var Game = (() => {
       abilities: cfg.buildAbilityBoard(sorted, state)
     };
   }
+  function optimalKeep(cfg, dice, rollsRemaining, state) {
+    const totalDice = dice.length;
+    const sorted = [...dice].sort((a, b) => a - b);
+    if (rollsRemaining === 0) return sorted;
+    const seenKeys = /* @__PURE__ */ new Set();
+    let bestEv = -Infinity;
+    let bestKept = sorted;
+    for (let mask = 0; mask < 1 << totalDice; mask++) {
+      const kept = [];
+      for (let i = 0; i < totalDice; i++) {
+        if (mask & 1 << i) kept.push(sorted[i]);
+      }
+      kept.sort((a, b) => a - b);
+      const kKey = kept.join(",");
+      if (seenKeys.has(kKey)) continue;
+      seenKeys.add(kKey);
+      const ev = evalState(cfg, kept, rollsRemaining, state, totalDice);
+      if (ev > bestEv) {
+        bestEv = ev;
+        bestKept = kept;
+      }
+    }
+    return bestKept;
+  }
   function _distToPercent(dist) {
     const out = {};
     for (const [name, p] of Object.entries(dist)) {
@@ -2688,8 +2712,7 @@ var Game = (() => {
         rollsRemaining += update.extraRollsGranted ?? 0;
       }
       if (rollsRemaining <= 0) break;
-      const result = calculateOptimalKeep(cfg, dice, rollsRemaining, oracleState);
-      const kept = result.topOptions[0].kept;
+      const kept = optimalKeep(cfg, dice, rollsRemaining, oracleState);
       if (kept.length === 5) {
         rollsRemaining = 0;
         continue;

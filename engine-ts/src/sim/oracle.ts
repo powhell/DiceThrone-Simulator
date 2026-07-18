@@ -90,8 +90,11 @@ export function completeOffensiveRoll(
     }
     if (rollsRemaining <= 0) break
 
-    const result = core.calculateOptimalKeep(cfg, dice, rollsRemaining, oracleState)
-    const kept = result.topOptions[0].kept
+    // Chemin de simulation : seule la garde optimale est consommée. On appelle la version
+    // allégée (optimalKeep) plutôt que calculateOptimalKeep pour ne pas payer, à chaque lancer
+    // rejoué par la politique value-greedy, les calculs coach-only (_abilityDist × 32 gardes,
+    // buildAbilityBoard, direct-damage). Résultat bit-identique — voir optimalKeep.
+    const kept = core.optimalKeep(cfg, dice, rollsRemaining, oracleState)
     if (kept.length === 5) {
       // DP says keep everything — skip the remaining attempts, but still open the final window.
       rollsRemaining = 0
