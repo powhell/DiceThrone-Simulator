@@ -52,6 +52,19 @@ function log(entry) {
   fs.appendFileSync(path.join(here, 'chain_log.jsonl'), JSON.stringify(entry) + '\n')
 }
 
+// Borne basse de l'intervalle de Wilson 95 % (même formule que bench.ts). Sert de garde
+// ANTI-BRUIT au gating : on ne promeut que si tout l'IC est au-dessus du seuil (le candidat
+// est significativement meilleur), pas si le simple winrate dépasse 0.5 — ce dernier laissait
+// passer des promotions dans le bruit (marche aléatoire du champion, 6 fausses promotions la
+// nuit du 18-19 : winrates 0.45-0.58 sur ~80 parties, IC ±11 %).
+function wilsonLow(wins, n, z = 1.96) {
+  if (n === 0) return 0
+  const p = wins / n, z2 = z * z, denom = 1 + z2 / n
+  const center = (p + z2 / (2 * n)) / denom
+  const half = (z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / denom
+  return Math.max(0, center - half)
+}
+
 let round0 = 0
 // reprend la numérotation là où le log s'était arrêté (relançable)
 const logPath = path.join(here, 'chain_log.jsonl')
@@ -100,14 +113,20 @@ for (let round = round0; round < round0 + rounds; round++) {
   }
   const dec = aW + bW
   const winrate = dec ? aW / dec : 0.5
-  const promoted = winrate > +(process.env.GATE_WR ?? 0.5) // 0.55 = anti-bruit (diagnostic 07-11)
+  // Anti-bruit (diagnostic 07-19) : borne basse de Wilson > seuil (défaut 0.5) → on exige que
+  // tout l'IC 95 % soit au-dessus de 50 %, donc une VRAIE amélioration, pas du bruit. Remplace
+  // l'ancien `winrate > 0.5` qui promouvait sur des pièces à pile ou face. Pour que ce gate
+  // laisse passer les vrais gains, il faut ASSEZ de parties de gate (sinon rien ne promeut —
+  // c'est voulu : mieux vaut un champion figé qu'un champion qui dérive au hasard).
+  const wLow = wilsonLow(aW, dec)
+  const promoted = wLow > +(process.env.GATE_WR ?? 0.5)
   if (promoted) {
     fs.copyFileSync(candPath, champPath)
     fs.copyFileSync(candPath, path.join(here, 'weights2', `champion_r${round}.json`))
   }
   const entry = {
     round, candidateWins: aW, championWins: bW, nulls: nu,
-    winrate: Number(winrate.toFixed(3)), promoted,
+    winrate: Number(winrate.toFixed(3)), wilsonLow: Number(wLow.toFixed(3)), promoted,
     minutes: Number(((Date.now() - t0) / 60000).toFixed(1)),
   }
   // Jalon BASELINE une ronde sur deux : le champion courant vs value-greedy (la vraie métrique

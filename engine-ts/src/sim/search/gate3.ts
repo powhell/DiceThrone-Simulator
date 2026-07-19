@@ -14,6 +14,7 @@ import { fromJSON, forward, fromJSON2, forward2, type Network2 } from '../rl/net
 import { encodeState, FEATURE_COUNT } from '../rl/features.js'
 import { encodeStateV5, FEATURE_COUNT_V5 } from '../rl/featuresV5.js'
 import { createValueGreedyPolicy } from '../rl/valueGreedyPolicy.js'
+import { TRAINABLE_HEROES } from '../rl/matchups.js'
 import { mulberry32Stateful } from '../rng.js'
 import { wilson } from '../bench.js'
 import { GameNode, actionKey, type NodeAction } from './gameNode.js'
@@ -93,7 +94,11 @@ function main(): void {
     agentB = net2Agent(loadNet2(bPath), sims, rngB)
   }
 
-  const MATCHUPS: Array<[HeroId, HeroId]> = [['sm', 'th'], ['hh', 'bw'], ['py', 'du'], ['fm', 'rv'], ['dr', 'se']]
+  // Matchups DÉRIVÉS de TRAINABLE_HEROES (comme selfplay2) — l'ancienne liste codée en dur
+  // excluait mb : le candidat était entraîné sur mb (self-play) mais jamais JUGÉ dessus, et la
+  // baseline vs value-greedy l'ignorait aussi. Diagonale i vs i+1 → chaque héros des 2 côtés.
+  const H = TRAINABLE_HEROES
+  const MATCHUPS: Array<[HeroId, HeroId]> = H.map((h, i) => [h, H[(i + 1) % H.length]])
   let aWins = 0, bWins = 0, nulls = 0
   let seed = seedBase
   const t0 = Date.now()
