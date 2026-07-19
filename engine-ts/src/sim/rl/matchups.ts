@@ -2,7 +2,7 @@
 // Miroirs exclus (user 2026-07-05) : coût sans information d'équilibre inter-héros.
 import type { HeroId } from '../types.js'
 
-export const TRAINABLE_HEROES: HeroId[] = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se']
+export const TRAINABLE_HEROES: HeroId[] = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se', 'mb']
 
 // Entraînement : toutes les paires ordonnées (90) + chaque héros vs Naraxus (10) = 100.
 // Les consommateurs DOIVENT tourner dans la liste avec un offset de seed — un worker qui

@@ -26,7 +26,10 @@ export const TOKEN_SLOTS = 32   // 24 jetons enregistrés
 const SPARE_SCALARS = 4         // mécaniques futures hors-jeton (piste, cadran…) sans resize
 
 // ---- Registres append-only (l'ORDRE est le contrat : ne jamais réordonner, seulement APPEND) -
-const HERO_REGISTRY: HeroId[] = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se']
+// mb ajouté 2026-07-18 : consomme le slot libre #10 (11/16), la taille du vecteur ne bouge pas
+// (FEATURE_COUNT_V5 inchangé) → le champion existant reste chargeable et s'entraîne PAR-DESSUS,
+// jamais de zéro. C'est exactement la promesse du layout figé.
+const HERO_REGISTRY: HeroId[] = ['hh', 'bw', 'fm', 'rv', 'dr', 'th', 'sm', 'py', 'du', 'se', 'mb']
 
 // jeton -> [slot implicite = ordre, cap de normalisation]
 const TOKEN_REGISTRY: Array<[string, number]> = [
@@ -35,6 +38,8 @@ const TOKEN_REGISTRY: Array<[string, number]> = [
   ['regen1', 2], ['wound', 2], ['electrokinesis', 4], ['guardBreak', 2], ['combo', 1],
   ['webbed', 1], ['invisibility', 1], ['fireMastery', 7], ['burn', 1], ['knockdown', 1],
   ['stun', 1], ['disarm', 1], ['chargedGem', 1], ['sunMarked', 1],
+  // mb 2026-07-18 : slots libres #24-27 (28/32) ; caps = mb.rules.ts (OCEAN/MOUNTAIN/SKY/CONCUSSION_CAP)
+  ['strengthOcean', 3], ['strengthMountain', 2], ['strengthSky', 2], ['concussion', 1],
 ]
 
 interface HeroEncoding {
