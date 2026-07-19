@@ -10,3 +10,15 @@
 {"round":9,"candidateWins":32,"championWins":40,"nulls":8,"winrate":0.444,"promoted":false,"minutes":111.7,"baseline":{"championWins":7,"vgWins":32,"nulls":1,"winrate":0.179}}
 {"round":10,"candidateWins":42,"championWins":33,"nulls":5,"winrate":0.56,"promoted":true,"minutes":109.7}
 {"round":11,"candidateWins":70,"championWins":81,"nulls":9,"winrate":0.464,"promoted":false,"minutes":274.9,"baseline":{"championWins":9,"vgWins":62,"nulls":9,"winrate":0.127}}
+{"round":12,"candidateWins":33,"championWins":40,"nulls":7,"winrate":0.452,"promoted":false,"minutes":37.2}
+{"round":13,"candidateWins":36,"championWins":36,"nulls":8,"winrate":0.5,"promoted":false,"minutes":51.3,"baseline":{"championWins":11,"vgWins":63,"nulls":6,"winrate":0.149}}
+{"round":14,"candidateWins":41,"championWins":35,"nulls":4,"winrate":0.539,"promoted":true,"minutes":53.8}
+{"round":15,"candidateWins":36,"championWins":39,"nulls":5,"winrate":0.48,"promoted":false,"minutes":47.5,"baseline":{"championWins":10,"vgWins":67,"nulls":3,"winrate":0.13}}
+{"round":16,"candidateWins":42,"championWins":32,"nulls":6,"winrate":0.568,"promoted":true,"minutes":51.6}
+{"round":17,"candidateWins":39,"championWins":35,"nulls":6,"winrate":0.527,"promoted":true,"minutes":48.7,"baseline":{"championWins":11,"vgWins":65,"nulls":4,"winrate":0.145}}
+{"round":18,"candidateWins":38,"championWins":37,"nulls":5,"winrate":0.507,"promoted":true,"minutes":45.3}
+{"round":19,"candidateWins":37,"championWins":35,"nulls":8,"winrate":0.514,"promoted":true,"minutes":46.9,"baseline":{"championWins":10,"vgWins":66,"nulls":4,"winrate":0.132}}
+{"round":20,"candidateWins":35,"championWins":42,"nulls":3,"winrate":0.455,"promoted":false,"minutes":43}
+{"round":21,"candidateWins":39,"championWins":37,"nulls":4,"winrate":0.513,"promoted":true,"minutes":47.9,"baseline":{"championWins":7,"vgWins":70,"nulls":3,"winrate":0.091}}
+{"round":22,"candidateWins":34,"championWins":38,"nulls":8,"winrate":0.472,"promoted":false,"minutes":48.7}
+{"round":23,"candidateWins":42,"championWins":31,"nulls":7,"winrate":0.575,"promoted":true,"minutes":48.4,"baseline":{"championWins":12,"vgWins":66,"nulls":2,"winrate":0.154}}
