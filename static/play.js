@@ -1197,6 +1197,27 @@
       renderControls();
     }));
   }
+  function addMbBtns(c){
+    // MB : choix humains pré-armés (plus d'action auto — user-caught 2026-07-19). Le moteur
+    // respecte you.mbStrengthPref (quelle Strength gagner) et you.mbOceanSpend (Ocean à l'upkeep).
+    if (HUMAN!=='mb') return;
+    const you=g.state.players[g.humanIdx];
+    const sp=you.mbStrengthPref;
+    const spLbl = sp==='strengthSky'?'☁️ Sky (défense)':sp==='strengthMountain'?'⛰️ Mountain (+dégâts)':sp==='strengthOcean'?'🌊 Ocean (CP/soin)':'🤖 Auto (Sky→Mountain…)';
+    c.appendChild(btn(`💪 Strength à gagner : ${spLbl}`, sp?'primary':'', ()=>{
+      you.mbStrengthPref = sp===undefined?'strengthSky':sp==='strengthSky'?'strengthMountain':sp==='strengthMountain'?'strengthOcean':undefined;
+      renderControls();
+    }));
+    const held=(you.tokens.strengthOcean||0);
+    if (held>0 || you.mbOceanSpend!==undefined){
+      const os=you.mbOceanSpend;
+      const osLbl = os===0?'✋ garder (0)':os===1?'1 → +1 CP':os===2?'2 → +1 CP, soin 2':'🤖 Auto';
+      c.appendChild(btn(`🌊 Ocean à l'upkeep : ${osLbl}`, os!==undefined?'primary':'', ()=>{
+        you.mbOceanSpend = os===undefined?0:os===0?1:os===1?2:undefined;
+        renderControls();
+      }));
+    }
+  }
   function renderControls() {
     const c = $('controls'); c.innerHTML='';
     // ⚠️ Coach stratégique minimal (user 07-11 : « le coach devrait me dire ça ») : la ZONE
@@ -1235,6 +1256,7 @@
       addThorBtns(c); // 🔨 navette Mjölnir possible à tout moment (défausse 1 carte)
       addSmDefBtns(c); // 🕷️ choix Spider-Sense/Counterpunch + dépenses Invisibility pré-armées
       addFmDefBtns(c); // ⚒️ Masterwork Forge : quelle armure doubler (pré-armé)
+      addMbBtns(c); // 💪 MB : quelle Strength gagner si Wrassle fait un Peak (pré-armé)
       if (HUMAN==='du') { // 👣 où tu es AVANT le jet — les reculs de Retreat sont OBLIGATOIRES (règle)
         const youDu=g.state.players[g.humanIdx], posDu=youDu.footwork||0;
         const LBLD={'-2':'🛡️+3 Défensif (prévient 3)','-1':'🂠 Défensif (pige 1)','0':'⚖️ Neutral','1':'⚔️+1 Off.','2':'⚔️+3 Off.'};
@@ -1429,6 +1451,7 @@
         addNvToggle(c);
         addMorphBtns(c);
         addThorBtns(c);
+        addMbBtns(c); // 💪 MB : Strength à gagner + 🌊 Ocean à l'upkeep (pré-armés)
         if (ttaCharges > 0) {
           const s0=document.createElement('span'); s0.className='rolls';
           s0.textContent='Try Try Again : 2e relance gratuite (même dé permis) —';

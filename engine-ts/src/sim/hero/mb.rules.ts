@@ -40,6 +40,11 @@ export function chooseStrengthKind(p: PlayerState): StrengthKind | null {
   const m = p.tokens.strengthMountain ?? 0
   const s = p.tokens.strengthSky ?? 0
   const o = p.tokens.strengthOcean ?? 0
+  // Préférence du joueur humain (pré-armée dans l'UI) : respectée tant que le type visé n'est pas
+  // au cap. Sinon on retombe sur le meilleur marginal calibré (ci-dessous). L'IA ne pose jamais
+  // mbStrengthPref, donc ce court-circuit ne la concerne pas.
+  const cap = (k: StrengthKind) => k === 'strengthOcean' ? OCEAN_CAP : k === 'strengthMountain' ? MOUNTAIN_CAP : SKY_CAP
+  if (p.mbStrengthPref && (p.tokens[p.mbStrengthPref] ?? 0) < cap(p.mbStrengthPref)) return p.mbStrengthPref
   const vm = m < MOUNTAIN_CAP ? MOUNTAIN_MARGINAL[m] : -1
   const vs = s < SKY_CAP ? SKY_MARGINAL[s] : -1
   const vo = o < OCEAN_CAP ? OCEAN_MARGINAL[o] : -1
@@ -70,6 +75,9 @@ export function inflictConcussion(target: PlayerState): number {
 // sinon 1 jeton (+1 CP) — un jeton banké reste dépensable plus tard ou via Sea Song! (2 CP).
 export function oceanUpkeepChoice(p: PlayerState): 0 | 1 | 2 {
   const held = p.tokens.strengthOcean ?? 0
+  // Choix du joueur humain (pré-armé dans l'UI) : dépense exactement ce qu'il a demandé, borné à
+  // ce qu'il détient. undefined = heuristique auto (ci-dessous). L'IA ne pose jamais mbOceanSpend.
+  if (p.mbOceanSpend !== undefined) return Math.min(p.mbOceanSpend, held) as 0 | 1 | 2
   if (held >= 2 && p.hp <= HEAL_CAP - 16) return 2 // blessé : le heal 2 vaut plus que le 2e CP différé
   return held >= 1 ? 1 : 0
 }

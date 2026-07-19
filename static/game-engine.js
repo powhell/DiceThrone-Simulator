@@ -6358,6 +6358,8 @@ var Game = (() => {
     const m = p.tokens.strengthMountain ?? 0;
     const s = p.tokens.strengthSky ?? 0;
     const o = p.tokens.strengthOcean ?? 0;
+    const cap = (k) => k === "strengthOcean" ? OCEAN_CAP : k === "strengthMountain" ? MOUNTAIN_CAP : SKY_CAP;
+    if (p.mbStrengthPref && (p.tokens[p.mbStrengthPref] ?? 0) < cap(p.mbStrengthPref)) return p.mbStrengthPref;
     const vm = m < MOUNTAIN_CAP ? MOUNTAIN_MARGINAL[m] : -1;
     const vs = s < SKY_CAP ? SKY_MARGINAL[s] : -1;
     const vo = o < OCEAN_CAP ? OCEAN_MARGINAL[o] : -1;
@@ -6382,6 +6384,7 @@ var Game = (() => {
   }
   function oceanUpkeepChoice(p) {
     const held = p.tokens.strengthOcean ?? 0;
+    if (p.mbOceanSpend !== void 0) return Math.min(p.mbOceanSpend, held);
     if (held >= 2 && p.hp <= HEAL_CAP2 - 16) return 2;
     return held >= 1 ? 1 : 0;
   }

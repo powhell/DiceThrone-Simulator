@@ -81,6 +81,12 @@ export interface PlayerState {
   // Escape! payé, succès sur Web au lieu de Spider), posé au jet, consommé au comptage.
   smDefenseMode?: 'sense' | 'counter'
   smDefenseActive?: 'sense' | 'sense-swing' | 'counter'
+  // Préférences humaines MB (pré-armées dans l'UI, respectées par le moteur ; l'IA ne les pose
+  // jamais donc son comportement calibré est inchangé) : mbStrengthPref = quelle Strength gagner
+  // quand une habileté/défense en donne une (undefined = auto calibré) ; mbOceanSpend = combien
+  // d'Ocean dépenser à l'Upkeep (undefined = heuristique auto).
+  mbStrengthPref?: 'strengthMountain' | 'strengthSky' | 'strengthOcean'
+  mbOceanSpend?: 0 | 1 | 2
   // Toggles humains pré-armés : Swing Escape! (payé seulement si ça convertit échec->succès)
   // et « dépenser Invisibility pour défendre contre l'indéfendable » (l'IA a ses heuristiques).
   swingEscapeArmed?: boolean
