@@ -13,6 +13,7 @@
 import * as fs from 'node:fs'
 import type { HeroId } from '../types.js'
 import type { Policy } from '../policy.js'
+import { TRAINABLE_HEROES } from '../rl/matchups.js'
 import { greedyHighestDamagePolicy } from '../policy.js'
 import { fromJSON2, forward2 } from '../rl/network.js'
 import { encodeStateV5, FEATURE_COUNT_V5 } from '../rl/featuresV5.js'
@@ -69,11 +70,17 @@ function main(): void {
     return raw.map(l => Math.exp(l - mx))
   }
 
-  const MATCHUPS: Array<[HeroId, HeroId]> = [['sm', 'th'], ['hh', 'bw'], ['py', 'du'], ['fm', 'rv'], ['dr', 'se']]
+  // Paires diagonales DÉRIVÉES de TRAINABLE_HEROES (héros i vs i+1, cyclique) : chaque héros
+  // apparaît des deux côtés une fois par cycle, et AJOUTER un héros (mb 2026-07-18, ou un futur)
+  // l'inclut ICI automatiquement — plus de liste codée en dur à maintenir (l'ancienne oubliait mb).
+  // Pas de boss (nx hors TRAINABLE_HEROES). Rotation par seedBase pour que des workers de graines
+  // différentes couvrent des paires différentes (cf. avertissement de matchups.ts).
+  const H = TRAINABLE_HEROES
+  const MATCHUPS: Array<[HeroId, HeroId]> = H.map((h, i) => [h, H[(i + 1) % H.length]])
   const rows: Row[] = []
   const t0 = Date.now()
   for (let g = 0; g < games; g++) {
-    const [heroA, heroB] = MATCHUPS[g % MATCHUPS.length]
+    const [heroA, heroB] = MATCHUPS[(seedBase + g) % MATCHUPS.length]
     let node = GameNode.root(heroA, heroB, seedBase + g, delegates)
     const gameRows: Row[] = []
     let moveCount = 0
