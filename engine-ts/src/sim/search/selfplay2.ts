@@ -23,6 +23,11 @@ import { mctsSearch, type MctsOptions, type SearchableNode } from './mcts.js'
 import { actionBucket, ACTION_SLOTS } from './actionSpace.js'
 
 const TEMP_MOVES = 10
+// Issues de hasard échantillonnées par nœud de chance (progressive widening). 6 était trop peu
+// pour un jeu de DÉS : la valeur d'un nœud de chance était bruitée, donc la recherche ne dépassait
+// pas le réseau (cliquet AlphaZero grippé, diagnostic 07-20). Réglable par env pour tuner sans
+// recompiler ; défaut relevé à 20.
+const MAX_CHANCE = Number(process.env.MAX_CHANCE ?? 20)
 
 interface Row { x: number[]; pi: Float32Array; actorIdx: 0 | 1; z: number }
 
@@ -90,7 +95,7 @@ function main(): void {
       if (actor.kind === 'chance') { node = node.continueChance(); continue }
       if (actor.kind !== 'player') break
       const d = node.pendingDecision()!
-      const r = mctsSearch(node, actor.idx, { sims, cPuct: 0.7, maxChanceChildren: 6, evaluate, rng: searchRng, priors })
+      const r = mctsSearch(node, actor.idx, { sims, cPuct: 0.7, maxChanceChildren: MAX_CHANCE, evaluate, rng: searchRng, priors })
       const total = r.visits.reduce((s, v) => s + v.n, 0)
       if (r.visits.length > 1 && total > 0) {
         const pi = new Float32Array(ACTION_SLOTS)

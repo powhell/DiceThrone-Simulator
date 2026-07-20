@@ -23,6 +23,10 @@ import { actionBucket, ACTION_SLOTS } from './actionSpace.js'
 
 interface NodeAgent { pick(node: GameNode, seat: 0 | 1): NodeAction }
 
+// Issues de hasard par nœud de chance (voir selfplay2) — même défaut, réglable par env pour que
+// le gate juge à la même force de recherche que la génération.
+const MAX_CHANCE = Number(process.env.MAX_CHANCE ?? 20)
+
 function net2Agent(net: Network2, sims: number, rng: () => number): NodeAgent {
   const evaluate: MctsOptions['evaluate'] = (n: SearchableNode, me: 0 | 1) => {
     const { value } = forward2(net, encodeStateV5((n as GameNode).stateForEval(), me))
@@ -38,7 +42,7 @@ function net2Agent(net: Network2, sims: number, rng: () => number): NodeAgent {
   }
   return {
     pick(node, seat) {
-      return mctsSearch(node, seat, { sims, cPuct: 0.7, maxChanceChildren: 6, evaluate, rng, priors }).action
+      return mctsSearch(node, seat, { sims, cPuct: 0.7, maxChanceChildren: MAX_CHANCE, evaluate, rng, priors }).action
     },
   }
 }
