@@ -79,13 +79,13 @@ export function getCandidates(
     out.push(['Combustion (ABCD)', dmg - removable * FM_VALUE + FM_VALUE, dmg])
   }
 
-  // Pyroblast (4 F + 1 M) : 6 dmg + 1d6 d'effets (II/III : 2d6, III relance 1)
+  // Pyroblast (3 F + 1 M) : 6 dmg + 1d6 d'effets (II/III : 2d6, III relance 1)
   if (a >= 4 && d >= 1) {
     const dice2 = (has('pyroblast-ii') || has('pyroblast-iii')) ? 2 : 1
     // E[par dé] = 1/2*3 dmg + 1/6*Burn + 1/6*2 FM + 1/6*Knockdown
     const perDie = 0.5 * 3 + (burnV + 2 * FM_VALUE + knockV) / 6
     const reroll = has('pyroblast-iii') ? 0.4 : 0 // relance optionnelle ~ +0.4
-    out.push(['Pyroblast (AAAAD)', PYROBLAST_DMG + dice2 * perDie + reroll - tax(true), PYROBLAST_DMG])
+    out.push(['Pyroblast (AAAD)', PYROBLAST_DMG + dice2 * perDie + reroll - tax(true), PYROBLAST_DMG])
   }
 
   // Hot Streak (petite suite) : +2 FM PUIS base + 1/FM
@@ -153,7 +153,7 @@ export function buildAbilityBoard(dice: number[], fm: number, fmCap: number, opp
   const matched = new Map(getCandidates(dice, fm, fmCap, oppBurned, oppKnocked, upgradeIds, defenseTax).map(([n, v, dd]) => [n, [v, dd] as const]))
   const all = [
     'Fireball 3F (AAA)', 'Fireball 4F (AAAA)', 'Fireball 5F (AAAAA)', 'Burning Soul (CC)',
-    'Combustion (ABCD)', 'Pyroblast (AAAAD)', 'Hot Streak (4-straight)', 'Ignite (5-straight)',
+    'Combustion (ABCD)', 'Pyroblast (AAAD)', 'Hot Streak (4-straight)', 'Ignite (5-straight)',
     'Meteorite (DDDD)', 'Scorch the Earth (DDDDD)',
   ]
   if (upgradeIds.includes('hot-streak-ii')) all.push('Scorch (AABB)')

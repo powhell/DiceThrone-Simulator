@@ -2006,7 +2006,7 @@ var Game = (() => {
       const dice2 = has("pyroblast-ii") || has("pyroblast-iii") ? 2 : 1;
       const perDie = 0.5 * 3 + (burnV + 2 * FM_VALUE + knockV) / 6;
       const reroll = has("pyroblast-iii") ? 0.4 : 0;
-      out.push(["Pyroblast (AAAAD)", PYROBLAST_DMG + dice2 * perDie + reroll - tax(true), PYROBLAST_DMG]);
+      out.push(["Pyroblast (AAAD)", PYROBLAST_DMG + dice2 * perDie + reroll - tax(true), PYROBLAST_DMG]);
     }
     if (hasStraight8(dice, 4)) {
       const base = has("hot-streak-ii") ? HOT_STREAK_BASE_II : HOT_STREAK_BASE;
@@ -2060,7 +2060,7 @@ var Game = (() => {
       "Fireball 5F (AAAAA)",
       "Burning Soul (CC)",
       "Combustion (ABCD)",
-      "Pyroblast (AAAAD)",
+      "Pyroblast (AAAD)",
       "Hot Streak (4-straight)",
       "Ignite (5-straight)",
       "Meteorite (DDDD)",
@@ -4287,8 +4287,8 @@ var Game = (() => {
       },
       {
         id: "pyroblast",
-        boardName: "Pyroblast (AAAAD)",
-        dicePattern: "AAAAD",
+        boardName: "Pyroblast (AAAD)",
+        dicePattern: "AAAD",
         baseDamage: 6,
         defendable: true,
         bonusRoll: { dice: 1, onA: "add3dmg", onB: "inflictBurn", onC: "fireMastery2", onD: "inflictKnockdown" },
@@ -4421,7 +4421,7 @@ var Game = (() => {
         kind: "upgrade",
         cpCost: 2,
         upgradeSlot: "pyroblast",
-        text: "AAAAD: Deal 6 dmg and roll 2 dice: Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
+        text: "AAAD: Deal 6 dmg and roll 2 dice: Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
         verified: true
       },
       {
@@ -4430,7 +4430,7 @@ var Game = (() => {
         kind: "upgrade",
         cpCost: 3,
         upgradeSlot: "pyroblast",
-        text: "AAAAD: Deal 6 dmg and roll 2 dice (may re-roll 1): Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
+        text: "AAAD: Deal 6 dmg and roll 2 dice (may re-roll 1): Add 3 x Flame dmg. On Blaze, inflict Burn. Gain 2 x FierySoul Fire Mastery. On Meteor, inflict Knockdown.",
         verified: true
       },
       {

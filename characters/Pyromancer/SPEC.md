@@ -15,7 +15,7 @@ Source : `characters/Pyromancer/board/*.jpg`, `leaflet/Screenshot_{20..24}.png`,
 | Fireball | 3/4/5 F | 4/6/8 dmg + **+1 FM** |
 | Burning Soul | SS | **+2 FM par S** ; **1 collatéral par S** à tous les adversaires |
 | Combustion | F+B+S+M (1 de chaque) | +1 FM ; puis retire jusqu'à 4 FM → **3 dmg indéfendables PAR jeton retiré** |
-| Pyroblast | FFFF+M | 6 dmg et lance 1d6 : F → +3 dmg ; B → inflige **Burn** ; S → +2 FM ; M → inflige **Knockdown** |
+| Pyroblast | FFF+M | 6 dmg et lance 1d6 : F → +3 dmg ; B → inflige **Burn** ; S → +2 FM ; M → inflige **Knockdown** |
 | Hot Streak | petite SUITE | +2 FM ; puis **5 + 1 dmg par FM** |
 | Ignite | grande SUITE | +2 FM ; puis **4 + 2 dmg par FM** |
 | Meteorite | MMMM | +2 FM ; inflige **Stun** ; puis **1 dmg indéfendable par FM** ; + **2 collatéraux** à tous |
