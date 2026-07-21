@@ -71,6 +71,27 @@ function vgAgent(): { agent: NodeAgent; policy: Policy } {
   return { agent, policy: vg }
 }
 
+// Agent MCTS branché sur le réseau v4 (valeur seule, celui de value-greedy) au lieu du réseau v5
+// warm. Teste si la recherche multi-coups avec un BON évaluateur bat le 1-coup value-greedy.
+// Priors uniformes (le v4 n'a pas de tête politique). Diagnostic 07-21 : la profondeur de recherche
+// est un levier qui marche (27→37 % en montant les sims) → avec un meilleur réseau, ça devrait passer.
+function v4MctsAgent(sims: number, rng: () => number): NodeAgent {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
+  const win: { AI_WEIGHTS?: unknown } = {}
+  new Function('window', fs.readFileSync(path.join(root, 'static/ai-weights.js'), 'utf8'))(win)
+  const net = fromJSON(JSON.stringify(win.AI_WEIGHTS))
+  if (net.sizes[0] !== FEATURE_COUNT) throw new Error('ai-weights incompatibles avec features v4')
+  const evaluate: MctsOptions['evaluate'] = (n: SearchableNode, me: 0 | 1) => {
+    const v = forward(net, [encodeState((n as GameNode).stateForEval(), me)])[0]
+    return Math.min(1, Math.max(0, (v + 1) / 2))
+  }
+  return {
+    pick(node, seat) {
+      return mctsSearch(node, seat, { sims, cPuct: 0.7, maxChanceChildren: MAX_CHANCE, evaluate, rng }).action
+    },
+  }
+}
+
 function loadNet2(p: string): Network2 {
   const net = fromJSON2(fs.readFileSync(p, 'utf-8'))
   if (net.featDim !== FEATURE_COUNT_V5 || net.actionSlots !== ACTION_SLOTS) {
@@ -88,7 +109,8 @@ function main(): void {
 
   const rngA = mulberry32Stateful(seedBase * 7 + 1)
   const rngB = mulberry32Stateful(seedBase * 7 + 2)
-  const agentA = net2Agent(loadNet2(aPath), sims, rngA)
+  // aPath spécial 'v4' : agent MCTS branché sur le réseau v4 (test définitif de viabilité).
+  const agentA = aPath === 'v4' ? v4MctsAgent(sims, rngA) : net2Agent(loadNet2(aPath), sims, rngA)
   let agentB: NodeAgent
   let delegates: [Policy, Policy] = [greedyHighestDamagePolicy, greedyHighestDamagePolicy]
   if (bPath === 'vg') {
