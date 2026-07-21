@@ -92,6 +92,36 @@ function v4MctsAgent(sims: number, rng: () => number): NodeAgent {
   }
 }
 
+// Agent HYBRIDE : valeur = réseau v4 (bon juge), priors = tête politique du réseau warm (qui imite
+// value-greedy → bons coups à explorer). Diagnostic 07-21 : MCTS(v4) à priors uniformes = PARITÉ
+// (46,5 %) car il explore à l'aveugle. En dirigeant la recherche avec la politique warm, le gain
+// multi-coups devrait s'exprimer et passer devant value-greedy.
+function v4ValueWarmPriorAgent(sims: number, rng: () => number): NodeAgent {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
+  const win: { AI_WEIGHTS?: unknown } = {}
+  new Function('window', fs.readFileSync(path.join(root, 'static/ai-weights.js'), 'utf8'))(win)
+  const v4 = fromJSON(JSON.stringify(win.AI_WEIGHTS))
+  if (v4.sizes[0] !== FEATURE_COUNT) throw new Error('ai-weights incompatibles avec features v4')
+  const warm = loadNet2(path.join(root, 'rl-py', 'weights2', 'champion_warm.json'))
+  const evaluate: MctsOptions['evaluate'] = (n: SearchableNode, me: 0 | 1) => {
+    const v = forward(v4, [encodeState((n as GameNode).stateForEval(), me)])[0]
+    return Math.min(1, Math.max(0, (v + 1) / 2))
+  }
+  const priors: MctsOptions['priors'] = (actions, nodeS) => {
+    const d = (nodeS as GameNode).pendingDecision()
+    if (!d || actions.length <= 1) return actions.map(() => 1)
+    const { logits } = forward2(warm, encodeStateV5(d.state, d.playerIdx))
+    const raw = actions.map(a => logits[actionBucket(actionKey(a))])
+    const mx = Math.max(...raw)
+    return raw.map(l => Math.exp(l - mx))
+  }
+  return {
+    pick(node, seat) {
+      return mctsSearch(node, seat, { sims, cPuct: 0.7, maxChanceChildren: MAX_CHANCE, evaluate, rng, priors }).action
+    },
+  }
+}
+
 function loadNet2(p: string): Network2 {
   const net = fromJSON2(fs.readFileSync(p, 'utf-8'))
   if (net.featDim !== FEATURE_COUNT_V5 || net.actionSlots !== ACTION_SLOTS) {
@@ -109,8 +139,11 @@ function main(): void {
 
   const rngA = mulberry32Stateful(seedBase * 7 + 1)
   const rngB = mulberry32Stateful(seedBase * 7 + 2)
-  // aPath spécial 'v4' : agent MCTS branché sur le réseau v4 (test définitif de viabilité).
-  const agentA = aPath === 'v4' ? v4MctsAgent(sims, rngA) : net2Agent(loadNet2(aPath), sims, rngA)
+  // aPath spéciaux : 'v4' = MCTS(valeur v4, priors uniformes) ; 'v4warm' = MCTS(valeur v4 + priors
+  // de la tête politique du warm) — le test des priors informés.
+  const agentA = aPath === 'v4' ? v4MctsAgent(sims, rngA)
+    : aPath === 'v4warm' ? v4ValueWarmPriorAgent(sims, rngA)
+    : net2Agent(loadNet2(aPath), sims, rngA)
   let agentB: NodeAgent
   let delegates: [Policy, Policy] = [greedyHighestDamagePolicy, greedyHighestDamagePolicy]
   if (bPath === 'vg') {
