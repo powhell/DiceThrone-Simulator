@@ -12,10 +12,18 @@ Métrique de référence dans tout ce document : **winrate du champion strong-AI
 
 ## ⭐ OÙ ON EN EST (à lire en premier)
 
-Le **self-play AlphaZero ne s'auto-améliore pas** (0 promotion sur ~9 rondes). MAIS **la PROFONDEUR
-DE RECHERCHE, elle, est un levier qui MARCHE** (découvert 2026-07-21) : winrate warm vs value-greedy
-= **27 % (sims 120) → 33 % (sims 300) → 37 % (sims 800)**, montée monotone. Ce n'est donc PAS « pour
-rien » — il y a un mécanisme qui répond. Gains lents (logarithmiques) avec le réseau warm FAIBLE.
+**Le projet a l'air VIABLE.** Trajectoire vs value-greedy : loop cassé **15 %** → warm-start **25 %**
+→ + recherche renforcée **37 %** → + bon réseau v4 dans le MCTS **44 %** (au bord de la parité, IC
+jusqu'à 55 %). Chaque levier ajoute. On n'a PAS épuisé les leviers → probable de passer 50 %.
+
+Ce qui a fait monter les chiffres (PAS le self-play — lui, 0 promotion sur ~9 rondes) :
+1. **Warm-start** (imiter value-greedy au lieu de partir du hasard) : remonte le plancher 15 → 25 %.
+2. **Profondeur de recherche** (sims 120→300→800, dés 6→20) : extrait plus du réseau, 25 → 37 %.
+3. **Meilleur évaluateur** (réseau v4 au lieu du warm faible dans le MCTS) : 33 → 44 % à sims égaux.
+
+**PROCHAIN TEST : MCTS(v4) à sims plus élevés (600-800)** — la recherche montait déjà avec le warm,
+avec le bon réseau ça devrait franchir 50 %. Levier bonus : **priors informés** (le v4 n'a pas de tête
+politique → priors uniformes ; ajouter un prior heuristique focaliserait la recherche).
 
 **Correction 2026-07-21 :** mon hypothèse « strong-AI handicapé par le greedy délégué » était FAUSSE —
 les délégués `greedyHighestDamagePolicy` sont **symétriques** (l'adversaire value-greedy joue aussi au
@@ -87,6 +95,12 @@ ne cliquette pas.
 champion_warm vs value-greedy, MAX_CHANCE 20, à sims croissants : **120 → ~27 %, 300 → 33,3 %,
 800 → 37,3 %** (31-52, IC 28-48, 88 parties, 48 min). Montée **monotone** → la profondeur de recherche
 aide vraiment, gains lents (logarithmiques) car réseau warm faible. Motive le test v4-MCTS (cf. tête).
+
+### 11. TEST DÉFINITIF — MCTS(réseau v4) vs value-greedy (commit gate3 v4MctsAgent)
+MCTS avec le bon réseau v4 (au lieu du warm) comme évaluateur, priors uniformes, sims 300, MAX_CHANCE
+20 : **44,2 %** (38-48, IC 34-55, 88 parties, 28 min). **+11 points vs le warm à sims égaux (33 %).**
+3 lots sur 4 à ~50/50, un seul lot malchanceux. **Au bord de la parité** → le projet est viable, il
+reste des leviers (sims plus hauts + priors informés) pour passer 50 %.
 
 ---
 
