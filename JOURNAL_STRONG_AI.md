@@ -12,9 +12,14 @@ Métrique de référence dans tout ce document : **winrate du champion strong-AI
 
 ## ⭐ OÙ ON EN EST (à lire en premier)
 
-**Le projet a l'air VIABLE.** Trajectoire vs value-greedy : loop cassé **15 %** → warm-start **25 %**
-→ + recherche renforcée **37 %** → + bon réseau v4 dans le MCTS **44 %** (au bord de la parité, IC
-jusqu'à 55 %). Chaque levier ajoute. On n'a PAS épuisé les leviers → probable de passer 50 %.
+**Le projet a l'air VIABLE — on est à la PARITÉ avec value-greedy.** Trajectoire vs value-greedy :
+loop cassé **15 %** → warm-start **25 %** → + recherche renforcée **37 %** → + bon réseau v4 dans le
+MCTS **44 %** (sims 300) → **46,5 %** (sims 800, IC 36-57, 3 lots/4 à égalité parfaite = parité). Les
+sims donnent des rendements décroissants (44→46,5). **Levier restant le plus prometteur : PRIORS
+INFORMÉS** — le MCTS(v4) explore actuellement à l'AVEUGLE (priors uniformes, le v4 n'a pas de tête
+politique). value-greedy ≈ « 1-coup avec la valeur v4 » ; notre gain multi-coups est annulé par
+l'exploration aveugle. Brancher un prior (la **tête politique du réseau warm**, qui imite value-greedy)
+= v4-valeur + warm-politique → la recherche devient dirigée → devrait passer devant. **C'est le prochain test.**
 
 Ce qui a fait monter les chiffres (PAS le self-play — lui, 0 promotion sur ~9 rondes) :
 1. **Warm-start** (imiter value-greedy au lieu de partir du hasard) : remonte le plancher 15 → 25 %.
@@ -101,6 +106,11 @@ MCTS avec le bon réseau v4 (au lieu du warm) comme évaluateur, priors uniforme
 20 : **44,2 %** (38-48, IC 34-55, 88 parties, 28 min). **+11 points vs le warm à sims égaux (33 %).**
 3 lots sur 4 à ~50/50, un seul lot malchanceux. **Au bord de la parité** → le projet est viable, il
 reste des leviers (sims plus hauts + priors informés) pour passer 50 %.
+
+### 12. MCTS(v4) à sims 800
+Même config, sims 800 : **46,5 %** (40-46, IC 36-57, 88 parties, 29 min). 3 lots/4 à égalité PARFAITE
+(11-11, 11-11, 12-10). Progression sims 300→800 : 44 → 46,5 % (rendement décroissant). **= PARITÉ**
+avec value-greedy. Pour passer devant : priors informés (cf. tête), pas juste plus de sims.
 
 ---
 
