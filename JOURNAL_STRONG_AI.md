@@ -12,16 +12,21 @@ Métrique de référence dans tout ce document : **winrate du champion strong-AI
 
 ## ⭐ OÙ ON EN EST (à lire en premier)
 
-Le **self-play AlphaZero ne s'auto-améliore pas** sur ce jeu à cette échelle (1 PC) : **0 promotion
-réelle sur ~9 rondes** (warm + recherche renforcée). Le warm-start donne un gain PONCTUEL
-(15 % → 25 % → 33 % vs value-greedy) mais le cliquet ne mord jamais.
+Le **self-play AlphaZero ne s'auto-améliore pas** (0 promotion sur ~9 rondes). MAIS **la PROFONDEUR
+DE RECHERCHE, elle, est un levier qui MARCHE** (découvert 2026-07-21) : winrate warm vs value-greedy
+= **27 % (sims 120) → 33 % (sims 300) → 37 % (sims 800)**, montée monotone. Ce n'est donc PAS « pour
+rien » — il y a un mécanisme qui répond. Gains lents (logarithmiques) avec le réseau warm FAIBLE.
 
-**MAIS le dossier n'est PAS clos** (2026-07-21, objection user justifiée) : le strong-AI est
-**handicapé** — il délègue **27 % de ses décisions au greedy BÊTE** (`greedyHighestDamagePolicy`),
-alors que value-greedy joue « fin » (réseau v4) partout. **Test jamais fait** = changer les délégués
-en **value-greedy** + garder le réseau warm + recherche renforcée, puis mesurer vs value-greedy.
-Intuition solide : le MCTS regarde plusieurs coups, value-greedy un seul → le multi-coups DEVRAIT
-battre le 1-coup **si on ne l'handicape pas**. **C'est LE prochain test à lancer.**
+**Correction 2026-07-21 :** mon hypothèse « strong-AI handicapé par le greedy délégué » était FAUSSE —
+les délégués `greedyHighestDamagePolicy` sont **symétriques** (l'adversaire value-greedy joue aussi au
+greedy bête sur les mêmes 27 % via le `delegates` partagé du GameNode). Le 33-37 % est donc DÉJÀ la
+comparaison propre « MCTS(warm) vs value-greedy 1-coup ». Ne PAS relancer un test de délégués.
+
+**PROCHAIN TEST (LE bon, jamais fait) : MCTS branché sur le réseau v4** (celui, bien meilleur, que
+value-greedy utilise) au lieu du réseau warm faible, vs value-greedy. Puisque la recherche aide ET que
+le v4 est un meilleur évaluateur, MCTS-v4 devrait battre le 1-coup value-greedy à des sims raisonnables.
+Câblage : un agent dans gate3 avec `evaluate` = valeur du réseau v4 (features.ts + `forward`), priors
+uniformes (le v4 n'a pas de tête politique). **C'est le test définitif de viabilité.**
 
 ---
 
@@ -77,6 +82,11 @@ nettement significatif.
 3 rondes (30-32), sims 300 + MAX_CHANCE 20, depuis champion_warm. **0 promotion** (gate candidat
 0,33-0,41). Baseline r31 = 32,9 %. Champion toujours figé. → même avec recherche forte, le self-play
 ne cliquette pas.
+
+### 10. Scaling des sims (2026-07-21) — la recherche est un LEVIER
+champion_warm vs value-greedy, MAX_CHANCE 20, à sims croissants : **120 → ~27 %, 300 → 33,3 %,
+800 → 37,3 %** (31-52, IC 28-48, 88 parties, 48 min). Montée **monotone** → la profondeur de recherche
+aide vraiment, gains lents (logarithmiques) car réseau warm faible. Motive le test v4-MCTS (cf. tête).
 
 ---
 
