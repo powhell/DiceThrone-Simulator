@@ -12,14 +12,21 @@ Métrique de référence dans tout ce document : **winrate du champion strong-AI
 
 ## ⭐ OÙ ON EN EST (à lire en premier)
 
-**Le projet a l'air VIABLE — on est à la PARITÉ avec value-greedy.** Trajectoire vs value-greedy :
-loop cassé **15 %** → warm-start **25 %** → + recherche renforcée **37 %** → + bon réseau v4 dans le
-MCTS **44 %** (sims 300) → **46,5 %** (sims 800, IC 36-57, 3 lots/4 à égalité parfaite = parité). Les
-sims donnent des rendements décroissants (44→46,5). **Levier restant le plus prometteur : PRIORS
-INFORMÉS** — le MCTS(v4) explore actuellement à l'AVEUGLE (priors uniformes, le v4 n'a pas de tête
-politique). value-greedy ≈ « 1-coup avec la valeur v4 » ; notre gain multi-coups est annulé par
-l'exploration aveugle. Brancher un prior (la **tête politique du réseau warm**, qui imite value-greedy)
-= v4-valeur + warm-politique → la recherche devient dirigée → devrait passer devant. **C'est le prochain test.**
+**⚠️ CORRECTION 2026-07-21 (test fiable) : on NE bat PAS value-greedy — l'optimisme précédent était
+du BRUIT.** Les tests à 88 parties (±10 %) donnaient 44 %, 46 % « au bord de la parité ». Un GROS test
+fiable (440 parties, ±5 %) de MCTS(v4 + priors warm) vs value-greedy = **33,3 %** (IC 29-38), **nettement
+sous 50 %**. Les « améliorations » 44→46 étaient des flukes de petits échantillons. Ce qui reste SOLIDE
+(gros effets, réels même à 88 parties) : loop cassé 15 % → **warm-start 25 %** (vrai bond). Au-delà, les
+variantes MCTS(v4/warm, sims, priors) se regroupent autour de **~33 %** une fois mesurées proprement.
+
+**Leçon : ne JAMAIS conclure sur 88 parties (±10 %).** Pour toute question fine (« bat-on X ? »), 400+
+parties obligatoires. Le user l'avait dit deux fois.
+
+**Incertitude honnête restante :** les priors warm ont peut-être NUI (v4+uniforme montrait 44 % en petit
+test, v4+priors big test = 33 %). Possible que de MEILLEURS priors aident. Mais aucun chiffre >40 % n'a
+jamais été confirmé à grande échelle → prudence maximale.
+
+**État réel : notre meilleur agent ≈ 33 % vs value-greedy. value-greedy reste nettement le meilleur.**
 
 Ce qui a fait monter les chiffres (PAS le self-play — lui, 0 promotion sur ~9 rondes) :
 1. **Warm-start** (imiter value-greedy au lieu de partir du hasard) : remonte le plancher 15 → 25 %.
@@ -108,9 +115,14 @@ MCTS avec le bon réseau v4 (au lieu du warm) comme évaluateur, priors uniforme
 reste des leviers (sims plus hauts + priors informés) pour passer 50 %.
 
 ### 12. MCTS(v4) à sims 800
-Même config, sims 800 : **46,5 %** (40-46, IC 36-57, 88 parties, 29 min). 3 lots/4 à égalité PARFAITE
-(11-11, 11-11, 12-10). Progression sims 300→800 : 44 → 46,5 % (rendement décroissant). **= PARITÉ**
-avec value-greedy. Pour passer devant : priors informés (cf. tête), pas juste plus de sims.
+Même config, sims 800 : **46,5 %** (40-46, IC 36-57, 88 parties, 29 min). ⚠️ **CHIFFRE NON FIABLE**
+(88 parties, ±10 %) — voir test #13 qui le contredit.
+
+### 13. GROS test fiable — MCTS(v4 + priors warm) vs value-greedy (440 parties)
+sims 300, MAX_CHANCE 20, **440 parties** (±5 %) : **33,3 %** (141-282, IC **29-38**), 124 min. Verdict
+FIABLE : **nettement sous 50 %, on ne bat pas value-greedy.** Contredit les petits tests #11/#12 (44/46 %
+= bruit). Les priors warm n'ont pas aidé (peut-être nui vs uniforme, non confirmé à grande échelle).
+**Conclusion : l'optimisme « parité » était un artefact de petits échantillons.** Meilleur agent réel ≈ 33 %.
 
 ---
 
