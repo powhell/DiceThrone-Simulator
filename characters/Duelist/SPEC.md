@@ -24,7 +24,7 @@ Le jeton Footwork **démarre en Neutral** (Hero Setup).
 | Habileté | Exigence | Effet |
 |---|---|---|
 | Blade Flurry | 3/4/5 Blades | 4/5/6 dmg ; sur 4-of-a-kind (chiffres) → may take 1 Step |
-| Balestra | AABB (2 Blades + 2 Boots) | may take up to 2 Steps ; puis **6 dmg** |
+| Balestra | ABBB (1 Blade + 3 Boots) | may take up to 2 Steps ; puis **6 dmg** |
 | Feint Attack | AACC (2 Blades + 2 Pierce) | gagne **Guard Break** ; may take 1 Step ; puis **2 dmg indéfendables** |
 | En Garde | CBBB (1 Pierce + 3 Boots) | **8 dmg** et lance **4d6** : sur **Pierce** → inflige **Disarm** |
 | Strike | petite SUITE | **7 dmg** |

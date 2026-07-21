@@ -2185,7 +2185,7 @@ var Game = (() => {
     if (a >= 2 && b >= 2) {
       const dmg = has("balestra-ii") ? BALESTRA_DMG_II : BALESTRA_DMG;
       const p = stepPack(BALESTRA_STEPS);
-      out.push(["Balestra (AABB)", dmg + p.offBonus + p.residual - tax(true), dmg]);
+      out.push(["Balestra (ABBB)", dmg + p.offBonus + p.residual - tax(true), dmg]);
     }
     if (b >= 3 && has("balestra-ii")) {
       const p = stepPack(FANCY_FEET_STEPS);
@@ -2240,7 +2240,7 @@ var Game = (() => {
       "Blade Flurry 3A (AAA)",
       "Blade Flurry 4A (AAAA)",
       "Blade Flurry 5A (AAAAA)",
-      "Balestra (AABB)",
+      "Balestra (ABBB)",
       "Feint Attack (AACC)",
       "En Garde (CBBB)",
       "Strike (4-straight)",
@@ -4565,8 +4565,8 @@ var Game = (() => {
       },
       {
         id: "balestra",
-        boardName: "Balestra (AABB)",
-        dicePattern: "AABB",
+        boardName: "Balestra (ABBB)",
+        dicePattern: "ABBB",
         baseDamage: 6,
         defendable: true,
         stepsBeforeDamage: { upTo: 2 },

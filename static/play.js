@@ -2966,7 +2966,7 @@
       {name:'Ancestral Strength',req:'CCCC',dmg:'+2 Strengths ·7 indéf.'},
       {name:'Power of the Ancients',req:'CCCCC',dmg:'12 ·+2 Str ·Concussion ·ULT'} ],
     du:[ {name:'Blade Flurry',req:'AAA+',dmg:'4/5/6 ·4-kind: 1 Step'},
-      {name:'Balestra',req:'AABB',dmg:'≤2 Steps ·6'},
+      {name:'Balestra',req:'ABBB',dmg:'≤2 Steps ·6'},
       {name:'Feint Attack',req:'AACC',dmg:'+GB ·1 Step ·2 indéf.'},
       {name:'En Garde',req:'CBBB',dmg:'8 +4d6: Pierce→Disarm'},
       {name:'Strike',req:'SUITE 4',dmg:'7'},

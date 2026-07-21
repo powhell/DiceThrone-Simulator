@@ -78,11 +78,11 @@ export function getCandidates(
     out.push([label, table[tier] + p.offBonus + p.residual - tax(true), table[tier]])
   }
 
-  // Balestra (AABB) : up to 2 Steps puis 6 (II : 8)
+  // Balestra (ABBB) : up to 2 Steps puis 6 (II : 8)
   if (a >= 2 && b >= 2) {
     const dmg = has('balestra-ii') ? BALESTRA_DMG_II : BALESTRA_DMG
     const p = stepPack(BALESTRA_STEPS)
-    out.push(['Balestra (AABB)', dmg + p.offBonus + p.residual - tax(true), dmg])
+    out.push(['Balestra (ABBB)', dmg + p.offBonus + p.residual - tax(true), dmg])
   }
 
   // Fancy Feet (BBB, Balestra II) : GB + up to 3 Steps, pas de dégâts
@@ -155,7 +155,7 @@ export function buildAbilityBoard(dice: number[], footwork: number, guardBreak: 
   const matched = new Map(getCandidates(dice, footwork, guardBreak, oppDisarmed, bonusAvailable, upgradeIds, defenseTax).map(([n, v, d]) => [n, [v, d] as const]))
   const all = [
     'Blade Flurry 3A (AAA)', 'Blade Flurry 4A (AAAA)', 'Blade Flurry 5A (AAAAA)',
-    'Balestra (AABB)', 'Feint Attack (AACC)', 'En Garde (CBBB)',
+    'Balestra (ABBB)', 'Feint Attack (AACC)', 'En Garde (CBBB)',
     'Strike (4-straight)', 'Strike (5-straight)', 'Bladestorm (CCCC)', 'Master of the Blade! (CCCCC)',
   ]
   if (upgradeIds.includes('balestra-ii')) all.push('Fancy Feet (BBB)')

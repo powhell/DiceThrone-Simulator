@@ -25,7 +25,7 @@
      "numberMatchBonus": {"ofAKind": 4, "steps": 1},
      "upgradedBy": {"upgradeId": "blade-flurry-ii", "baseDamage": 7.0, "numberMatchOfAKind": 3},
      "verified": true},
-    {"id": "balestra", "boardName": "Balestra (AABB)", "dicePattern": "AABB", "baseDamage": 6.0, "defendable": true,
+    {"id": "balestra", "boardName": "Balestra (ABBB)", "dicePattern": "ABBB", "baseDamage": 6.0, "defendable": true,
      "stepsBeforeDamage": {"upTo": 2},
      "upgradedBy": {"upgradeId": "balestra-ii", "baseDamage": 8.0},
      "notes": "You may take up to 2 Steps. Then deal 6 dmg (II : 8).",
