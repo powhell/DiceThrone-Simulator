@@ -11,11 +11,11 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const engine = path.join(here, '..', 'engine-ts')
 const tsxCli = path.join(engine, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+// sims réglable en 1er argument : node calibration/v4uniform_run.mjs 800  (défaut 500)
+const SIMS = Number(process.argv[2] ?? 500), MAX_CHANCE = '20', GPM = 21   // ~11 matchups × 22 × 4 workers = ~970 parties
 const outDir = path.join(here, 'results_v4uniform')
 fs.mkdirSync(outDir, { recursive: true })
-const outFile = path.join(outDir, 'games.jsonl')
-
-const SIMS = 500, MAX_CHANCE = '20', GPM = 21   // ~11 matchups × 22 × 4 workers = ~970 parties
+const outFile = path.join(outDir, `games_s${SIMS}.jsonl`)
 const SEEDS = [86000, 87000, 88000, 89000]
 
 // repart à neuf (une run = un dataset propre ; en cas de mort, le partiel reste lisible)

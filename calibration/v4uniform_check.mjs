@@ -4,9 +4,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// sims en 1er argument (défaut 500) : node calibration/v4uniform_check.mjs 800
 const here = path.dirname(fileURLToPath(import.meta.url))
-const f = path.join(here, 'results_v4uniform', 'games.jsonl')
-if (!fs.existsSync(f)) { console.log('Aucun checkpoint encore (results_v4uniform/games.jsonl absent).'); process.exit(0) }
+const SIMS = Number(process.argv[2] ?? 500)
+const f = path.join(here, 'results_v4uniform', `games_s${SIMS}.jsonl`)
+console.log(`(sims ${SIMS})`)
+if (!fs.existsSync(f)) { console.log(`Aucun checkpoint encore pour sims ${SIMS}.`); process.exit(0) }
 
 let a = 0, b = 0, nu = 0
 for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
