@@ -26,7 +26,17 @@ parties obligatoires. Le user l'avait dit deux fois.
 test, v4+priors big test = 33 %). Possible que de MEILLEURS priors aident. Mais aucun chiffre >40 % n'a
 jamais été confirmé à grande échelle → prudence maximale.
 
-**État réel : notre meilleur agent ≈ 33 % vs value-greedy. value-greedy reste nettement le meilleur.**
+**MAJ 2026-07-22 (gros test fiable, 968 parties) : les priors warm NUISAIENT.** MCTS(v4 + priors
+UNIFORMES) vs value-greedy = **44,0 %** (405-515, IC 40,8-47,2, 968 parties, sims 500). vs v4+priors
+warm 33 % (IC 29-38) — **IC disjoints = différence réelle et significative.** Donc : (1) les priors de
+la tête politique du réseau warm dégradaient la recherche ; (2) le 44 % des petits tests n'était PAS du
+bruit, confirmé à l'échelle. **Meilleur strong-AI actuel = MCTS(réseau v4) + priors UNIFORMES ≈ 44 %
+vs value-greedy** (proche parité, pas encore 50 %). Prochain levier : plus de sims (petits tests :
+44%@300 → 46,5%@800 ; à confirmer en gros test). NB outillage : run robuste avec checkpoint =
+calibration/v4uniform_run.mjs (+ _check.mjs, + _night.cmd) — écrit chaque partie dans
+results_v4uniform/games.jsonl, survit aux kills.
+
+**État réel : meilleur agent ≈ 44 % vs value-greedy (priors uniformes). Value-greedy reste devant mais l'écart se resserre.**
 
 Ce qui a fait monter les chiffres (PAS le self-play — lui, 0 promotion sur ~9 rondes) :
 1. **Warm-start** (imiter value-greedy au lieu de partir du hasard) : remonte le plancher 15 → 25 %.
