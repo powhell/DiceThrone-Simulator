@@ -36,7 +36,9 @@ vs value-greedy** (proche parité, pas encore 50 %). Prochain levier : plus de s
 calibration/v4uniform_run.mjs (+ _check.mjs, + _night.cmd) — écrit chaque partie dans
 results_v4uniform/games.jsonl, survit aux kills.
 
-**État réel : meilleur agent ≈ 44 % vs value-greedy (priors uniformes). Value-greedy reste devant mais l'écart se resserre.**
+**État réel : value-greedy RESTE LE MEILLEUR agent (il gagne 56 % vs le MCTS). Le MCTS(v4)+uniforme est
+seulement le meilleur CHALLENGER (44 %, donc il PERD encore contre value-greedy) — l'écart s'est resserré
+mais il n'a PAS dépassé value-greedy. Devenir "le meilleur" = franchir 50 %.**
 
 Ce qui a fait monter les chiffres (PAS le self-play — lui, 0 promotion sur ~9 rondes) :
 1. **Warm-start** (imiter value-greedy au lieu de partir du hasard) : remonte le plancher 15 → 25 %.
