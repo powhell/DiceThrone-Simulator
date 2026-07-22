@@ -1,0 +1,175 @@
+{
+  "$schema": "self-describing architecture map for AI agents",
+  "generated": "2026-07-22",
+  "readMeFirst": "This file is the machine-readable map of the whole codebase, written for an AI agent starting a new feature. Human-facing version: ARCHITECTURE.html. Deep-dive docs: CLAUDE.md (build+conventions), PLAN_STRONG_AI.md (strong-AI spec), JOURNAL_STRONG_AI.md (strong-AI test log). Rule of thumb: game logic lives in engine-ts/src (TypeScript), gets bundled to static/*.js, and the UIs are vanilla JS in static/. Nothing needs a server.",
+
+  "project": {
+    "name": "Dice Throne Simulator",
+    "oneLine": "A Dice Throne (dice-combat board game) engine + AI, with two browser UIs: a dice-keep 'coach' optimizer and a full 'play vs AI' game. Backed by a TypeScript engine bundled to static JS. No server.",
+    "language": "TypeScript (engine) + vanilla JS (UI) + Python (neural-net training only)",
+    "runtime": "Browser (open static/*.html directly) for UIs; Node for sims/calibration; Python+PyTorch for training",
+    "heroes": ["hh (Headless Horseman)", "bw (Black Widow)", "fm (Forge Master)", "rv (Raveness)", "dr (Druid)", "th (Thor)", "sm (Spider-Man)", "py (Pyromancer)", "du (Duelist)", "se (Sun Elf)", "mb (Mythic Brawler)"],
+    "gameModel": "50 HP, 2 CP income/turn for all heroes; only starting tokens differ. Dice faces classify per-hero into symbols mapped to A(1-3)/B(4-5)/C(6) (some heroes differ, e.g. bw=1-2/3-5/6, py has 4 symbols 1-3/4/5/6). Turn = Upkeep -> Income -> Main -> Offensive Roll (3 attempts, keep/reroll) -> resolve Attack -> opponent Defense -> Discard."
+  },
+
+  "buildCommands": {
+    "cwd": "engine-ts",
+    "buildCoach": "npx esbuild src/index.ts --bundle --format=iife --global-name=Engine --outfile=../static/engine.js && node inline.mjs && node gen-assets.mjs",
+    "buildSim": "npx esbuild src/sim/browser.ts --bundle --format=iife --global-name=Game --outfile=../static/game-engine.js && node gen-assets.mjs",
+    "npmBuild": "npm run build  (builds the COACH engine.js + inline + assets; does NOT rebuild game-engine.js)",
+    "typecheck": "npx tsc --noEmit",
+    "test": "npx vitest run  (or a single file: npx vitest run tests/sim/mb.rules.test.ts)",
+    "CRITICAL": "static/game-engine.js and static/engine.js are BUILD ARTIFACTS embedding the TS source AND the hero JSON data. After editing engine-ts/src OR any hero.json, you MUST rebuild the relevant bundle or the UIs run stale code/data. game-engine.js is rebuilt with the esbuild command on src/sim/browser.ts (NOT by npm run build)."
+  },
+
+  "entryPoints": [
+    {"kind": "UI-coach", "file": "static/index.html", "loads": "static/engine.js", "purpose": "Dice-keep optimizer / 'coach'. Click dice, get top-5 optimal keep strategies + per-ability EV board. Supports ONLY hh/bw/fm (src/index.ts imports only those 3 configs).", "brain": "core/evaluator.ts exact DP solver"},
+    {"kind": "UI-play", "file": "static/play.html", "loads": "static/game-engine.js + static/play.js + static/ai-weights.js", "purpose": "Full game: human vs AI, ALL 11 heroes. play.js drives the engine; human decisions via interactive.ts; AI = value-greedy.", "brain": "sim/turn.ts + rl/valueGreedyPolicy.ts"},
+    {"kind": "UI-aux", "files": ["static/report.html", "static/stats.html", "static/verify.html", "static/dice3d-demo.html"], "purpose": "Auxiliary views: match report, meta stats, verification, 3D dice demo."},
+    {"kind": "Node-sim", "file": "engine-ts/src/sim/cli.ts", "purpose": "Headless match runner / smoke tests."},
+    {"kind": "Node-browserbundle", "file": "engine-ts/src/sim/browser.ts", "purpose": "The esbuild entry for game-engine.js: re-exports the sim primitives the UI + calibration + strong-AI workers all call (global `Game`)."}
+  ],
+
+  "subsystems": [
+    {
+      "id": "core-solver",
+      "name": "Exact dice-keep DP solver ('the coach brain')",
+      "purpose": "Given current dice + rolls remaining + hero state, compute the EV-optimal set of dice to keep, exactly (no search). Recursive DP over all 2^5 keep subsets x 6^n reroll outcomes, memoized. Used BOTH by the coach UI and by the sim's offensive-roll loop.",
+      "keyFiles": [
+        {"path": "engine-ts/src/core/evaluator.ts", "lines": 347, "role": "evalState (recursive EV, Map-memoized), calculateOptimalKeep (full coach result: top-5 + ability distribution + board), optimalKeep (LIGHT: just the best keep, for the sim hot path -- 2x faster, bit-identical), augmentTerminalValue/wildcardVariants (safety-net cards Six-It!/So Wild! etc., coach-only)"},
+        {"path": "engine-ts/src/core/types.ts", "role": "CharacterConfig<S> interface: each hero plugs in bestAbilityValue/bestAbilityName/buildAbilityBoard/stateKey. AbilityEntry."},
+        {"path": "engine-ts/src/core/dice.ts", "role": "enumerateOutcomes, face->A/B/C classification"}
+      ],
+      "publicApi": ["calculateOptimalKeep(cfg, dice, rollsRemaining, state) -> SolverResult", "optimalKeep(cfg, dice, rollsRemaining, state) -> number[]  (sim path, added 2026-07-18)", "evalState(cfg, kept, rolls, state, totalDice)"],
+      "gotchas": ["evMemo/distMemo are MODULE-GLOBAL and never auto-cleared (call clearCache() between unrelated contexts). Cache keys are strings built by cfg.stateKey -- the #1 profiler hotspot.", "totalDice defaults 5 but is 4 when Naraxus steals a die -- solver stays exact."]
+    },
+    {
+      "id": "sim-engine",
+      "name": "Simulation engine (the monolith)",
+      "purpose": "The authoritative game engine: plays full turns for any hero, resolves every ability, phase, token, and card. Deterministic given (heroes, seed, policies).",
+      "keyFiles": [
+        {"path": "engine-ts/src/sim/turn.ts", "lines": 4019, "role": "THE monolith. playTurn(state, activeIdx, rng, policies). All phases (upkeep/income/main/offensive-roll/defense/discard) + ALL 11 heroes' ability resolution (applyMBAbility, applyHHAbility... search 'name.startsWith'). runOffensiveRoll. To add/fix an ability's RESOLUTION, it's here."},
+        {"path": "engine-ts/src/sim/types.ts", "lines": 289, "role": "GameState, PlayerState (hp/cp/hand/deck/tokens/upgradesInPlay/... + human-pref fields like fmForgePref/mbStrengthPref), Tokens bag, WindowAction, WindowContext, DecisionRequest, AbilityCandidate, HeroId"},
+        {"path": "engine-ts/src/sim/match.ts", "lines": 146, "role": "runMatch(heroA, heroB, seed, policies)->MatchResult, createInitialGameState, MAX_TURNS=200, runBossMatch (vs Naraxus 'nx')"},
+        {"path": "engine-ts/src/sim/decision.ts", "role": "resolveResponseWindow: the pass-pass priority loop (Advanced Rules interaction layer). Decision-agnostic: callers pass enumerate+apply closures. MAX_WINDOW_ACTIONS=100 backstop."},
+        {"path": "engine-ts/src/sim/oracle.ts", "role": "completeOffensiveRoll: the keep/reroll loop that calls core/optimalKeep. oracleStateFor builds the per-hero solver state (incl. defenseTax). This is the bridge sim<->solver."},
+        {"path": "engine-ts/src/sim/policy.ts", "lines": 146, "role": "Policy interface (chooseAbility/decide/chooseCardsToDiscard/chooseAttackModifierCards/... one method per decision type). greedyHighestDamagePolicy (dumb baseline)."},
+        {"path": "engine-ts/src/sim/ability-resolver.ts", "role": "resolveMatchedAbilities, fullAbilityBoard -- which abilities a dice set can activate"},
+        {"path": "engine-ts/src/sim/tokens.ts", "role": "emptyBag, token helpers, TRANSFERABLE_TOKENS"},
+        {"path": "engine-ts/src/sim/cp.ts", "role": "CP (combat points) economy"},
+        {"path": "engine-ts/src/sim/rng.ts", "role": "mulberry32 (seedable), mulberry32Stateful, rollDice, shuffle -- ALL randomness flows through here (determinism)"}
+      ],
+      "publicApi": ["runMatch(heroA, heroB, seed, [policyA, policyB])", "playTurn(state, activeIdx, rng, [pol,pol])", "createInitialGameState(heroA, heroB, rng)"],
+      "gotchas": ["turn.ts is 4000 lines -- use grep, don't read whole. Ability resolution is a big if/else on name.startsWith('AbilityName').", "A dead player must set gameOver+winner or the match spins to MAX_TURNS (a 'timeout', signals a bug -- distinct from a mutual-kill 'draw').", "The engine is PUSH: it calls policies[p].hook(...) at each decision. The strong-AI seam (GameNode) inverts this to PULL."]
+    },
+    {
+      "id": "hero-data-rules",
+      "name": "Hero data, rules & EV configs (per-hero, 11 heroes)",
+      "purpose": "Three layers per hero: (1) verified card DATA, (2) special token MECHANICS, (3) EV VALUES the solver uses to score abilities.",
+      "keyFiles": [
+        {"path": "engine-ts/src/sim/data/characters/<hh|bw|fm|rv|dr|th|sm|py|du|se|mb>/hero.json", "role": "SOURCE OF TRUTH for a hero's abilities (dicePattern like 'AABB'/'ABBB', baseDamage, defendable, upgradedBy), cards (upgrades + action cards), tokens, diceAnatomy. VERIFIED against physical board/card scans in characters/<Hero>/. NOTE: transcription errors happen -- 2026-07-21 audit fixed Balestra AABB->ABBB (du) and Pyroblast AAAAD->AAAD (py)."},
+        {"path": "engine-ts/src/sim/data/schema.ts", "role": "TypeScript types for hero.json"},
+        {"path": "engine-ts/src/sim/data/load.ts", "role": "heroTemplateFor(heroId), cardById, buildFullDeck -- loads/parses the JSON"},
+        {"path": "engine-ts/src/sim/hero/<hero>.rules.ts", "role": "Per-hero token MECHANICS not expressible in JSON, e.g. mb.rules.ts (Strengths Ocean/Mountain/Sky gain + Concussion; chooseStrengthKind respects human pref mbStrengthPref), bw.rules.ts (Time Bomb, Agility, Sabotage), hh.rules.ts (Dreadful, Grim Pursuit)."},
+        {"path": "engine-ts/src/characters/<hero>/{config,abilities,constants}.ts", "role": "EV VALUES for the DP solver: constants.ts = damage/token values (empirically CALIBRATED), abilities.ts = bestAbilityValue/board, config.ts = the CharacterConfig plugged into core/evaluator. horseman/dreadful.ts = marginal Dreadful-token value."}
+      ],
+      "gotchas": ["hero.json boardName (e.g. 'Balestra (ABBB)') is used as an IDENTIFIER in multiple places -- if you change it, grep and change ALL occurrences (hero.json, characters/<hero>/abilities.ts, static/play.js, SPEC.md) or ability matching breaks.", "Token EV values in characters/<hero>/constants.ts are CALIBRATED numbers -- see calibration subsystem before changing them.", "Upgrade-gated ALT abilities (Fancy Feet, Scorch, ...) live in hero.json altAbilities and are NOT on the base board scans."]
+    },
+    {
+      "id": "human-bridge",
+      "name": "Human-vs-AI interactive bridge",
+      "purpose": "Lets play.js drive the synchronous engine for a HUMAN player: pre-armed choices (set a preference before rolling, engine consumes it), defense windows, coach hints.",
+      "keyFiles": [
+        {"path": "engine-ts/src/sim/interactive.ts", "lines": 715, "role": "HumanGame class, AiAttackInfo, DefensePrompt. The engine is synchronous, so human conditional choices are PRE-ARMED (e.g. you.mbStrengthPref, you.fmForgePref, you.smDefenseMode) and the engine's policy hooks read them. play.js sets these flags."},
+        {"path": "static/play.js", "lines": "223KB", "role": "The whole play-vs-AI UI (vanilla JS). renderControls() adds pre-arm buttons per hero (addMbBtns, addSmDefBtns, addFmDefBtns...). Reads game-engine.js (global Game)."}
+      ],
+      "gotchas": ["No async pause mid-resolution: human choices that are conditional (only if you roll X) must be pre-armed as a persistent PlayerState field, then respected inside the engine (usually via a `p.humanControlled ? p.<pref> : <ai-heuristic>` branch in sim/hero/*.rules.ts or turn.ts).", "play.js is hand-written (not generated) -- update it manually when hero data changes."]
+    },
+    {
+      "id": "deployed-ai",
+      "name": "Deployed AI: value-greedy (the current opponent)",
+      "purpose": "The AI that actually plays in play.html and drives calibration. 1-ply lookahead: for each candidate action, clone+replay it through the real engine, encode the resulting state, score with a trained value network (v4). Pick the highest. Strong on the migrated decisions; delegates the rest.",
+      "keyFiles": [
+        {"path": "engine-ts/src/sim/rl/valueGreedyPolicy.ts", "lines": 352, "role": "createValueGreedyPolicy(net) -> Policy. Implements every Policy hook by scoreCandidatesByReplay. Contains hand-tuned PRIORS (BW always plays upgrades, freebie cards auto-play, sell-cap for perf)."},
+        {"path": "engine-ts/src/sim/rl/network.ts", "lines": 188, "role": "Neural net: fromJSON/forward (v4 value-only MLP), fromJSON2/forward2 (v5 2-head value+policy). The MATH runtime -- Python trains, this infers (browser + node)."},
+        {"path": "engine-ts/src/sim/rl/features.ts", "lines": 172, "role": "encodeState (v4 feature vector). NOTE: v4 layout RESIZES when a hero is added (why v5 exists)."},
+        {"path": "engine-ts/src/sim/rl/lookahead.ts", "role": "scoreCandidatesByReplay, cloneForLookahead -- the 1-ply replay-and-score core"},
+        {"path": "engine-ts/src/sim/rl/candidates.ts", "role": "enumerate* -- legal candidate actions per decision"},
+        {"path": "static/ai-weights.js", "role": "The trained v4 net weights (window.AI_WEIGHTS). This is the deployed AI's brain. Loaded by play.js and calibration/strong-AI workers."}
+      ],
+      "gotchas": ["value-greedy is the STRONGEST agent currently (beats the strong-AI research net ~2:1, see JOURNAL_STRONG_AI.md).", "It only NEURAL-scores the migrated decisions (chooseAbility/decide/discard); other hooks use hand-tuned heuristics. Dice-keeping is delegated to the exact DP solver (core/optimalKeep), not the net."]
+    },
+    {
+      "id": "strong-ai",
+      "name": "Strong-AI research (AlphaZero self-play) -- EXPERIMENTAL, does NOT yet beat value-greedy",
+      "purpose": "An AlphaZero-style agent: MCTS over a stable-layout 2-head net, self-play generations with gating. Goal: surpass value-greedy. Status (2026-07-21): reliably ~33% vs value-greedy; self-play does not ratchet. Levers under investigation: bigger search, better priors, warm-start from value-greedy. Full log: JOURNAL_STRONG_AI.md.",
+      "keyFiles": [
+        {"path": "engine-ts/src/sim/rl/featuresV5.ts", "lines": 152, "role": "STABLE feature layout (frozen caps + append-only registries). Adding a hero consumes free slots WITHOUT resizing -> the champion net stays valid (warm-start). FEATURE_COUNT_V5=223."},
+        {"path": "engine-ts/src/sim/rl/matchups.ts", "role": "TRAINABLE_HEROES (11, includes mb), TRAIN_MATCHUPS, EVAL_MATCHUPS. Single source of matchups for training/eval."},
+        {"path": "engine-ts/src/sim/search/gameNode.ts", "lines": 406, "role": "THE SEAM: converts the engine's PUSH model to PULL for search (deterministic script-replay). currentActor/pendingDecision/legalActions/apply/sampleChance. Parity-tested vs playTurn."},
+        {"path": "engine-ts/src/sim/search/mcts.ts", "lines": 139, "role": "MCTS/PUCT. evaluate=net value at leaves, priors=net policy head, chance nodes = progressive widening (maxChanceChildren, default raised to 20 for dice)."},
+        {"path": "engine-ts/src/sim/search/actionSpace.ts", "role": "ACTION_SLOTS=256, actionBucket (FNV-1a hash). Hero-agnostic -> new heroes' actions auto-fit the policy head."},
+        {"path": "engine-ts/src/sim/search/selfplay2.ts", "lines": 125, "role": "Self-play data gen (DTX2 format): MCTS plays, records featuresV5 + visit distribution + outcome. Matchups derived from TRAINABLE_HEROES."},
+        {"path": "engine-ts/src/sim/search/gate3.ts", "lines": 190, "role": "Gating arbiter: agent A vs agent B (net2 champion/candidate, or 'vg' value-greedy, or 'v4'/'v4warm' MCTS-on-v4-net test agents). Matchups from TRAINABLE_HEROES."},
+        {"path": "engine-ts/src/sim/search/warmstartGen.ts", "role": "Behavior-cloning: value-greedy plays, record (features, chosen-action one-hot, outcome) -> train the net to imitate value-greedy (warm start)."},
+        {"path": "rl-py/train.py", "role": "PyTorch trainer. cmd_train (v1 value net), cmd_train2 (v2 2-head). JSON weight format shared with network.ts (parity-checked)."},
+        {"path": "rl-py/chain2.mjs", "role": "The AlphaZero generation loop: self-play (champion) -> train2 -> parity check -> gate3 (candidate vs champion) -> promote if Wilson-lower-bound>0.5. State in rl-py/weights2/champion.json (gitignored)."}
+      ],
+      "gotchas": ["Two separate nets: v4 (deployed, features.ts, RESIZES on new hero) vs v5 (research, featuresV5.ts, STABLE). Don't confuse them.", "chain2 promotion uses Wilson lower bound > 0.5 (anti-noise) -- 88-game tests have +-10% error, use 400+ games for any 'do we beat X' question.", "rl-py/weights2/, exp2/, *.log are gitignored. champion_warm.json = best warm-started net."]
+    },
+    {
+      "id": "calibration",
+      "name": "EV calibration (empirical token/card values)",
+      "purpose": "Measure the marginal damage-equivalent value of each token/HP/CP/card by counterfactual paired A/B games (same seed, one mutated starting state), so the solver's EV constants are empirically correct. Feeds characters/<hero>/constants.ts.",
+      "keyFiles": [
+        {"path": "calibration/arms.mjs", "role": "The 'arms' = each starting-state mutation to test (e.g. th_ek1 = Thor +1 Electrokinesis). CALIB_SET env picks a wave (v5/cards/mb). Matchup = hero vs bw."},
+        {"path": "calibration/run.mjs", "role": "Parallel launcher (worker_threads), auto-resumes from results/*.jsonl. --seeds N --workers K (4 is the safe max on this machine)."},
+        {"path": "calibration/worker.mjs", "role": "Plays one game via game-engine.js (value-greedy, or greedy for mb since the net doesn't know mb). Reads static/game-engine.js -- REBUILD it after engine changes."},
+        {"path": "calibration/analyze.mjs", "role": "Turns jsonl into the value table: value(asset) = delta-win(asset) / delta-win(1 HP of same hero)."},
+        {"path": "calibration/matrix_team.mjs", "role": "All-heroes win-rate matrix (meta / who-beats-whom)."}
+      ],
+      "gotchas": ["worker.mjs reads static/game-engine.js -- calibration runs STALE unless you rebuild the sim bundle after engine changes.", "CPU/thermal: default to <=4 workers for long runs (see CLAUDE.md / user has burned CPU to 100C stacking parallel batches)."]
+    },
+    {
+      "id": "dice3d",
+      "name": "3D dice rendering (cosmetic)",
+      "purpose": "Physics-based 3D dice roll animation for the UI.",
+      "keyFiles": [
+        {"path": "static/dice3d.js", "role": "three.js + cannon-es dice. Standalone, no game logic."},
+        {"path": "engine-ts/src/dice3d/dice3d.js", "role": "source"}
+      ]
+    }
+  ],
+
+  "dataFlows": [
+    {"name": "Coach (dice-keep optimizer)", "steps": ["static/index.html click dice", "callEngine() inline adapter", "Engine.calculateOptimalKeep() [static/engine.js from src/index.ts]", "core/evaluator.ts DP + characters/<hh|bw|fm>/config.ts EV values", "returns top-5 keeps + ability EV board -> rendered"]},
+    {"name": "Play vs AI", "steps": ["static/play.html + play.js", "human turn: play.js sets pre-armed prefs, calls Game.playTurn with a human policy (interactive.ts) + AI policy (value-greedy)", "Game.playTurn [game-engine.js from src/sim/browser.ts -> turn.ts]", "offensive roll -> oracle.completeOffensiveRoll -> core/optimalKeep", "AI decisions -> valueGreedyPolicy (v4 net from ai-weights.js)", "state rendered by play.js"]},
+    {"name": "Calibration", "steps": ["CALIB_SET=v5 node calibration/run.mjs --workers 4", "workers spawn -> worker.mjs -> Game.runMatch (value-greedy both sides)", "results/*.jsonl", "node calibration/analyze.mjs -> value table -> hand-apply to characters/<hero>/constants.ts -> rebuild -> confirm via bench"]},
+    {"name": "Strong-AI training", "steps": ["node rl-py/chain2.mjs", "selfplay2.ts (MCTS+GameNode, champion net) -> exp2/*.dtx2", "train.py train2 (GPU) -> candidate net", "checkParity2 (TS<->torch)", "gate3 candidate vs champion -> promote if significantly better", "champion.json updated"]}
+  ],
+
+  "howToAddA": {
+    "newHeroAbilityFix_or_dicePatternError": ["Verify against the physical scan in characters/<Hero>/board/ or cards/", "Edit engine-ts/src/sim/data/characters/<hero>/hero.json (dicePattern + boardName)", "grep the boardName string everywhere and update ALL (characters/<hero>/abilities.ts, static/play.js, characters/<Hero>/SPEC.md, and upgrade card `text` fields)", "tsc --noEmit && vitest run tests/sim/<hero>.rules.test.ts", "rebuild game-engine.js (esbuild browser.ts) + node gen-assets.mjs", "reload play.html"],
+    "newHero": ["Scan board+cards into characters/<Hero>/, write SPEC.md", "Create engine-ts/src/sim/data/characters/<xx>/hero.json (abilities, cards, tokens, diceAnatomy)", "Add engine-ts/src/sim/hero/<xx>.rules.ts for special token mechanics", "Add engine-ts/src/characters/<xx>/{config,abilities,constants}.ts (EV values for the solver)", "Wire ability RESOLUTION in sim/turn.ts (applyXXAbility)", "Register in sim/data/load.ts and oracle.ts config map", "For strong-AI: append 'xx' to featuresV5 HERO_REGISTRY + its tokens to TOKEN_REGISTRY (append-only!) + add to matchups.ts TRAINABLE_HEROES (this is warm-start-safe; FEATURE_COUNT_V5 must stay 223)", "Add tests, rebuild bundles, add pre-arm buttons in play.js if it has human choices", "Calibrate token EV values (calibration/arms.mjs new arms)"],
+    "newHumanChoice (stop the AI auto-deciding for a human)": ["Add a pref field to PlayerState in sim/types.ts (e.g. xxPref?)", "In the resolving code (sim/hero/<hero>.rules.ts or turn.ts), branch: if the chooser is humanControlled and the pref is set, use it; else the AI heuristic. The AI must NEVER set the pref (keeps its calibrated behavior unchanged).", "Add a cycling pre-arm button in play.js renderControls (see addMbBtns/addFmDefBtns as templates)", "rebuild game-engine.js"],
+    "newStrongAIExperiment": ["Add/adjust an agent in search/gate3.ts (see v4/v4warm sentinels)", "Run a BIG gate (400+ games) via a scratch orchestrator -- small tests are noise", "Log the result in JOURNAL_STRONG_AI.md"]
+  },
+
+  "topGotchas": [
+    "REBUILD after edits: static/*.js are bundles embedding TS + hero JSON. Edit source -> rebuild (game-engine.js via esbuild browser.ts; engine.js via npm run build) or UIs/calibration run stale.",
+    "Two engines: engine.js (coach, HH/BW/FM only, src/index.ts) vs game-engine.js (full sim, 11 heroes, src/sim/browser.ts). Two nets: v4 (deployed) vs v5 (research).",
+    "Determinism is the contract: all randomness flows through sim/rng.ts. Same (heroes, seed, policies) -> same game. The strong-AI GameNode seam relies on this.",
+    "Statistical honesty: 88-game A/B tests carry +-10% error -- do not conclude 'we beat X' from them; use 400+ games (lesson learned the hard way, JOURNAL_STRONG_AI.md).",
+    "CPU/thermal: <=4 workers for long runs; user has hit 100C stacking parallel batches. Set High Performance power plan + monitor temps for overnight runs.",
+    "Hero JSON = source of truth but transcription errors exist -- verify against characters/<Hero>/ scans (2026-07-21 audit found 2)."
+  ],
+
+  "docs": [
+    {"file": "CLAUDE.md", "what": "Build commands, architecture summary, conventions (checked into repo)"},
+    {"file": "ARCHITECTURE.html", "what": "Human-facing visual version of THIS file"},
+    {"file": "PLAN_STRONG_AI.md", "what": "Strong-AI design spec (AlphaZero+ISMCTS phases)"},
+    {"file": "JOURNAL_STRONG_AI.md", "what": "Chronological strong-AI test log with every numeric result + verdict (READ before touching strong-AI)"},
+    {"file": "PLAN_INTERFACE.md / STATUS_INTERFACE.md", "what": "The play-vs-AI UI plan/status"},
+    {"file": "characters/<Hero>/SPEC.md", "what": "Per-hero verified rules spec from scans"}
+  ]
+}

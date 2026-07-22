@@ -1,0 +1,253 @@
+<title>Dice Throne Simulator — Architecture</title>
+<style>
+  :root {
+    --ink:#1b1e26; --paper:#f5f3ee; --panel:#fffefb; --line:#e4e0d6; --line2:#efece4;
+    --muted:#6d7180; --faint:#9a9ba5;
+    --amber:#c9741f; --amber-soft:#f4e6d2;
+    --steel:#3a6ea5; --steel-soft:#e0e9f3;
+    --green:#3d7a52; --green-soft:#e2eee5;
+    --violet:#7159a8; --violet-soft:#e9e3f4;
+    --accent:#c9741f;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,Menlo,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --ink:#e8e6df; --paper:#14161b; --panel:#1b1e25; --line:#2b2f39; --line2:#22262e;
+    --muted:#9aa0ac; --faint:#666c78;
+    --amber:#e0954a; --amber-soft:#33261684; --steel:#7aa6d8; --steel-soft:#1c2a3a;
+    --green:#6fb586; --green-soft:#1c2a20; --violet:#a892d8; --violet-soft:#241f33;
+  }}
+  :root[data-theme="light"]{--ink:#1b1e26;--paper:#f5f3ee;--panel:#fffefb;--line:#e4e0d6;--line2:#efece4;--muted:#6d7180;--faint:#9a9ba5;--amber:#c9741f;--amber-soft:#f4e6d2;--steel:#3a6ea5;--steel-soft:#e0e9f3;--green:#3d7a52;--green-soft:#e2eee5;--violet:#7159a8;--violet-soft:#e9e3f4;}
+  :root[data-theme="dark"]{--ink:#e8e6df;--paper:#14161b;--panel:#1b1e25;--line:#2b2f39;--line2:#22262e;--muted:#9aa0ac;--faint:#666c78;--amber:#e0954a;--amber-soft:#332616;--steel:#7aa6d8;--steel-soft:#1c2a3a;--green:#6fb586;--green-soft:#1c2a20;--violet:#a892d8;--violet-soft:#241f33;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 5rem;}
+  code,.mono{font-family:var(--mono);}
+  a{color:var(--steel);}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 .7rem;}
+  h1{font-size:clamp(1.8rem,4vw,2.6rem);line-height:1.08;margin:0 0 .8rem;letter-spacing:-.015em;}
+  .lede{font-size:1.1rem;color:var(--muted);max-width:70ch;margin:0 0 1.4rem;}
+  h2{font-size:1.25rem;margin:3rem 0 1.1rem;letter-spacing:-.01em;display:flex;align-items:center;gap:.6rem;}
+  h2 .num{font-family:var(--mono);font-size:.8rem;color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:.15rem .45rem;}
+  p{margin:0 0 1rem;max-width:74ch;}
+  strong{font-weight:650;}
+  .key{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.2rem 0 0;}
+  .key .pill{font-family:var(--mono);font-size:.74rem;padding:.35rem .7rem;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);}
+  .key .pill b{color:var(--ink);}
+
+  /* layered map */
+  .map{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:1.3rem;margin:1.6rem 0;display:grid;gap:.7rem;}
+  .layer{border-radius:10px;padding:.7rem .9rem;border:1px solid var(--line);}
+  .layer .lh{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:.5rem;}
+  .row{display:flex;flex-wrap:wrap;gap:.55rem;}
+  .box{flex:1 1 150px;min-width:130px;border-radius:8px;padding:.6rem .75rem;border:1px solid var(--line);background:var(--paper);}
+  .box .t{font-weight:640;font-size:.92rem;}
+  .box .f{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:.15rem;word-break:break-word;}
+  .box.ui{border-color:var(--amber);background:var(--amber-soft);}
+  .box.ai{border-color:var(--steel);background:var(--steel-soft);}
+  .box.core{border-color:var(--violet);background:var(--violet-soft);}
+  .box.data{border-color:var(--green);background:var(--green-soft);}
+  .arrows{text-align:center;color:var(--faint);font-size:.9rem;letter-spacing:.3em;}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1.2rem 0;}
+  @media(max-width:720px){.grid{grid-template-columns:1fr;}}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:1.1rem 1.2rem;border-top:3px solid var(--edge,var(--accent));}
+  .card h3{margin:0 0 .1rem;font-size:1.02rem;}
+  .card .role{font-size:.9rem;color:var(--muted);margin:.35rem 0 .7rem;}
+  .files{list-style:none;padding:0;margin:.4rem 0 0;display:grid;gap:.4rem;}
+  .files li{font-size:.82rem;}
+  .files .p{font-family:var(--mono);color:var(--steel);word-break:break-all;}
+  .files .d{color:var(--muted);}
+  .gotcha{margin-top:.7rem;font-size:.82rem;color:var(--muted);border-left:2px solid var(--amber);padding-left:.7rem;}
+  .gotcha b{color:var(--amber);font-weight:640;}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;padding:.1rem .45rem;border-radius:5px;font-weight:700;vertical-align:middle;margin-left:.4rem;}
+  .tag.exp{background:var(--amber-soft);color:var(--amber);}
+
+  .flow{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:1rem 1.1rem;margin:.8rem 0;}
+  .flow h4{margin:0 0 .6rem;font-size:.98rem;}
+  .steps{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;font-size:.8rem;}
+  .steps .s{font-family:var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:.3rem .5rem;color:var(--ink);}
+  .steps .to{color:var(--faint);}
+
+  .recipe{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:1rem 1.2rem;margin:.8rem 0;}
+  .recipe summary{cursor:pointer;font-weight:640;font-size:.98rem;}
+  .recipe ol{margin:.7rem 0 0;padding-left:1.2rem;}
+  .recipe li{font-size:.88rem;color:var(--muted);margin:.3rem 0;}
+  .recipe li code{font-size:.82em;background:var(--line2);padding:.05em .35em;border-radius:4px;color:var(--ink);}
+
+  .warnlist{display:grid;gap:.55rem;margin:1rem 0;}
+  .warnlist .w{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:8px;background:var(--panel);padding:.7rem .9rem;font-size:.9rem;}
+  .warnlist .w b{color:var(--amber);}
+  .meta{font-family:var(--mono);font-size:.76rem;color:var(--faint);border-top:1px solid var(--line);margin-top:3rem;padding-top:1.1rem;}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Dice Throne Simulator · Carte d'architecture · 22 juillet 2026</p>
+  <h1>Le codebase, en une page</h1>
+  <p class="lede">Un moteur de jeu Dice Throne (combat aux dés) + une IA, avec deux interfaces navigateur : un <b>coach</b> qui optimise la garde des dés, et un jeu <b>complet contre l'IA</b>. Moteur écrit en TypeScript, bundlé en JS statique. Aucun serveur.</p>
+  <div class="key">
+    <span class="pill"><b>2 moteurs</b> · coach (engine.js) + sim (game-engine.js)</span>
+    <span class="pill"><b>2 réseaux</b> · v4 déployé + v5 recherche</span>
+    <span class="pill"><b>11 héros</b></span>
+    <span class="pill"><b>turn.ts</b> = 4000 lignes, le monolithe</span>
+  </div>
+
+  <h2><span class="num">01</span> La carte en couches</h2>
+  <p>Deux chaînes parallèles. À gauche le <b>coach</b> (optimiseur de dés, HH/BW/FM seulement). À droite le <b>jeu complet</b> (11 héros, IA). Les deux passent par le solveur DP exact ; le jeu ajoute tout le moteur de simulation.</p>
+  <div class="map">
+    <div class="layer" style="border-color:var(--amber)">
+      <div class="lh">Interfaces (static/ — vanilla JS, ouvrir dans le navigateur)</div>
+      <div class="row">
+        <div class="box ui"><div class="t">🎲 Coach</div><div class="f">index.html + engine.js</div></div>
+        <div class="box ui"><div class="t">⚔️ Jouer vs IA</div><div class="f">play.html + play.js</div></div>
+        <div class="box ui"><div class="t">Aux</div><div class="f">report / stats / verify / dice3d</div></div>
+      </div>
+    </div>
+    <div class="arrows">▼ &nbsp; bundles esbuild &nbsp; ▼</div>
+    <div class="layer" style="border-color:var(--steel)">
+      <div class="lh">Bundles buildés (static/*.js — NE PAS éditer à la main, régénérés)</div>
+      <div class="row">
+        <div class="box"><div class="t">engine.js</div><div class="f">← src/index.ts (coach, HH/BW/FM)</div></div>
+        <div class="box"><div class="t">game-engine.js</div><div class="f">← src/sim/browser.ts (sim, 11 héros)</div></div>
+        <div class="box ai"><div class="t">ai-weights.js</div><div class="f">cerveau IA v4 (value-greedy)</div></div>
+      </div>
+    </div>
+    <div class="arrows">▼ &nbsp; TypeScript (engine-ts/src) &nbsp; ▼</div>
+    <div class="layer" style="border-color:var(--violet)">
+      <div class="lh">Cœur du moteur</div>
+      <div class="row">
+        <div class="box core"><div class="t">Solveur DP</div><div class="f">core/evaluator.ts — garde de dés exacte</div></div>
+        <div class="box core"><div class="t">Moteur de sim</div><div class="f">sim/turn.ts (4019 l.) — tous les tours & habiletés</div></div>
+        <div class="box ai"><div class="t">IA value-greedy</div><div class="f">sim/rl/valueGreedyPolicy.ts</div></div>
+        <div class="box ai"><div class="t">Strong-AI (MCTS)</div><div class="f">sim/search/ — expérimental</div></div>
+      </div>
+    </div>
+    <div class="arrows">▼ &nbsp; données &nbsp; ▼</div>
+    <div class="layer" style="border-color:var(--green)">
+      <div class="lh">Données & valeurs (source de vérité)</div>
+      <div class="row">
+        <div class="box data"><div class="t">Cartes/habiletés</div><div class="f">sim/data/characters/&lt;xx&gt;/hero.json</div></div>
+        <div class="box data"><div class="t">Mécaniques jetons</div><div class="f">sim/hero/&lt;xx&gt;.rules.ts</div></div>
+        <div class="box data"><div class="t">Valeurs EV (calibrées)</div><div class="f">characters/&lt;xx&gt;/constants.ts</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="num">02</span> Les sous-systèmes</h2>
+  <div class="grid">
+    <div class="card" style="--edge:var(--violet)">
+      <h3>Solveur DP de dés <span class="mono" style="color:var(--faint);font-size:.75rem">core/</span></h3>
+      <div class="role">« Cerveau du coach ». Calcule <b>exactement</b> quels dés garder (récursif sur les 32 sous-ensembles × 6ⁿ relances, mémoïsé). Utilisé par le coach ET par le jet offensif du sim.</div>
+      <ul class="files">
+        <li><span class="p">core/evaluator.ts</span> <span class="d">— evalState, calculateOptimalKeep (coach), optimalKeep (sim, 2× plus rapide)</span></li>
+        <li><span class="p">core/types.ts</span> <span class="d">— CharacterConfig&lt;S&gt; : chaque héros s'y branche</span></li>
+      </ul>
+      <div class="gotcha"><b>Piège :</b> caches evMemo/distMemo globaux, jamais vidés seuls. Les clés-string sont le point chaud n°1.</div>
+    </div>
+
+    <div class="card" style="--edge:var(--violet)">
+      <h3>Moteur de simulation</h3>
+      <div class="role">Le moteur autoritaire : joue un tour complet pour n'importe quel héros, résout toutes les habiletés/phases/jetons. Déterministe (héros, graine, policies).</div>
+      <ul class="files">
+        <li><span class="p">sim/turn.ts</span> <span class="d">— LE monolithe (4019 l.). playTurn + résolution de TOUTES les habiletés (grep <code>name.startsWith</code>)</span></li>
+        <li><span class="p">sim/types.ts</span> <span class="d">— GameState, PlayerState, Tokens, WindowAction</span></li>
+        <li><span class="p">sim/match.ts</span> <span class="d">— runMatch, createInitialGameState, MAX_TURNS=200</span></li>
+        <li><span class="p">sim/decision.ts</span> <span class="d">— resolveResponseWindow (couche d'interaction)</span></li>
+        <li><span class="p">sim/oracle.ts</span> <span class="d">— completeOffensiveRoll (pont sim↔solveur)</span></li>
+        <li><span class="p">sim/rng.ts</span> <span class="d">— tout le hasard passe ici (déterminisme)</span></li>
+      </ul>
+      <div class="gotcha"><b>Piège :</b> un joueur mort doit poser gameOver+winner, sinon la partie tourne jusqu'à MAX_TURNS (« timeout » = bug, ≠ « nul »).</div>
+    </div>
+
+    <div class="card" style="--edge:var(--green)">
+      <h3>Données & règles des héros <span class="mono" style="color:var(--faint);font-size:.75rem">×11</span></h3>
+      <div class="role">Trois couches par héros : (1) données de cartes vérifiées, (2) mécaniques de jetons, (3) valeurs EV pour le solveur.</div>
+      <ul class="files">
+        <li><span class="p">sim/data/characters/&lt;xx&gt;/hero.json</span> <span class="d">— SOURCE DE VÉRITÉ (dicePattern, dégâts, cartes). Vérifié vs scans dans characters/&lt;Hero&gt;/</span></li>
+        <li><span class="p">sim/hero/&lt;xx&gt;.rules.ts</span> <span class="d">— mécaniques jetons (mb Strengths, bw Time Bomb…)</span></li>
+        <li><span class="p">characters/&lt;xx&gt;/constants.ts</span> <span class="d">— valeurs EV CALIBRÉES</span></li>
+      </ul>
+      <div class="gotcha"><b>Piège :</b> le boardName (« Balestra (ABBB) ») est un IDENTIFIANT — si tu le changes, grep-le partout. Des erreurs de transcription existent (audit 07-21 : 2 corrigées).</div>
+    </div>
+
+    <div class="card" style="--edge:var(--steel)">
+      <h3>IA déployée : value-greedy</h3>
+      <div class="role">L'IA qui joue vraiment (play.html + calibration). Lookahead 1 coup : rejoue chaque coup, évalue l'état résultant avec le réseau v4, prend le meilleur. <b>L'agent le plus fort actuel.</b></div>
+      <ul class="files">
+        <li><span class="p">sim/rl/valueGreedyPolicy.ts</span> <span class="d">— createValueGreedyPolicy + priors réglés à la main</span></li>
+        <li><span class="p">sim/rl/network.ts</span> <span class="d">— forward (v4) / forward2 (v5 2-têtes)</span></li>
+        <li><span class="p">sim/rl/features.ts</span> <span class="d">— encodeState v4 (se redimensionne si on ajoute un héros)</span></li>
+        <li><span class="p">static/ai-weights.js</span> <span class="d">— poids v4 (window.AI_WEIGHTS)</span></li>
+      </ul>
+      <div class="gotcha"><b>Note :</b> la garde de dés est déléguée au solveur DP exact, pas au réseau.</div>
+    </div>
+
+    <div class="card" style="--edge:var(--steel)">
+      <h3>Strong-AI (AlphaZero) <span class="tag exp">expérimental</span></h3>
+      <div class="role">Agent MCTS self-play sur réseau 2-têtes à layout stable. Objectif : dépasser value-greedy. <b>État : ~33 % vs value-greedy, ne cliquette pas encore</b> (voir JOURNAL_STRONG_AI.md).</div>
+      <ul class="files">
+        <li><span class="p">sim/rl/featuresV5.ts</span> <span class="d">— layout FIGÉ (ajouter un héros ne re-dimensionne pas → warm-start)</span></li>
+        <li><span class="p">sim/search/gameNode.ts</span> <span class="d">— LE seam : convertit le PUSH du moteur en PULL pour la recherche</span></li>
+        <li><span class="p">sim/search/mcts.ts</span> <span class="d">— MCTS/PUCT</span></li>
+        <li><span class="p">sim/search/{selfplay2,gate3}.ts</span> <span class="d">— génération self-play + gating</span></li>
+        <li><span class="p">rl-py/{train.py,chain2.mjs}</span> <span class="d">— entraînement PyTorch + boucle de générations</span></li>
+      </ul>
+      <div class="gotcha"><b>Piège :</b> tests à 88 parties = ±10 % de bruit. Pour « bat-on X ? » → 400+ parties obligatoires.</div>
+    </div>
+
+    <div class="card" style="--edge:var(--green)">
+      <h3>Calibration EV</h3>
+      <div class="role">Mesure la valeur (en équivalent-dégâts) de chaque jeton/carte par parties appariées contrefactuelles (même graine, un seul changement d'état initial). Alimente les constants.ts.</div>
+      <ul class="files">
+        <li><span class="p">calibration/{arms,run,worker,analyze}.mjs</span> <span class="d">— bras (mutations), lanceur //, worker, analyse</span></li>
+        <li><span class="p">calibration/matrix_team.mjs</span> <span class="d">— matrice de win-rates (méta)</span></li>
+      </ul>
+      <div class="gotcha"><b>Piège :</b> worker.mjs lit static/game-engine.js → <b>rebuild</b> le sim après une modif moteur, sinon calibration périmée. ≤4 workers (thermique).</div>
+    </div>
+  </div>
+
+  <h2><span class="num">03</span> Flux de données</h2>
+  <div class="flow"><h4>🎲 Coach (optimiseur de dés)</h4><div class="steps"><span class="s">index.html clic dés</span><span class="to">→</span><span class="s">Engine.calculateOptimalKeep</span><span class="to">→</span><span class="s">core/evaluator.ts + config héros</span><span class="to">→</span><span class="s">top-5 gardes + board EV</span></div></div>
+  <div class="flow"><h4>⚔️ Jouer vs IA</h4><div class="steps"><span class="s">play.js (prefs pré-armées)</span><span class="to">→</span><span class="s">Game.playTurn</span><span class="to">→</span><span class="s">turn.ts</span><span class="to">→</span><span class="s">oracle→optimalKeep (dés)</span><span class="to">→</span><span class="s">valueGreedyPolicy (réseau v4)</span><span class="to">→</span><span class="s">rendu</span></div></div>
+  <div class="flow"><h4>📊 Calibration</h4><div class="steps"><span class="s">run.mjs --workers 4</span><span class="to">→</span><span class="s">worker.mjs → runMatch</span><span class="to">→</span><span class="s">results/*.jsonl</span><span class="to">→</span><span class="s">analyze.mjs</span><span class="to">→</span><span class="s">constants.ts</span></div></div>
+  <div class="flow"><h4>🧠 Entraînement strong-AI</h4><div class="steps"><span class="s">chain2.mjs</span><span class="to">→</span><span class="s">selfplay2 (MCTS+GameNode)</span><span class="to">→</span><span class="s">train.py (GPU)</span><span class="to">→</span><span class="s">gate3 (candidat vs champion)</span><span class="to">→</span><span class="s">promotion</span></div></div>
+
+  <h2><span class="num">04</span> Comment ajouter / réparer</h2>
+  <details class="recipe"><summary>Réparer un motif de dés erroné (comme Balestra/Pyroblast)</summary>
+    <ol>
+      <li>Vérifier contre le scan physique dans <code>characters/&lt;Hero&gt;/board/</code> ou <code>/cards/</code></li>
+      <li>Éditer <code>hero.json</code> (dicePattern + boardName)</li>
+      <li>grep le boardName PARTOUT et corriger tout (abilities.ts, play.js, SPEC.md, textes des cartes upgrade)</li>
+      <li><code>tsc --noEmit</code> + <code>vitest run</code>, puis <b>rebuild game-engine.js</b> + gen-assets</li>
+    </ol>
+  </details>
+  <details class="recipe"><summary>Empêcher l'IA de décider à la place d'un humain (choix pré-armé)</summary>
+    <ol>
+      <li>Ajouter un champ pref à PlayerState dans <code>sim/types.ts</code></li>
+      <li>Dans le code de résolution : <code>if (humanControlled &amp;&amp; pref) use pref; else heuristique IA</code>. L'IA ne pose JAMAIS la pref (comportement calibré inchangé).</li>
+      <li>Bouton cyclique dans <code>play.js</code> renderControls (modèles : addMbBtns, addFmDefBtns)</li>
+      <li>rebuild game-engine.js</li>
+    </ol>
+  </details>
+  <details class="recipe"><summary>Ajouter un héros (résumé)</summary>
+    <ol>
+      <li>Scanner board+cartes → <code>characters/&lt;Hero&gt;/</code> + SPEC.md</li>
+      <li><code>sim/data/characters/&lt;xx&gt;/hero.json</code> + <code>sim/hero/&lt;xx&gt;.rules.ts</code> + <code>characters/&lt;xx&gt;/{config,abilities,constants}.ts</code></li>
+      <li>Câbler la résolution dans <code>sim/turn.ts</code>, enregistrer dans load.ts / oracle.ts</li>
+      <li>Strong-AI : append à featuresV5 (HERO_REGISTRY + jetons) + matchups.ts (warm-start-safe, FEATURE_COUNT_V5 reste 223)</li>
+      <li>Tests, rebuild, boutons play.js, calibrer les jetons</li>
+    </ol>
+  </details>
+
+  <h2><span class="num">05</span> Les 6 pièges à connaître</h2>
+  <div class="warnlist">
+    <div class="w"><b>REBUILD après édition.</b> static/*.js embarquent le TS + le JSON des héros. Édite la source → rebuild (game-engine.js via esbuild browser.ts ; engine.js via npm run build) ou les UIs/calibration tournent périmés.</div>
+    <div class="w"><b>Deux moteurs, deux réseaux.</b> engine.js (coach, HH/BW/FM) vs game-engine.js (sim, 11 héros). v4 (déployé) vs v5 (recherche). Ne pas confondre.</div>
+    <div class="w"><b>Le déterminisme est le contrat.</b> Tout le hasard passe par sim/rng.ts. Même (héros, graine, policies) → même partie. Le seam GameNode en dépend.</div>
+    <div class="w"><b>Honnêteté statistique.</b> Un A/B de 88 parties porte ±10 % d'erreur — ne jamais conclure « on bat X » là-dessus. 400+ parties (leçon apprise, JOURNAL_STRONG_AI.md).</div>
+    <div class="w"><b>CPU / thermique.</b> ≤4 workers pour les runs longues ; risque de CPU à 100° en empilant des batches. Plan « Performances élevées » + surveiller les temps la nuit.</div>
+    <div class="w"><b>Le JSON héros = vérité, mais des erreurs de transcription existent.</b> Vérifier contre les scans characters/&lt;Hero&gt;/ (audit 07-21 : Balestra + Pyroblast corrigés).</div>
+  </div>
+
+  <div class="meta">Version machine (pour le prochain agent) : <code>ARCHITECTURE.json</code> · Build/conventions : <code>CLAUDE.md</code> · Strong-AI : <code>PLAN_STRONG_AI.md</code> + <code>JOURNAL_STRONG_AI.md</code> · engine-ts/src ≈ 15 000 lignes TS.</div>
+</div>
